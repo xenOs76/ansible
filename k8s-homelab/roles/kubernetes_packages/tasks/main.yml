@@ -1,0 +1,93 @@
+---
+- name: Ensure /etc/apt/keyrings exists
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: "0755"
+  tags:
+    - k8s_packages
+
+- name: Remove conflicting or legacy Kubernetes keyrings and repository lists
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+    - /etc/apt/sources.list.d/kubernetes.list
+  tags:
+    - k8s_packages
+
+- name: Download Kubernetes repository GPG key
+  ansible.builtin.get_url:
+    url: "https://pkgs.k8s.io/core:/stable:/{{ k8s_version_major_minor }}/deb/Release.key"
+    dest: /etc/apt/keyrings/kubernetes-apt-keyring.asc
+    mode: "0644"
+  tags:
+    - k8s_packages
+
+- name: Add Kubernetes apt repository
+  ansible.builtin.apt_repository:
+    repo: "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.asc] https://pkgs.k8s.io/core:/stable:/{{ k8s_version_major_minor }}/deb/ /"
+    state: present
+    filename: kubernetes
+  tags:
+    - k8s_packages
+
+- name: Install kubeadm, kubelet, and kubectl
+  ansible.builtin.apt:
+    name:
+      - "kubeadm={{ k8s_version }}"
+      - "kubelet={{ k8s_version }}"
+      - "kubectl={{ k8s_version }}"
+    state: present
+    update_cache: true
+    allow_downgrade: true
+  tags:
+    - k8s_packages
+    - kubeadm
+    - kubelet
+    - kubectl
+
+- name: Hold Kubernetes package versions
+  ansible.builtin.dpkg_selections:
+    name: "{{ item }}"
+    selection: hold
+  loop:
+    - kubeadm
+    - kubelet
+    - kubectl
+  tags:
+    - k8s_packages
+
+- name: Configure node-ip in /etc/default/kubelet
+  ansible.builtin.lineinfile:
+    path: /etc/default/kubelet
+    line: "KUBELET_EXTRA_ARGS=--node-ip={{ node_ip | default(ansible_default_ipv4.address) }} --cgroup-driver=systemd"
+    create: true
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart kubelet
+  tags:
+    - k8s_packages
+    - kubelet
+
+- name: Ensure /etc/kubernetes/manifests directory exists
+  ansible.builtin.file:
+    path: /etc/kubernetes/manifests
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  tags:
+    - k8s_packages
+    - kubelet
+
+- name: Ensure kubelet service is enabled
+  ansible.builtin.systemd:
+    name: kubelet
+    enabled: true
+    state: started
+  tags:
+    - k8s_packages
+    - kubelet

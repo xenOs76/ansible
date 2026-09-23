@@ -1,0 +1,8 @@
+---
+- name: Execute control plane upgrade tasks
+  ansible.builtin.include_tasks: control_plane.yml
+  when: inventory_hostname in groups['control_plane']
+
+- name: Execute worker upgrade tasks
+  ansible.builtin.include_tasks: worker.yml
+  when: inventory_hostname in groups['workers']

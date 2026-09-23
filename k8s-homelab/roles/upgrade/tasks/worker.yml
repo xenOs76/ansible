@@ -1,0 +1,99 @@
+---
+- name: Drain worker node from control plane
+  delegate_to: "{{ groups['control_plane'][0] }}"
+  ansible.builtin.command: >-
+    kubectl drain {{ inventory_hostname }}
+    --ignore-daemonsets
+    --delete-emptydir-data
+    --force
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  changed_when: true
+  tags:
+    - upgrade
+    - upgrade_worker
+
+- name: Unhold kubeadm package on worker
+  ansible.builtin.dpkg_selections:
+    name: kubeadm
+    selection: install
+  tags:
+    - upgrade
+    - upgrade_worker
+
+- name: Update apt cache and install target kubeadm version on worker
+  ansible.builtin.apt:
+    name: "kubeadm={{ upgrade_target_k8s_version }}"
+    state: present
+    update_cache: true
+  tags:
+    - upgrade
+    - upgrade_worker
+
+- name: Hold kubeadm package on worker
+  ansible.builtin.dpkg_selections:
+    name: kubeadm
+    selection: hold
+  tags:
+    - upgrade
+    - upgrade_worker
+
+- name: Upgrade worker node via kubeadm
+  ansible.builtin.command: kubeadm upgrade node
+  changed_when: true
+  tags:
+    - upgrade
+    - upgrade_worker
+
+- name: Unhold kubelet and kubectl packages on worker
+  ansible.builtin.dpkg_selections:
+    name: "{{ item }}"
+    selection: install
+  loop:
+    - kubelet
+    - kubectl
+  tags:
+    - upgrade
+    - upgrade_worker
+
+- name: Install target kubelet and kubectl versions on worker
+  ansible.builtin.apt:
+    name:
+      - "kubelet={{ upgrade_target_k8s_version }}"
+      - "kubectl={{ upgrade_target_k8s_version }}"
+    state: present
+    update_cache: true
+  tags:
+    - upgrade
+    - upgrade_worker
+
+- name: Hold kubelet and kubectl packages on worker
+  ansible.builtin.dpkg_selections:
+    name: "{{ item }}"
+    selection: hold
+  loop:
+    - kubelet
+    - kubectl
+  tags:
+    - upgrade
+    - upgrade_worker
+
+- name: Restart kubelet service on worker
+  ansible.builtin.systemd:
+    name: kubelet
+    state: restarted
+    daemon_reload: true
+  tags:
+    - upgrade
+    - upgrade_worker
+
+- name: Uncordon worker node from control plane
+  delegate_to: "{{ groups['control_plane'][0] }}"
+  ansible.builtin.command: >-
+    kubectl uncordon {{ inventory_hostname }}
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  changed_when: true
+  tags:
+    - upgrade
+    - upgrade_worker

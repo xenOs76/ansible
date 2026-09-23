@@ -1,0 +1,33 @@
+---
+# Playbook suite version
+playbook_version: "1.1.0"
+
+# Kubernetes versions and repositories
+k8s_version: "1.34.1-1.1"
+k8s_version_major_minor: "v1.34"
+
+# Cluster networking
+pod_network_cidr: "10.1.0.0/16"
+service_cidr: "10.96.0.0/12"  # 10.96.0.0 → 10.111.255.255
+cluster_name: "homelab-k8s"
+
+# Container runtime (CRI)
+container_runtime: "containerd"
+cri_socket: "unix:///run/containerd/containerd.sock"
+cni_plugins_version: "v1.6.0"
+
+# CNI (Cilium)
+cni_type: "cilium"
+cilium_cli_version: "v0.16.24"
+cilium_install_extra_args: ""
+
+# User config for kubeconfig setup
+cluster_admin_users:
+  - root
+  - "{{ ansible_user | default('vagrant') }}"
+
+# OS76 Custom APT Repository (kubectl-netdrill, etc.)
+os76_apt_repo_enabled: true
+os76_apt_repo: "deb [trusted=yes] https://repo.os76.xyz/apt stable main"
+os76_apt_packages:
+  - kubectl-netdrill

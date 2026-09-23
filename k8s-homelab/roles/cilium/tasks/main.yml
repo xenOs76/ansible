@@ -1,0 +1,81 @@
+---
+- name: Determine system architecture for Cilium CLI
+  ansible.builtin.set_fact:
+    cilium_arch: "{{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}"
+  tags:
+    - cni
+    - cilium
+
+- name: Check if Cilium CLI binary is already installed
+  ansible.builtin.stat:
+    path: /usr/local/bin/cilium
+  register: cilium_bin_stat
+  tags:
+    - cni
+    - cilium
+
+- name: Install Cilium CLI
+  when: not cilium_bin_stat.stat.exists
+  tags:
+    - cni
+    - cilium
+  block:
+    - name: Download Cilium CLI archive
+      ansible.builtin.unarchive:
+        src: >-
+          https://github.com/cilium/cilium-cli/releases/download/{{ cilium_cli_version }}/cilium-linux-{{ cilium_arch }}.tar.gz
+        dest: /usr/local/bin
+        remote_src: true
+        mode: '0755'
+        creates: /usr/local/bin/cilium
+
+- name: Check Cilium installation status in cluster
+  ansible.builtin.command: cilium status --wait=false
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: cilium_status_check
+  failed_when: false
+  changed_when: false
+  tags:
+    - cni
+    - cilium
+
+- name: Install Cilium CNI in cluster
+  ansible.builtin.command: >-
+    cilium install
+    --set cluster.name={{ cluster_name }}
+    {{ cilium_install_extra_args }}
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  when: cilium_status_check.rc != 0
+  changed_when: true
+  tags:
+    - cni
+    - cilium
+
+- name: Wait for Cilium deployment to be ready
+  ansible.builtin.command: >-
+    cilium status --wait --wait-duration {{ cilium_wait_duration }}
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  changed_when: false
+  tags:
+    - cni
+    - cilium
+    - verify
+
+- name: Verify all cluster nodes are in Ready status
+  ansible.builtin.command: kubectl get nodes --no-headers
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: cilium_nodes_status
+  until: >
+    cilium_nodes_status.stdout_lines | length >= (groups['k8s_cluster'] | length) and
+    'NotReady' not in cilium_nodes_status.stdout
+  retries: 20
+  delay: 10
+  changed_when: false
+  tags:
+    - cni
+    - cilium
+    - verify

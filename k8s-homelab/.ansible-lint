@@ -1,0 +1,16 @@
+---
+# .ansible-lint configuration for k8s-homelab
+profile: production
+
+exclude_paths:
+  - ".vagrant/"
+  - "vagrant/.vagrant/"
+  - "vagrant/scripts/"
+  - "back/"
+  - "archived/"
+
+skip_list:
+  - yaml[line-length]
+
+warn_list:
+  - experimental

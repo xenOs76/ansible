@@ -1,0 +1,5 @@
+---
+control_plane_pod_network_cidr: "{{ pod_network_cidr | default('10.244.0.0/16') }}"
+control_plane_service_cidr: "{{ service_cidr | default('10.96.0.0/12') }}"
+control_plane_kubeadm_init_extra_args: "{{ kubeadm_init_extra_args | default('') }}"
+control_plane_admin_users: "{{ cluster_admin_users | default(['root', ansible_user | default('vagrant')]) }}"

@@ -1,0 +1,69 @@
+---
+- name: 0. Announce playbook automation suite version
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Display playbook version
+      ansible.builtin.debug:
+        msg: "=== k8s-homelab automation suite v{{ playbook_version | default('1.1.0') }} ==="
+
+- name: 1. Bootstrap common prerequisites, containerd, and kubernetes packages
+  hosts: k8s_cluster
+  become: true
+  roles:
+    - role: common
+    - role: containerd
+    - role: kubernetes_packages
+
+- name: 2. Initialize Kubernetes control plane
+  hosts: control_plane
+  become: true
+  roles:
+    - role: control_plane
+
+- name: 3. Join worker nodes to cluster
+  hosts: workers
+  become: true
+  roles:
+    - role: worker
+
+- name: 4. Deploy Cilium CNI and verify node readiness
+  hosts: control_plane
+  become: true
+  roles:
+    - role: cilium
+
+- name: 5. Display final cluster status
+  hosts: control_plane
+  become: true
+  tasks:
+    - name: Fetch cluster nodes overview
+      ansible.builtin.command: kubectl get nodes -o wide
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+      register: cluster_nodes
+      changed_when: false
+      tags:
+        - verify
+
+    - name: Fetch cluster pods overview
+      ansible.builtin.command: kubectl get pods -A -o wide
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+      register: cluster_pods
+      changed_when: false
+      tags:
+        - verify
+
+    - name: Print cluster nodes summary
+      ansible.builtin.debug:
+        msg: "{{ cluster_nodes.stdout_lines }}"
+      tags:
+        - verify
+
+    - name: Print cluster pods summary
+      ansible.builtin.debug:
+        msg: "{{ cluster_pods.stdout_lines }}"
+      tags:
+        - verify

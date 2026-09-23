@@ -1,0 +1,88 @@
+---
+- name: Stop kubelet service
+  ansible.builtin.systemd:
+    name: kubelet
+    state: stopped
+  failed_when: false
+  tags:
+    - reset
+
+- name: Reset cluster node using kubeadm
+  ansible.builtin.command: kubeadm reset -f
+  failed_when: false
+  changed_when: true
+  tags:
+    - reset
+
+- name: Remove CNI configuration directory
+  ansible.builtin.file:
+    path: /etc/cni/net.d
+    state: absent
+  tags:
+    - reset
+
+- name: Remove Kubernetes configuration directory
+  ansible.builtin.file:
+    path: /etc/kubernetes
+    state: absent
+  tags:
+    - reset
+
+- name: Remove kubelet data directory
+  ansible.builtin.file:
+    path: /var/lib/kubelet
+    state: absent
+  tags:
+    - reset
+
+- name: Remove etcd data directory
+  ansible.builtin.file:
+    path: /var/lib/etcd
+    state: absent
+  tags:
+    - reset
+
+- name: Remove CNI state directory
+  ansible.builtin.file:
+    path: /var/lib/cni
+    state: absent
+  tags:
+    - reset
+
+- name: Remove root kubeconfig
+  ansible.builtin.file:
+    path: /root/.kube
+    state: absent
+  tags:
+    - reset
+
+- name: Flush iptables filter table
+  ansible.builtin.command: iptables -F
+  changed_when: true
+  tags:
+    - reset
+
+- name: Flush iptables nat table
+  ansible.builtin.command: iptables -t nat -F
+  changed_when: true
+  tags:
+    - reset
+
+- name: Flush iptables mangle table
+  ansible.builtin.command: iptables -t mangle -F
+  changed_when: true
+  tags:
+    - reset
+
+- name: Flush iptables raw table
+  ansible.builtin.command: iptables -t raw -F
+  changed_when: true
+  tags:
+    - reset
+
+- name: Restart containerd container runtime
+  ansible.builtin.systemd:
+    name: containerd
+    state: restarted
+  tags:
+    - reset

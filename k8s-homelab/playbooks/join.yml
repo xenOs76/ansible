@@ -1,0 +1,19 @@
+---
+- name: Ensure join command is available from control plane
+  hosts: control_plane
+  become: true
+  tasks:
+    - name: Generate fresh kubeadm join command
+      ansible.builtin.command: kubeadm token create --print-join-command
+      register: control_plane_join_cmd_raw
+      changed_when: false
+
+    - name: Set join command fact on control plane
+      ansible.builtin.set_fact:
+        control_plane_join_command: "{{ control_plane_join_cmd_raw.stdout }}"
+
+- name: Join worker nodes to Kubernetes cluster
+  hosts: workers
+  become: true
+  roles:
+    - role: worker

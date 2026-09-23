@@ -1,0 +1,4 @@
+---
+# Control plane specific configuration
+is_control_plane: true
+kubeadm_init_extra_args: ""

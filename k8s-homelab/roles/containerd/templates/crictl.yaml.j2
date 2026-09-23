@@ -1,0 +1,4 @@
+runtime-endpoint: "{{ cri_socket }}"
+image-endpoint: "{{ cri_socket }}"
+timeout: {{ containerd_crictl_timeout | default(10) }}
+debug: {{ 'true' if (containerd_crictl_debug | default(false)) else 'false' }}

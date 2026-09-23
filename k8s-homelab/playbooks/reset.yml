@@ -1,0 +1,6 @@
+---
+- name: Teardown and reset Kubernetes cluster nodes
+  hosts: k8s_cluster
+  become: true
+  roles:
+    - role: reset

@@ -1,0 +1,4 @@
+---
+cilium_cli_version: "{{ cilium_version | default('v0.16.24') }}"
+cilium_install_extra_args: ""
+cilium_wait_duration: "5m"

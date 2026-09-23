@@ -1,0 +1,5 @@
+---
+# Preprod specific configuration (Vagrant cluster)
+environment_name: "preprod"
+apiserver_advertise_address: "192.168.56.10"
+apiserver_bind_port: 6443

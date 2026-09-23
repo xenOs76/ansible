@@ -1,0 +1,84 @@
+---
+- name: Unhold kubeadm package on control plane
+  ansible.builtin.dpkg_selections:
+    name: kubeadm
+    selection: install
+  tags:
+    - upgrade
+    - upgrade_control_plane
+
+- name: Update apt cache and install target kubeadm version
+  ansible.builtin.apt:
+    name: "kubeadm={{ upgrade_target_k8s_version }}"
+    state: present
+    update_cache: true
+  tags:
+    - upgrade
+    - upgrade_control_plane
+
+- name: Hold kubeadm package on control plane
+  ansible.builtin.dpkg_selections:
+    name: kubeadm
+    selection: hold
+  tags:
+    - upgrade
+    - upgrade_control_plane
+
+- name: Check kubeadm upgrade plan
+  ansible.builtin.command: kubeadm upgrade plan
+  register: upgrade_kubeadm_plan_out
+  changed_when: false
+  tags:
+    - upgrade
+    - upgrade_control_plane
+
+- name: Apply kubeadm upgrade on control plane
+  ansible.builtin.command: >-
+    kubeadm upgrade apply -y "v{{ upgrade_target_k8s_version.split('-')[0] }}"
+  register: upgrade_kubeadm_upgrade_out
+  changed_when: true
+  tags:
+    - upgrade
+    - upgrade_control_plane
+
+- name: Unhold kubelet and kubectl packages on control plane
+  ansible.builtin.dpkg_selections:
+    name: "{{ item }}"
+    selection: install
+  loop:
+    - kubelet
+    - kubectl
+  tags:
+    - upgrade
+    - upgrade_control_plane
+
+- name: Install target kubelet and kubectl versions on control plane
+  ansible.builtin.apt:
+    name:
+      - "kubelet={{ upgrade_target_k8s_version }}"
+      - "kubectl={{ upgrade_target_k8s_version }}"
+    state: present
+    update_cache: true
+  tags:
+    - upgrade
+    - upgrade_control_plane
+
+- name: Hold kubelet and kubectl packages on control plane
+  ansible.builtin.dpkg_selections:
+    name: "{{ item }}"
+    selection: hold
+  loop:
+    - kubelet
+    - kubectl
+  tags:
+    - upgrade
+    - upgrade_control_plane
+
+- name: Restart kubelet service on control plane
+  ansible.builtin.systemd:
+    name: kubelet
+    state: restarted
+    daemon_reload: true
+  tags:
+    - upgrade
+    - upgrade_control_plane

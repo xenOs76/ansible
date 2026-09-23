@@ -1,0 +1,17 @@
+---
+- name: Upgrade Kubernetes control plane
+  hosts: control_plane
+  become: true
+  roles:
+    - role: upgrade
+  vars:
+    is_control_plane: true
+
+- name: Rolling upgrade of Kubernetes worker nodes
+  hosts: workers
+  become: true
+  serial: 1
+  roles:
+    - role: upgrade
+  vars:
+    is_control_plane: false

@@ -1,0 +1,60 @@
+---
+- name: Check if node has already joined the cluster
+  ansible.builtin.stat:
+    path: /etc/kubernetes/kubelet.conf
+  register: worker_kubelet_conf
+  tags:
+    - worker
+    - join
+
+- name: Validate that control plane join command is available
+  ansible.builtin.assert:
+    that:
+      - hostvars[groups['control_plane'][0]]['control_plane_join_command'] is defined
+    fail_msg: "The kubeadm join command is not available from control plane host!"
+  when: not worker_kubelet_conf.stat.exists
+  tags:
+    - worker
+    - join
+
+- name: Join node to Kubernetes cluster
+  ansible.builtin.command: "{{ hostvars[groups['control_plane'][0]]['control_plane_join_command'] }}"
+  when: not worker_kubelet_conf.stat.exists
+  register: worker_join_output
+  changed_when: true
+  tags:
+    - worker
+    - join
+
+- name: Ensure node-ip is configured in /etc/default/kubelet
+  ansible.builtin.lineinfile:
+    path: /etc/default/kubelet
+    line: "KUBELET_EXTRA_ARGS=--node-ip={{ node_ip | default(ansible_default_ipv4.address) }} --cgroup-driver=systemd"
+    create: true
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Restart kubelet
+  tags:
+    - worker
+    - kubelet
+
+- name: Ensure /etc/kubernetes/manifests directory exists
+  ansible.builtin.file:
+    path: /etc/kubernetes/manifests
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  tags:
+    - worker
+    - kubelet
+
+- name: Ensure kubelet service is enabled and started
+  ansible.builtin.systemd:
+    name: kubelet
+    enabled: true
+    state: started
+  tags:
+    - worker
+    - kubelet

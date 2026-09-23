@@ -1,0 +1,8 @@
+---
+- name: Bootstrap base Kubernetes node prerequisites
+  hosts: k8s_cluster
+  become: true
+  roles:
+    - role: common
+    - role: containerd
+    - role: kubernetes_packages

@@ -1,0 +1,3 @@
+---
+containerd_crictl_timeout: 10
+containerd_crictl_debug: false

@@ -1,0 +1,3 @@
+---
+# Worker nodes specific configuration
+is_control_plane: false

@@ -1,0 +1,6 @@
+---
+- name: Deploy and verify Cilium CNI
+  hosts: control_plane
+  become: true
+  roles:
+    - role: cilium

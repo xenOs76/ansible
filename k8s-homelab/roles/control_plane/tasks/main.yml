@@ -1,0 +1,67 @@
+---
+- name: Check if control plane is already initialized
+  ansible.builtin.stat:
+    path: /etc/kubernetes/admin.conf
+  register: control_plane_admin_conf
+  tags:
+    - control_plane
+    - init
+
+- name: Initialize Kubernetes control plane with kubeadm
+  ansible.builtin.command: >-
+    kubeadm init
+    --pod-network-cidr={{ control_plane_pod_network_cidr }}
+    --service-cidr={{ control_plane_service_cidr }}
+    --apiserver-advertise-address={{ apiserver_advertise_address | default(node_ip) | default(ansible_default_ipv4.address) }}
+    {{ control_plane_kubeadm_init_extra_args }}
+  when: not control_plane_admin_conf.stat.exists
+  register: control_plane_init_output
+  changed_when: true
+  tags:
+    - control_plane
+    - init
+
+- name: Create .kube directory for root
+  ansible.builtin.file:
+    path: /root/.kube
+    state: directory
+    mode: "0700"
+  tags:
+    - control_plane
+    - kubeconfig
+
+- name: Copy admin.conf to root kubeconfig
+  ansible.builtin.copy:
+    src: /etc/kubernetes/admin.conf
+    dest: /root/.kube/config
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0600"
+  tags:
+    - control_plane
+    - kubeconfig
+
+- name: Configure kubeconfig for administrative users
+  ansible.builtin.include_tasks: user_kubeconfig.yml
+  loop: "{{ control_plane_admin_users }}"
+  loop_control:
+    loop_var: current_admin_user
+  tags:
+    - control_plane
+    - kubeconfig
+
+- name: Generate fresh kubeadm join command
+  ansible.builtin.command: kubeadm token create --print-join-command
+  register: control_plane_join_cmd_raw
+  changed_when: false
+  tags:
+    - control_plane
+    - join_token
+
+- name: Set kubeadm join command fact on control plane
+  ansible.builtin.set_fact:
+    control_plane_join_command: "{{ control_plane_join_cmd_raw.stdout }}"
+  tags:
+    - control_plane
+    - join_token
