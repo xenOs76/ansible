@@ -37,6 +37,6 @@ helm upgrade --install metrics-server metrics-server/metrics-server \
   "${EXTRA_ARGS[@]}"
 
 echo "Waiting for metrics-server deployment rollout..."
-kubectl rollout status deployment metrics-server -n kube-system --timeout=120s || true
+kubectl rollout status deployment metrics-server -n kube-system --timeout=120s
 
 echo "=== Metrics server installed successfully ==="
