@@ -1,2 +1,4 @@
 .vagrant
 .direnv
+.devenv
+devenv.lock

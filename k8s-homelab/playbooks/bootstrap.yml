@@ -6,3 +6,9 @@
     - role: common
     - role: containerd
     - role: kubernetes_packages
+
+- name: Bootstrap control plane management tools and scripts
+  hosts: control_plane
+  become: true
+  roles:
+    - role: control_plane_tools

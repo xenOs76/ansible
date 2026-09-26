@@ -6,6 +6,20 @@ suite will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Added `control_plane_tools` role to install Helm via official Debian/Ubuntu
+  APT repository, k9s via official release `.deb` package, and stage
+  `install-kube-metrics.sh` during cluster bootstrap.
+- Added `scripts/install-kube-metrics.sh` helper script to deploy the
+  Kubernetes Metrics Server Helm chart with `--kubelet-insecure-tls`.
+- Integrated control plane tooling bootstrap phase into `playbooks/site.yml`
+  and `playbooks/bootstrap.yml`.
+- Added `install-kube-metrics.sh` and `control-plane-tools.sh` to `Vagrantfile`
+  provisioning for the control plane VM.
+
 ## [1.1.0] - 2026-09-23
 
 ### Added

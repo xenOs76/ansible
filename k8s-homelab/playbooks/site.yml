@@ -16,25 +16,36 @@
     - role: containerd
     - role: kubernetes_packages
 
-- name: 2. Initialize Kubernetes control plane
+- name: 2. Bootstrap control plane tooling (Helm APT, k9s .deb, metrics installer)
+  hosts: control_plane
+  become: true
+  roles:
+    - role: control_plane_tools
+  tags:
+    - bootstrap
+    - tools
+    - helm
+    - k9s
+
+- name: 3. Initialize Kubernetes control plane
   hosts: control_plane
   become: true
   roles:
     - role: control_plane
 
-- name: 3. Join worker nodes to cluster
+- name: 4. Join worker nodes to cluster
   hosts: workers
   become: true
   roles:
     - role: worker
 
-- name: 4. Deploy Cilium CNI and verify node readiness
+- name: 5. Deploy Cilium CNI and verify node readiness
   hosts: control_plane
   become: true
   roles:
     - role: cilium
 
-- name: 5. Display final cluster status
+- name: 6. Display final cluster status
   hosts: control_plane
   become: true
   tasks:

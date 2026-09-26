@@ -1,0 +1,9 @@
+---
+- name: Install Helm CLI via official APT repository
+  ansible.builtin.include_tasks: helm.yml
+
+- name: Install k9s CLI package
+  ansible.builtin.include_tasks: k9s.yml
+
+- name: Deploy kube-metrics installer script
+  ansible.builtin.include_tasks: kube_metrics.yml

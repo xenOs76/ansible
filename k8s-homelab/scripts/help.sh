@@ -52,6 +52,8 @@ ${BOLD}${YELLOW}[5] Kubernetes Setup Steps (Inside VMs)${RESET}
        ${GREEN}./cni-install-cilium.sh${RESET}
      Install Calico CNI (Option B):
        ${GREEN}./cni-install-calico.sh${RESET}
+     Install Metrics Server (via Helm):
+       ${GREEN}./install-kube-metrics.sh${RESET}
 
   2. On ${BOLD}kube-worker-1${RESET}:
      Join cluster:

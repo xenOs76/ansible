@@ -1,0 +1,17 @@
+---
+- name: Determine system architecture for k9s .deb package
+  ansible.builtin.set_fact:
+    control_plane_tools_k9s_deb_arch: "{{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}"
+  tags:
+    - bootstrap
+    - tools
+    - k9s
+
+- name: Install k9s from official release .deb package
+  ansible.builtin.apt:
+    deb: "https://github.com/derailed/k9s/releases/download/{{ control_plane_tools_k9s_version }}/k9s_linux_{{ control_plane_tools_k9s_deb_arch }}.deb"
+    state: present
+  tags:
+    - bootstrap
+    - tools
+    - k9s

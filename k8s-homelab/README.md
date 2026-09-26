@@ -367,9 +367,11 @@ k8s-homelab/
 │   ├── run-playbook.sh           # Playbook execution wrapper
 │   ├── common.sh                 # VM provisioning: containerd & k8s packages
 │   ├── control-plane.sh          # VM provisioning: kubeadm init helper
+│   ├── control-plane-tools.sh    # VM provisioning: Helm & k9s installer
 │   ├── worker.sh                 # VM provisioning: kubeadm join helper
 │   ├── cni-install-cilium.sh     # Cilium CLI installer
-│   └── cni-install-calico.sh     # Calico CNI installer
+│   ├── cni-install-calico.sh     # Calico CNI installer
+│   └── install-kube-metrics.sh   # Metrics Server Helm installer
 ├── inventory/
 │   ├── preprod/
 │   │   └── hosts.ini             # Inventory for Vagrant libvirt VMs
@@ -384,6 +386,7 @@ k8s-homelab/
 │   ├── common/                   # Swap off, kernel modules, sysctl
 │   ├── containerd/               # Docker apt repo, containerd.io
 │   ├── kubernetes_packages/      # pkgs.k8s.io repo, kubeadm, kubelet, kubectl
+│   ├── control_plane_tools/      # Helm (APT), k9s (.deb), metrics installer
 │   ├── control_plane/            # kubeadm init, kubeconfig, join token
 │   ├── worker/                   # kubeadm join execution, kubelet node-ip
 │   ├── cilium/                   # Cilium CLI download, deployment
@@ -416,6 +419,7 @@ specific tasks:
 | `common` | Disable swap persistently, load `overlay`/`br_netfilter`, set sysctl, install utils | `common`, `swap`, `modules`, `sysctl`, `packages` |
 | `containerd` | Setup Docker repository, install `containerd.io`, configure `SystemdCgroup = true` | `cri`, `containerd` |
 | `kubernetes_packages` | Add `pkgs.k8s.io` repository, install `kubeadm`/`kubelet`/`kubectl`, hold | `k8s_packages`, `kubeadm`, `kubelet`, `kubectl` |
+| `control_plane_tools` | Install Helm via official APT repo, k9s via release .deb, stage metrics script | `bootstrap`, `tools`, `helm`, `k9s`, `metrics` |
 | `control_plane` | Run `kubeadm init`, configure root/user kubeconfig, generate join token | `control_plane`, `init`, `kubeconfig`, `join_token` |
 | `worker` | Execute `kubeadm join`, configure node IP in `/etc/default/kubelet` | `worker`, `join`, `kubelet` |
 | `cilium` | Download Cilium CLI, install Cilium daemonset, wait for status, verify nodes | `cni`, `cilium`, `verify` |
