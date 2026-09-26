@@ -24,8 +24,6 @@
   tags:
     - bootstrap
     - tools
-    - helm
-    - k9s
 
 - name: 3. Initialize Kubernetes control plane
   hosts: control_plane

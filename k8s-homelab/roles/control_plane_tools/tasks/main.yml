@@ -1,9 +1,21 @@
 ---
 - name: Install Helm CLI via official APT repository
   ansible.builtin.include_tasks: helm.yml
+  tags:
+    - bootstrap
+    - tools
+    - helm
 
 - name: Install k9s CLI package
   ansible.builtin.include_tasks: k9s.yml
+  tags:
+    - bootstrap
+    - tools
+    - k9s
 
 - name: Deploy kube-metrics installer script
   ansible.builtin.include_tasks: kube_metrics.yml
+  tags:
+    - bootstrap
+    - tools
+    - metrics
