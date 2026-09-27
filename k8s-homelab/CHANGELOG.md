@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-09-27
+
 ### Added
 
 - Added `control_plane_tools` role to install Helm via official Debian/Ubuntu
@@ -29,6 +31,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `playbooks/site.yml`.
 - Automatically invoke `scripts/sync-kubeconfig.sh --best-effort` at the
   completion of `make preprod-up` to ensure credentials stay up to date.
+- Added comprehensive header docstrings, parameter specifications, and usage
+  examples across all homelab helper scripts under `scripts/`.
+
+### Fixed
+
+- Improved `scripts/sync-kubeconfig.sh` with robust `admin.conf` staging, dynamic
+  TLS server address resolution with reachable IP probing, and mode-aware sync.
+- Refined Helm repository setup to verify GPG key fingerprints and reject extra
+  primary keys.
 
 ## [1.1.0] - 2026-09-23
 
