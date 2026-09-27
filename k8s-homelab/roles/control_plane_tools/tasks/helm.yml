@@ -1,0 +1,97 @@
+---
+- name: Ensure /etc/apt/keyrings directory exists
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: "0755"
+  tags:
+    - bootstrap
+    - tools
+    - helm
+
+- name: Check if Helm GPG keyring already exists
+  ansible.builtin.stat:
+    path: /etc/apt/keyrings/helm.gpg
+  register: control_plane_tools_helm_keyring_stat
+  tags:
+    - bootstrap
+    - tools
+    - helm
+
+- name: Setup Helm repository GPG key
+  when: not control_plane_tools_helm_keyring_stat.stat.exists
+  tags:
+    - bootstrap
+    - tools
+    - helm
+  block:
+    - name: Download Helm raw GPG key to temporary file
+      ansible.builtin.get_url:
+        url: "{{ control_plane_tools_helm_apt_key_url }}"
+        dest: /tmp/helm-raw.gpg
+        mode: "0644"
+
+    - name: Extract primary key count from downloaded Helm key
+      ansible.builtin.shell: >-
+        set -o pipefail &&
+        gpg --show-keys --with-colons /tmp/helm-raw.gpg | grep -c '^pub:'
+      args:
+        executable: /bin/bash
+      register: control_plane_tools_helm_pub_count
+      changed_when: false
+
+    - name: Extract primary key fingerprint from downloaded Helm key
+      ansible.builtin.shell: >-
+        set -o pipefail &&
+        gpg --show-keys --with-colons /tmp/helm-raw.gpg | awk -F: '$1 == "pub" {getline; if ($1 == "fpr") print $10}'
+      args:
+        executable: /bin/bash
+      register: control_plane_tools_helm_key_fpr
+      changed_when: false
+
+    - name: Validate Helm GPG key contains only the pinned primary key
+      ansible.builtin.assert:
+        that:
+          - control_plane_tools_helm_pub_count.stdout | int == 1
+          - control_plane_tools_helm_key_fpr.stdout == control_plane_tools_helm_apt_key_fingerprint
+        fail_msg: >-
+          Downloaded Helm key response is invalid: found {{ control_plane_tools_helm_pub_count.stdout }} primary keys
+          with fingerprint '{{ control_plane_tools_helm_key_fpr.stdout }}'
+          (expected 1 key matching '{{ control_plane_tools_helm_apt_key_fingerprint }}').
+
+    - name: Dearmor Helm GPG key into /etc/apt/keyrings/helm.gpg
+      ansible.builtin.command:
+        cmd: gpg --dearmor -o /etc/apt/keyrings/helm.gpg /tmp/helm-raw.gpg
+      changed_when: true
+
+    - name: Ensure Helm keyring file permissions
+      ansible.builtin.file:
+        path: /etc/apt/keyrings/helm.gpg
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Clean up temporary raw key
+      ansible.builtin.file:
+        path: /tmp/helm-raw.gpg
+        state: absent
+
+- name: Add Helm official APT repository
+  ansible.builtin.apt_repository:
+    repo: "{{ control_plane_tools_helm_apt_repo }}"
+    state: present
+    filename: helm-stable-debian
+  tags:
+    - bootstrap
+    - tools
+    - helm
+
+- name: Install Helm package via APT
+  ansible.builtin.apt:
+    name: helm
+    state: present
+    update_cache: true
+  tags:
+    - bootstrap
+    - tools
+    - helm
