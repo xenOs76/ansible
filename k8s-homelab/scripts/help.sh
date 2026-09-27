@@ -28,6 +28,8 @@ ${BOLD}${YELLOW}[2] Cluster Lifecycle${RESET}
     ${GREEN}./scripts/shell.sh --run "vagrant halt"${RESET}
   Destroy and clean up all VMs:
     ${GREEN}make preprod-destroy${RESET}  or  ${GREEN}./scripts/shell.sh --run "vagrant destroy -f"${RESET}
+  Sync cluster credentials locally:
+    ${GREEN}make preprod-sync-kubeconfig${RESET}  or  ${GREEN}./scripts/sync-kubeconfig.sh${RESET}
 
 ${BOLD}${YELLOW}[3] Provisioning Existing VMs (No Re-creation)${RESET}
   Re-run provisioners on all running VMs:

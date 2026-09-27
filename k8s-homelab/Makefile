@@ -1,4 +1,4 @@
-.PHONY: all lint syntax inventory deps check-deps preprod-up preprod-destroy preprod-recreate preprod-status preprod-provision preprod-deploy preprod-cni preprod-upgrade preprod-reset help
+.PHONY: all lint syntax inventory deps check-deps preprod-up preprod-destroy preprod-recreate preprod-status preprod-provision preprod-sync-kubeconfig preprod-deploy preprod-cni preprod-upgrade preprod-reset help
 
 all: help
 
@@ -15,6 +15,7 @@ help:
 	@echo "make preprod-recreate  - Clean rebuild: destroy and boot fresh Vagrant VMs"
 	@echo "make preprod-status    - Check status of Vagrant VMs"
 	@echo "make preprod-provision - Run Vagrant provisioners on running preprod VMs"
+	@echo "make preprod-sync-kubeconfig - Sync cluster credentials non-disruptively to ~/.kube/config"
 	@echo "make preprod-deploy    - Run full site.yml deployment on preprod"
 	@echo "make preprod-cni       - Install/verify Cilium CNI on preprod"
 	@echo "make preprod-upgrade   - Run rolling upgrade on preprod"
@@ -45,6 +46,7 @@ inventory:
 
 preprod-up:
 	./scripts/shell.sh --run "vagrant up"
+	@./scripts/sync-kubeconfig.sh || true
 
 preprod-destroy:
 	./scripts/shell.sh --run "vagrant destroy -f"
@@ -56,6 +58,9 @@ preprod-recreate: preprod-destroy preprod-up
 
 preprod-provision:
 	./scripts/shell.sh --run "vagrant provision"
+
+preprod-sync-kubeconfig:
+	@./scripts/sync-kubeconfig.sh
 
 preprod-deploy:
 	./scripts/run-playbook.sh -e preprod -p site.yml

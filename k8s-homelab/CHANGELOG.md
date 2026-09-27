@@ -19,6 +19,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and `playbooks/bootstrap.yml`.
 - Added `install-kube-metrics.sh` and `control-plane-tools.sh` to `Vagrantfile`
   provisioning for the control plane VM.
+- Added `scripts/sync-kubeconfig.sh` helper script and Makefile target
+  `preprod-sync-kubeconfig` to non-disruptively synchronize preprod cluster
+  credentials to local `~/.kube/config` and generate `kubeconfig.preprod`.
+- Automatically invoke `scripts/sync-kubeconfig.sh` at the completion of
+  `make preprod-up` to ensure local cluster credentials stay up to date.
 
 ## [1.1.0] - 2026-09-23
 
