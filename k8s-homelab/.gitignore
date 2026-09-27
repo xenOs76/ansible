@@ -3,5 +3,5 @@
 .devenv
 devenv.lock
 admin.conf
-kubeconfig.preprod
+kubeconfig.*
 kubeadm-init.out

@@ -1,0 +1,8 @@
+---
+# Production specific configuration
+environment_name: "prod"
+
+# Context and cluster naming for production
+cluster_name: "k8s-homelab"
+k8s_context_name: "k8s-homelab"
+k8s_user_name: "k8s-homelab-admin"

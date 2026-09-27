@@ -76,3 +76,30 @@
         msg: "{{ cluster_pods.stdout_lines }}"
       tags:
         - verify
+
+    - name: Fetch admin.conf to local workstation controller
+      ansible.builtin.fetch:
+        src: /etc/kubernetes/admin.conf
+        dest: "{{ playbook_dir }}/../admin.conf"
+        flat: true
+      run_once: true
+      tags:
+        - sync_kubeconfig
+        - kubeconfig
+
+    - name: Synchronize Kubernetes credentials to local client machine
+      ansible.builtin.command:
+        cmd: >-
+          {{ playbook_dir }}/../scripts/sync-kubeconfig.sh
+          -e {{ environment_name | default('preprod') }}
+      delegate_to: localhost
+      run_once: true
+      become: false
+      environment:
+        CONTEXT_NAME: "{{ k8s_context_name | default('k8s-homelab') }}"
+        CLUSTER_NAME: "{{ k8s_cluster_name | default('k8s-homelab') }}"
+        USER_NAME: "{{ k8s_user_name | default('k8s-homelab-admin') }}"
+      changed_when: true
+      tags:
+        - sync_kubeconfig
+        - kubeconfig
