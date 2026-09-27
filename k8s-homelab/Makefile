@@ -46,7 +46,7 @@ inventory:
 
 preprod-up:
 	./scripts/shell.sh --run "vagrant up"
-	@./scripts/sync-kubeconfig.sh || true
+	@./scripts/sync-kubeconfig.sh --best-effort || true
 
 preprod-destroy:
 	./scripts/shell.sh --run "vagrant destroy -f"
