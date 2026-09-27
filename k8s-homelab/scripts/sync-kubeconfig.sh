@@ -1,6 +1,45 @@
 #!/usr/bin/env bash
-# Synchronize Vagrant preprod Kubernetes credentials non-disruptively
-# with the local client's ~/.kube/config and generate a standalone kubeconfig.
+# ==============================================================================
+# Script: sync-kubeconfig.sh
+# Purpose: Non-disruptively synchronize Kubernetes cluster admin credentials
+#          from the preprod Vagrant environment to the local client machine.
+#
+# Context:
+#   Executed on the HOST machine (not inside VMs). Can be invoked manually,
+#   via 'make preprod-sync-kubeconfig', or automatically at the completion
+#   of 'make preprod-up'.
+#
+# Non-Disruptive Safety Guarantees:
+#   1. Zero Data Loss: Automatically backs up existing ~/.kube/config to
+#      ~/.kube/backups/config.backup.<YYYYMMDD_HHMMSS> prior to any mutation.
+#   2. Namespacing: Renames generic 'kubernetes' cluster, 'kubernetes-admin' user,
+#      and context to 'homelab-k8s' / 'homelab-k8s-admin'.
+#   3. Context Preservation: Captures the active current-context before merging
+#      and restores it immediately afterwards, ensuring no interruption to
+#      unrelated cluster workflows.
+#   4. Standalone File: Generates 'kubeconfig.preprod' (mode 0600) in the
+#      repo root for isolated cluster interaction via KUBECONFIG export.
+#   5. Idempotent & Safe: Safe to run repeatedly; refreshes tokens/certs without
+#      duplicating entries. Exits 0 if the cluster is not yet initialized.
+#
+# Usage:
+#   ./scripts/sync-kubeconfig.sh
+#   # Or via Makefile:
+#   make preprod-sync-kubeconfig
+#
+# Configurable Environment Variables:
+#   CLUSTER_NAME     - Name for the cluster entry (default: homelab-k8s).
+#   USER_NAME        - Name for the user credential entry (default: homelab-k8s-admin).
+#   CONTEXT_NAME     - Name for the context entry (default: homelab-k8s).
+#   API_SERVER       - External HTTPS URL of the Kubernetes API server
+#                      (default: https://192.168.56.10:6443).
+#   KUBECONFIG       - Target client kubeconfig file (default: ~/.kube/config).
+#
+# Prerequisites:
+#   - 'kubectl' and 'python3' available in PATH on the host machine.
+#   - Control plane node initialized with '/etc/kubernetes/admin.conf' or
+#     'admin.conf' cached in repository root.
+# ==============================================================================
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -40,7 +79,9 @@ trap cleanup EXIT
 
 RAW_ADMIN="${TMP_DIR}/raw-admin.conf"
 
-# 1. Discover admin.conf source
+# ------------------------------------------------------------------------------
+# 1. Discover admin.conf source (local cache or live VM)
+# ------------------------------------------------------------------------------
 if [[ -f "${BASE_DIR}/admin.conf" && -s "${BASE_DIR}/admin.conf" ]]; then
   cp -f "${BASE_DIR}/admin.conf" "${RAW_ADMIN}"
 elif [[ -x "${BASE_DIR}/scripts/shell.sh" ]]; then
@@ -73,10 +114,14 @@ fi
 
 echo "${BOLD}${CYAN}[sync-kubeconfig]${RESET} Processing Kubernetes admin credentials..."
 
+# ------------------------------------------------------------------------------
 # 2. Extract JSON representation
+# ------------------------------------------------------------------------------
 kubectl --kubeconfig="${RAW_ADMIN}" config view --raw -o json > "${TMP_DIR}/admin.json"
 
+# ------------------------------------------------------------------------------
 # 3. Transform config: namespace cluster, user, and context
+# ------------------------------------------------------------------------------
 python3 - "${TMP_DIR}/admin.json" "${API_SERVER}" "${CLUSTER_NAME}" "${USER_NAME}" "${CONTEXT_NAME}" <<'PYEOF'
 import json
 import sys
@@ -110,12 +155,16 @@ with open(json_file, "w", encoding="utf-8") as f:
     json.dump(data, f, indent=2)
 PYEOF
 
-# 4. Generate standalone kubeconfig
+# ------------------------------------------------------------------------------
+# 4. Generate standalone kubeconfig (mode 0600)
+# ------------------------------------------------------------------------------
 kubectl --kubeconfig="${TMP_DIR}/admin.json" config view --raw > "${STANDALONE_KUBECONFIG}"
 chmod 0600 "${STANDALONE_KUBECONFIG}"
 echo "${GREEN}✔${RESET} Standalone kubeconfig written to: ${STANDALONE_KUBECONFIG}"
 
+# ------------------------------------------------------------------------------
 # 5. Non-disruptive merge into local client kubeconfig
+# ------------------------------------------------------------------------------
 CLIENT_DIR="$(dirname "${CLIENT_KUBECONFIG}")"
 mkdir -p "${CLIENT_DIR}"
 

@@ -1,5 +1,19 @@
 #!/usr/bin/env bash
-# Quick reference for managing the CKA training Vagrant Libvirt cluster
+# ==============================================================================
+# Script: help.sh
+# Purpose: Display formatted quick-reference cheatsheet and operational workflows
+#          for managing the CKA training Vagrant + Libvirt Kubernetes cluster.
+#
+# Context:
+#   Executed on the HOST machine. Designed as an interactive terminal cheatsheet
+#   summarizing environment loading, VM lifecycle, manual CKA setup steps,
+#   SSH commands, and credentials synchronization.
+#
+# Usage:
+#   ./scripts/help.sh
+#   # Or via Makefile default target:
+#   make help
+# ==============================================================================
 set -euo pipefail
 
 # ANSI color codes

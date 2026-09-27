@@ -1,4 +1,38 @@
 #!/usr/bin/env bash
+# ==============================================================================
+# Script: install-kube-metrics.sh
+# Purpose: Deploy or upgrade the Kubernetes Metrics Server Helm chart with
+#          homelab-compatible settings (--kubelet-insecure-tls).
+#
+# Context:
+#   Can be executed directly on the control plane node or from the host machine
+#   when pointing to a valid kubeconfig. Requires 'helm' and 'kubectl'.
+#
+# Usage:
+#   ./install-kube-metrics.sh [METRICS_SERVER_VERSION]
+#
+# Arguments:
+#   $1 - METRICS_SERVER_VERSION  (Optional) Pinned Helm chart version to install.
+#                                Default: Latest available from upstream Helm repo.
+#
+# Environment Variables:
+#   KUBECONFIG - Path to kubeconfig. Automatically defaults to
+#                /etc/kubernetes/admin.conf if run inside the control plane VM
+#                without an existing ~/.kube/config.
+#
+# Technical Note on --kubelet-insecure-tls:
+#   Standard kubeadm clusters use self-signed serving certificates for node
+#   kubelets. Without '--kubelet-insecure-tls', Metrics Server cannot scrape
+#   kubelet 10250 metrics endpoints and logs 'x509: certificate signed by unknown
+#   authority'. This flag enables secure scrape over TLS while bypassing the
+#   unknown CA verification error in lab environments.
+#
+# Manual Verification:
+#   kubectl rollout status deployment metrics-server -n kube-system
+#   kubectl get deployment metrics-server -n kube-system
+#   kubectl top nodes   # (Allow ~60-90s after rollout for initial metric collection)
+#   kubectl top pods -A
+# ==============================================================================
 set -euo pipefail
 
 echo "=== Installing Kubernetes Metrics Server via Helm ==="
@@ -30,7 +64,6 @@ helm repo add metrics-server https://kubernetes-sigs.github.io/metrics-server/ >
 helm repo update metrics-server
 
 echo "Installing/upgrading metrics-server chart..."
-# Note: --kubelet-insecure-tls is required in kubeadm homelabs due to self-signed kubelet certs
 helm upgrade --install metrics-server metrics-server/metrics-server \
   --namespace kube-system \
   --set args="{--kubelet-insecure-tls}" \
@@ -40,3 +73,4 @@ echo "Waiting for metrics-server deployment rollout..."
 kubectl rollout status deployment metrics-server -n kube-system --timeout=120s
 
 echo "=== Metrics server installed successfully ==="
+echo "Note: Resource metrics will be visible via 'kubectl top nodes' in ~60-90 seconds."
