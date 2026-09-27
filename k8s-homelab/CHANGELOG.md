@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-09-27
+
 ### Added
 
 - Added `control_plane_tools` role to install Helm via official Debian/Ubuntu
@@ -19,6 +21,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and `playbooks/bootstrap.yml`.
 - Added `install-kube-metrics.sh` and `control-plane-tools.sh` to `Vagrantfile`
   provisioning for the control plane VM.
+- Added `scripts/sync-kubeconfig.sh` helper script and Makefile targets
+  `preprod-sync-kubeconfig` and `prod-sync-kubeconfig` to non-disruptively
+  synchronize cluster credentials to local `~/.kube/config`.
+- Integrated environment-aware context naming configured via Ansible
+  `group_vars` (`k8s_context_name`, `cluster_name`, `k8s_user_name`),
+  defaulting to `k8s-homelab-preprod` for preprod and `k8s-homelab` for prod.
+- Integrated automated credential staging and synchronization into
+  `playbooks/site.yml`.
+- Automatically invoke `scripts/sync-kubeconfig.sh --best-effort` at the
+  completion of `make preprod-up` to ensure credentials stay up to date.
+- Added comprehensive header docstrings, parameter specifications, and usage
+  examples across all homelab helper scripts under `scripts/`.
+
+### Fixed
+
+- Improved `scripts/sync-kubeconfig.sh` with robust `admin.conf` staging, dynamic
+  TLS server address resolution with reachable IP probing, and mode-aware sync.
+- Refined Helm repository setup to verify GPG key fingerprints and reject extra
+  primary keys.
 
 ## [1.1.0] - 2026-09-23
 

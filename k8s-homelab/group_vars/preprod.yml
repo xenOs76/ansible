@@ -3,3 +3,8 @@
 environment_name: "preprod"
 apiserver_advertise_address: "192.168.56.10"
 apiserver_bind_port: 6443
+
+# Context and cluster naming for preprod
+cluster_name: "k8s-homelab-preprod"
+k8s_context_name: "k8s-homelab-preprod"
+k8s_user_name: "k8s-homelab-preprod-admin"

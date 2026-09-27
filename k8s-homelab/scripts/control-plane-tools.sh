@@ -1,9 +1,49 @@
 #!/usr/bin/env bash
+# ==============================================================================
+# Script: control-plane-tools.sh
+# Purpose: Install essential Kubernetes administration and operations CLI tools
+#          (Helm v3 and k9s) on the control plane node.
+#
+# Context:
+#   Executed inside the 'kube-control-plane' VM with superuser privileges
+#   (root / sudo). Run during Vagrant initial provisioning or manually on any
+#   control plane node requiring administration utilities.
+#
+# Usage:
+#   sudo /vagrant/scripts/control-plane-tools.sh
+#   # Or with custom k9s version:
+#   sudo K9S_VERSION="v0.40.10" /vagrant/scripts/control-plane-tools.sh
+#
+# Environment Variables:
+#   K9S_VERSION - Target release tag of k9s to install from GitHub releases.
+#                 Default: v0.40.10
+#
+# Key Subsystems Installed:
+#   1. Helm v3:
+#      - Verifies and imports official Helm Debian APT repository signing key.
+#      - Validates key against published fingerprint:
+#        DDF78C3E6EBB2D2CC223C95C62BA89D07698DBC6
+#      - Installs helm package via apt-get.
+#   2. k9s Terminal UI:
+#      - Detects current installed version to ensure idempotency.
+#      - Downloads official architecture-specific .deb from GitHub releases.
+#      - Installs package via apt-get and removes temporary installer.
+#
+# Manual Verification:
+#   helm version --short
+#   k9s version --short
+#
+# Troubleshooting:
+#   - If Helm key verification fails: Check curl connectivity to packages.buildkite.com.
+#   - If k9s download fails: Verify GitHub access or inspect /tmp/k9s_linux_*.deb.
+# ==============================================================================
 set -euo pipefail
 
 echo "=== Installing Control Plane Tools (Helm, k9s) ==="
 
-# 1. Install Helm via official APT repository
+# ------------------------------------------------------------------------------
+# 1. Install Helm via official APT repository with GPG fingerprint verification
+# ------------------------------------------------------------------------------
 if ! command -v helm >/dev/null 2>&1; then
   echo "Installing Helm via official APT repository..."
   mkdir -p /etc/apt/keyrings
@@ -29,7 +69,9 @@ else
   echo "Helm is already installed."
 fi
 
-# 2. Install k9s via official .deb package
+# ------------------------------------------------------------------------------
+# 2. Install k9s via official release .deb package
+# ------------------------------------------------------------------------------
 K9S_VERSION="${K9S_VERSION:-v0.40.10}"
 NORMALIZED_TARGET="${K9S_VERSION#v}"
 INSTALLED_K9S_VERSION=""

@@ -520,8 +520,33 @@ ansible-playbook -i inventory/preprod/hosts.ini playbooks/site.yml
 
 ### 3. Verify Cluster
 
-Once finished, the playbook outputs the cluster nodes and pod summary. You
-can also SSH to the control plane:
+Once finished, the playbook outputs the cluster nodes and pod summary.
+
+#### Option A: Direct Host Access via Synced Credentials
+
+Cluster credentials are synchronized non-disruptively into your local
+`~/.kube/config` and written to standalone `kubeconfig.<env>`. Context names
+are configurable via Ansible `group_vars`:
+
+- **Preprod**: `k8s-homelab-preprod` (configured in `group_vars/preprod.yml`)
+- **Production**: `k8s-homelab` (configured in `group_vars/prod.yml`)
+
+```bash
+# Query the preprod cluster directly from host
+kubectl --context=k8s-homelab-preprod get nodes -o wide
+
+# Or switch active context
+kubectl config use-context k8s-homelab-preprod
+kubectl get pods -A
+
+# Or re-synchronize credentials manually at any time
+make preprod-sync-kubeconfig
+# For production: make prod-sync-kubeconfig
+```
+
+#### Option B: SSH to Control Plane
+
+You can also SSH into the control plane VM directly:
 
 ```bash
 ./scripts/shell.sh --run "vagrant ssh kube-control-plane"

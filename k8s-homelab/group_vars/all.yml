@@ -1,6 +1,6 @@
 ---
 # Playbook suite version
-playbook_version: "1.1.0"
+playbook_version: "1.2.0"
 
 # Kubernetes versions and repositories
 k8s_version: "1.34.1-1.1"
@@ -8,8 +8,11 @@ k8s_version_major_minor: "v1.34"
 
 # Cluster networking
 pod_network_cidr: "10.1.0.0/16"
-service_cidr: "10.96.0.0/12"  # 10.96.0.0 → 10.111.255.255
-cluster_name: "homelab-k8s"
+cluster_name: "k8s-homelab"
+
+# Kubernetes context and credential naming for local client sync
+k8s_context_name: "k8s-homelab"
+k8s_user_name: "k8s-homelab-admin"
 
 # Container runtime (CRI)
 container_runtime: "containerd"
