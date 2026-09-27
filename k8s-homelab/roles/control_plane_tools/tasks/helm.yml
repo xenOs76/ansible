@@ -31,20 +31,33 @@
         dest: /tmp/helm-raw.gpg
         mode: "0644"
 
-    - name: Extract fingerprint of downloaded Helm key
+    - name: Extract primary key count from downloaded Helm key
       ansible.builtin.shell: >-
         set -o pipefail &&
-        gpg --show-keys --with-colons /tmp/helm-raw.gpg | awk -F: '$1 == "fpr" {print $10}' | head -n 1
+        gpg --show-keys --with-colons /tmp/helm-raw.gpg | grep -c '^pub:'
+      args:
+        executable: /bin/bash
+      register: control_plane_tools_helm_pub_count
+      changed_when: false
+
+    - name: Extract primary key fingerprint from downloaded Helm key
+      ansible.builtin.shell: >-
+        set -o pipefail &&
+        gpg --show-keys --with-colons /tmp/helm-raw.gpg | awk -F: '$1 == "pub" {getline; if ($1 == "fpr") print $10}'
+      args:
+        executable: /bin/bash
       register: control_plane_tools_helm_key_fpr
       changed_when: false
 
-    - name: Validate Helm GPG key fingerprint matches expected key
+    - name: Validate Helm GPG key contains only the pinned primary key
       ansible.builtin.assert:
         that:
+          - control_plane_tools_helm_pub_count.stdout | int == 1
           - control_plane_tools_helm_key_fpr.stdout == control_plane_tools_helm_apt_key_fingerprint
         fail_msg: >-
-          Downloaded Helm key fingerprint '{{ control_plane_tools_helm_key_fpr.stdout }}' does not match
-          expected '{{ control_plane_tools_helm_apt_key_fingerprint }}'.
+          Downloaded Helm key response is invalid: found {{ control_plane_tools_helm_pub_count.stdout }} primary keys
+          with fingerprint '{{ control_plane_tools_helm_key_fpr.stdout }}'
+          (expected 1 key matching '{{ control_plane_tools_helm_apt_key_fingerprint }}').
 
     - name: Dearmor Helm GPG key into /etc/apt/keyrings/helm.gpg
       ansible.builtin.command:

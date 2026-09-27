@@ -11,9 +11,10 @@ if ! command -v helm >/dev/null 2>&1; then
     HELM_KEY_FINGERPRINT="DDF78C3E6EBB2D2CC223C95C62BA89D07698DBC6"  # gitleaks:allow
     TMP_HELM_KEY=$(mktemp /tmp/helm.XXXXXX.gpg)
     curl -fsSL https://packages.buildkite.com/helm-linux/helm-debian/gpgkey -o "$TMP_HELM_KEY"
-    DETECTED_FPR=$(gpg --show-keys --with-colons "$TMP_HELM_KEY" | awk -F: '$1 == "fpr" {print $10}' | head -n 1)
-    if [ "$DETECTED_FPR" != "$HELM_KEY_FINGERPRINT" ]; then
-      echo "ERROR: Helm APT key fingerprint mismatch: ${DETECTED_FPR} != ${HELM_KEY_FINGERPRINT}" >&2
+    PUB_COUNT=$(gpg --show-keys --with-colons "$TMP_HELM_KEY" | grep -c '^pub:' || true)
+    DETECTED_FPR=$(gpg --show-keys --with-colons "$TMP_HELM_KEY" | awk -F: '$1 == "pub" {getline; if ($1 == "fpr") print $10}')
+    if [ "$PUB_COUNT" -ne 1 ] || [ "$DETECTED_FPR" != "$HELM_KEY_FINGERPRINT" ]; then
+      echo "ERROR: Helm APT key validation failed: found ${PUB_COUNT} primary keys (expected 1), fingerprint='${DETECTED_FPR}'" >&2
       rm -f "$TMP_HELM_KEY"
       exit 1
     fi
