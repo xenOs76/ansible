@@ -93,6 +93,12 @@ elif [[ "${ENV}" == "preprod" ]]; then
     fi
   fi
 
+  if [[ "${FETCH_SUCCESS}" == "true" && -s "${SRC_CONF}" ]]; then
+    # Strip carriage returns and non-YAML banner headers (e.g. from nix-shell or vagrant)
+    sed -i 's/\r$//' "${SRC_CONF}"
+    sed -i -n '/^\(apiVersion\|kind\):/,$p' "${SRC_CONF}"
+  fi
+
   if [[ "${FETCH_SUCCESS}" == "true" && -s "${SRC_CONF}" ]] && grep -q "apiVersion:" "${SRC_CONF}"; then
     cp -f "${SRC_CONF}" "${STAGED_CONF}"
     chmod 0600 "${STAGED_CONF}"
@@ -118,6 +124,10 @@ else
   fi
 fi
 
+# Ensure source config is sanitized of any extraneous leading lines
+sed -i 's/\r$//' "${SRC_CONF}"
+sed -i -n '/^\(apiVersion\|kind\):/,$p' "${SRC_CONF}"
+
 # 2. Resolve Server Endpoint (User Override -> Inventory -> Detected server)
 DETECTED_SERVER="$(kubectl --kubeconfig="${SRC_CONF}" config view --minify -o jsonpath='{.clusters[0].cluster.server}' 2>/dev/null || true)"
 API_PORT="$(echo "${DETECTED_SERVER}" | grep -oE '[0-9]+$' || echo "6443")"
@@ -142,6 +152,12 @@ fi
 # 3. Extract credentials and assemble standalone kubeconfig
 CLIENT_CERT="$(kubectl --kubeconfig="${SRC_CONF}" config view --raw -o jsonpath='{.users[0].user.client-certificate-data}' 2>/dev/null || true)"
 CLIENT_KEY="$(kubectl --kubeconfig="${SRC_CONF}" config view --raw -o jsonpath='{.users[0].user.client-key-data}' 2>/dev/null || true)"
+
+if [[ -z "${CLIENT_CERT}" || -z "${CLIENT_KEY}" ]]; then
+  echo "${RED}Error:${RESET} Failed to extract client certificate credentials from ${SRC_CONF}." >&2
+  echo "       Please verify the cluster is properly initialized." >&2
+  exit 1
+fi
 
 rm -f "${STANDALONE_KUBECONFIG}"
 kubectl --kubeconfig="${STANDALONE_KUBECONFIG}" config set-cluster "${CLUSTER_NAME}" \
