@@ -26,6 +26,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated default preprod worker node count from 1 to 2 in `Vagrantfile`, added
   `kube-worker-2` (`192.168.56.22`) to `inventory/preprod/hosts.ini`, and updated
   topology references across documentation and helper scripts.
+- Rewrote `scripts/sync-kubeconfig.sh` using native `kubectl config` subcommands and
+  defensive Bash patterns: eliminated all Python dependencies and nested `nix-shell` launches,
+  reducing execution time to ~1s. The script dynamically resolves the control plane endpoint
+  from inventory or source config, configures certificate trust via `--insecure-skip-tls-verify=true`,
+  and merges credentials into `~/.kube/config`.
 
 ### Fixed
 

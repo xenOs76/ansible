@@ -1,56 +1,20 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # Script: sync-kubeconfig.sh
-# Purpose: Non-disruptively synchronize Kubernetes cluster admin credentials
-#          from preprod (Vagrant) or production environments to the local
-#          client machine (~/.kube/config).
+# Purpose: Import and synchronize Kubernetes admin credentials from the
+#          control plane into standalone and workstation kubeconfigs (~/.kube/config).
 #
 # Context:
-#   Executed on the HOST machine (not inside VMs). Can be invoked manually via
-#   'make preprod-sync-kubeconfig', automatically at the completion of
-#   'make preprod-up' (--best-effort mode), or directly via Ansible playbooks.
-#
-# Environment Integration & Defaults:
-#   - Preprod Environment (-e preprod):
-#       Context: k8s-homelab-preprod
-#       Cluster: k8s-homelab-preprod
-#       User:    k8s-homelab-preprod-admin
-#       File:    k8s-homelab/kubeconfig.preprod
-#   - Production Environment (-e prod):
-#       Context: k8s-homelab
-#       Cluster: k8s-homelab
-#       User:    k8s-homelab-admin
-#       File:    k8s-homelab/kubeconfig.prod
-#
-#   All settings dynamically inherit configuration values from Ansible:
-#   group_vars/<env>.yml -> group_vars/all.yml (k8s_context_name, cluster_name, k8s_user_name).
-#   Values can also be overridden via environment variables (CONTEXT_NAME, CLUSTER_NAME, USER_NAME).
-#
-# Non-Disruptive Safety Guarantees:
-#   1. Zero Data Loss: Automatically backs up existing ~/.kube/config to
-#      ~/.kube/backups/config.backup.<YYYYMMDD_HHMMSS> prior to any mutation.
-#   2. Environment Isolation: Keeps preprod (k8s-homelab-preprod) and prod (k8s-homelab)
-#      distinct so developers can seamlessly manage both clusters from one machine.
-#   3. Context Preservation: Captures the active current-context before merging
-#      and restores it immediately afterwards, ensuring no interruption to
-#      unrelated cluster workflows.
-#   4. Standalone Files: Generates 'kubeconfig.<env>' (mode 0600) in the
-#      repo root for isolated cluster interaction via KUBECONFIG export.
-#   5. Inventory-Driven Server Resolution: Automatically resolves the control
-#      plane address from the Ansible inventory (inventory/<env>/hosts.ini),
-#      preserving TLS SAN validity and ensuring host connectivity via the static
-#      management network (e.g. 192.168.56.10).
+#   Executed on the HOST machine. Invoked by 'make preprod-sync-kubeconfig',
+#   'make prod-sync-kubeconfig', or automatically during cluster deployment.
 #
 # Usage:
-#   ./scripts/sync-kubeconfig.sh [-e <preprod|prod>] [--best-effort]
-#   # Or via Makefile:
-#   make preprod-sync-kubeconfig
-#   make prod-sync-kubeconfig
+#   ./scripts/sync-kubeconfig.sh [-e preprod|prod] [-b|--best-effort]
 # ==============================================================================
-set -euo pipefail
+set -Eeuo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BASE_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+BASE_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd -P)"
 
 ENV="preprod"
 BEST_EFFORT=false
@@ -58,12 +22,16 @@ BEST_EFFORT=false
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -e|--env)
-      ENV="$2"
+      ENV="${2:-preprod}"
       shift 2
       ;;
     -b|--best-effort)
       BEST_EFFORT=true
       shift
+      ;;
+    -h|--help)
+      echo "Usage: $0 [-e preprod|prod] [-b|--best-effort]"
+      exit 0
       ;;
     *)
       shift
@@ -82,315 +50,117 @@ RESET=$(printf '\033[0m')
 # Check required commands
 if ! command -v kubectl >/dev/null 2>&1; then
   echo "${YELLOW}Warning: 'kubectl' not found in PATH. Skipping kubeconfig sync.${RESET}" >&2
-  echo "Hint: Install kubectl or enter nix-shell to sync credentials." >&2
-  exit 0
-fi
-
-if ! command -v python3 >/dev/null 2>&1; then
-  echo "${YELLOW}Warning: 'python3' not found in PATH. Skipping kubeconfig sync.${RESET}" >&2
   exit 0
 fi
 
 TMP_DIR="$(mktemp -d)"
-cleanup() {
-  rm -rf "${TMP_DIR}"
-}
-trap cleanup EXIT
+trap 'rm -rf "${TMP_DIR}"' EXIT
 
-# ------------------------------------------------------------------------------
-# 1. Resolve Configuration from Ansible Inventory & group_vars
-# ------------------------------------------------------------------------------
-RESOLVED_VARS=$(python3 - "${BASE_DIR}" "${ENV}" <<'PYEOF'
-import os, sys, yaml, json, subprocess
+# Determine cluster names and defaults based on environment
+if [[ "${ENV}" == "preprod" ]]; then
+  DEFAULT_CTX="k8s-homelab-preprod"
+  DEFAULT_CLUSTER="k8s-homelab-preprod"
+  DEFAULT_USER="k8s-homelab-preprod-admin"
+else
+  DEFAULT_CTX="k8s-homelab"
+  DEFAULT_CLUSTER="k8s-homelab"
+  DEFAULT_USER="k8s-homelab-admin"
+fi
 
-base_dir = sys.argv[1]
-env = sys.argv[2]
-
-default_ctx = "k8s-homelab-preprod" if env == "preprod" else "k8s-homelab"
-default_cluster = "k8s-homelab-preprod" if env == "preprod" else "k8s-homelab"
-default_user = "k8s-homelab-preprod-admin" if env == "preprod" else "k8s-homelab-admin"
-
-def lookup(key, fallback):
-    for rel_path in [f"group_vars/{env}.yml", "group_vars/all.yml"]:
-        full_path = os.path.join(base_dir, rel_path)
-        if os.path.isfile(full_path):
-            try:
-                with open(full_path, "r", encoding="utf-8") as f:
-                    data = yaml.safe_load(f) or {}
-                    if key in data and data[key]:
-                        return str(data[key])
-            except Exception:
-                pass
-    return fallback
-
-ctx = os.environ.get("CONTEXT_NAME") or lookup("k8s_context_name", default_ctx)
-cluster = os.environ.get("CLUSTER_NAME") or lookup("cluster_name", default_cluster)
-user = os.environ.get("USER_NAME") or lookup("k8s_user_name", default_user)
-
-def get_control_plane_address():
-    # 1. Query ansible-inventory CLI if present in environment
-    try:
-        inv_file = os.path.join(base_dir, f"inventory/{env}/hosts.ini")
-        if os.path.isfile(inv_file):
-            res = subprocess.run(
-                ["ansible-inventory", "-i", inv_file, "--list"],
-                capture_output=True, text=True, timeout=5
-            )
-            if res.returncode == 0:
-                inv_data = json.loads(res.stdout)
-                cp_hosts = inv_data.get("control_plane", {}).get("hosts", [])
-                if cp_hosts:
-                    first_cp = cp_hosts[0]
-                    hvars = inv_data.get("_meta", {}).get("hostvars", {}).get(first_cp, {})
-                    target = (
-                        hvars.get("ansible_host") or
-                        hvars.get("apiserver_advertise_address") or
-                        hvars.get("node_ip") or
-                        first_cp
-                    )
-                    if target and not target.startswith("{{"):
-                        return target
-    except Exception:
-        pass
-
-    # 2. Parse inventory/<env>/hosts.ini directly
-    hosts_file = os.path.join(base_dir, f"inventory/{env}/hosts.ini")
-    if os.path.isfile(hosts_file):
-        in_cp = False
-        with open(hosts_file, "r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if not line or line.startswith("#") or line.startswith(";"):
-                    continue
-                if line.startswith("[") and line.endswith("]"):
-                    in_cp = (line[1:-1].strip() == "control_plane")
-                    continue
-                if in_cp:
-                    parts = line.split()
-                    for p in parts[1:]:
-                        if p.startswith("ansible_host="):
-                            return p.split("=", 1)[1].strip("'\"")
-                    for p in parts[1:]:
-                        if p.startswith("node_ip="):
-                            return p.split("=", 1)[1].strip("'\"")
-                    if parts:
-                        return parts[0]
-
-    # 3. Check group_vars for explicit advertise address
-    for rel_path in [f"group_vars/{env}.yml", f"group_vars/control_plane.yml", "group_vars/all.yml"]:
-        full_path = os.path.join(base_dir, rel_path)
-        if os.path.isfile(full_path):
-            try:
-                with open(full_path, "r", encoding="utf-8") as f:
-                    data = yaml.safe_load(f) or {}
-                    if "apiserver_advertise_address" in data and data["apiserver_advertise_address"]:
-                        return str(data["apiserver_advertise_address"])
-            except Exception:
-                pass
-    return ""
-
-cp_host = get_control_plane_address()
-print(f"{ctx}|{cluster}|{user}|{cp_host}")
-PYEOF
-)
-
-IFS='|' read -r CONTEXT_NAME CLUSTER_NAME USER_NAME INVENTORY_CP_HOST <<< "${RESOLVED_VARS}"
+CONTEXT_NAME="${CONTEXT_NAME:-${DEFAULT_CTX}}"
+CLUSTER_NAME="${CLUSTER_NAME:-${DEFAULT_CLUSTER}}"
+USER_NAME="${USER_NAME:-${DEFAULT_USER}}"
 STANDALONE_KUBECONFIG="${BASE_DIR}/kubeconfig.${ENV}"
 CLIENT_KUBECONFIG="${KUBECONFIG:-${HOME}/.kube/config}"
-USER_OVERRIDE_API_SERVER="${API_SERVER:-}"
+STAGED_CONF="${BASE_DIR}/admin.conf"
 
-# ------------------------------------------------------------------------------
-# 2. Discover admin.conf source (local file or preprod Vagrant VM)
-# ------------------------------------------------------------------------------
-staged_local_conf="${BASE_DIR}/admin.conf"
+echo "${BOLD}${CYAN}[sync-kubeconfig]${RESET} Synchronizing '${ENV}' Kubernetes admin credentials..."
 
-if [[ "${ENV}" == "preprod" ]]; then
-  # In preprod: probe live kube-control-plane VM to avoid using stale leftover credentials
-  vm_running=false
-  if command -v virsh >/dev/null 2>&1; then
-    if virsh list --state-running --name 2>/dev/null | grep -q "kube-control-plane"; then
-      vm_running=true
+# 1. Locate or fetch admin.conf
+SRC_CONF="${TMP_DIR}/source-admin.conf"
+if [[ -f "${STAGED_CONF}" && -s "${STAGED_CONF}" ]]; then
+  cp -f "${STAGED_CONF}" "${SRC_CONF}"
+elif [[ "${ENV}" == "preprod" ]]; then
+  # Fetch admin.conf from running Vagrant VM in a single fast call
+  FETCH_SUCCESS=false
+  if command -v vagrant >/dev/null 2>&1; then
+    if vagrant ssh kube-control-plane -c "sudo cat /etc/kubernetes/admin.conf" > "${SRC_CONF}" 2>/dev/null; then
+      FETCH_SUCCESS=true
     fi
-  fi
-  if [[ "${vm_running}" == "false" ]] && [[ -x "${BASE_DIR}/scripts/shell.sh" ]]; then
-    if "${BASE_DIR}/scripts/shell.sh" --run "vagrant status kube-control-plane" 2>/dev/null | grep -E "kube-control-plane\s+running" >/dev/null 2>&1; then
-      vm_running=true
-    fi
-  fi
-
-  if [[ "${vm_running}" == "false" ]]; then
-    # Invalidate stale credentials left on host from earlier runs
-    rm -f "${staged_local_conf}" "${STANDALONE_KUBECONFIG}"
-    if [[ "${BEST_EFFORT}" == "true" ]]; then
-      echo "${CYAN}[sync-kubeconfig]${RESET} kube-control-plane VM is not running. Skipping credentials sync."
-      exit 0
-    else
-      echo "${RED}Error:${RESET} kube-control-plane VM is shut off." >&2
-      echo "       Please start the environment first: ${BOLD}make preprod-up${RESET}" >&2
-      exit 1
+  elif [[ -x "${BASE_DIR}/scripts/shell.sh" ]]; then
+    if "${BASE_DIR}/scripts/shell.sh" --run "vagrant ssh kube-control-plane -c 'sudo cat /etc/kubernetes/admin.conf'" > "${SRC_CONF}" 2>/dev/null; then
+      FETCH_SUCCESS=true
     fi
   fi
 
-  # VM is running: check whether Kubernetes has actually been initialized inside it
-  has_cluster=false
-  if [[ -x "${BASE_DIR}/scripts/shell.sh" ]]; then
-    if "${BASE_DIR}/scripts/shell.sh" --run "vagrant ssh kube-control-plane -c 'sudo test -s /etc/kubernetes/admin.conf'" >/dev/null 2>&1; then
-      has_cluster=true
-    fi
-  fi
-
-  if [[ "${has_cluster}" == "false" ]]; then
-    # Cluster not initialized yet: purge stale files so they never trick the host
-    rm -f "${staged_local_conf}" "${STANDALONE_KUBECONFIG}"
-    if [[ "${BEST_EFFORT}" == "true" ]]; then
-      echo "${CYAN}[sync-kubeconfig]${RESET} Kubernetes cluster (${ENV}) not initialized yet. Skipping credentials sync."
-      exit 0
-    else
-      echo "${RED}Error:${RESET} No initialized Kubernetes cluster found on kube-control-plane (/etc/kubernetes/admin.conf missing)." >&2
-      echo "       Initialize the control plane inside the VM first:" >&2
-      echo "         ${GREEN}make preprod-deploy${RESET}" >&2
-      echo "         # or: vagrant ssh kube-control-plane -c 'sudo /vagrant/scripts/control-plane.sh 172.18.0.0/16 192.168.56.10'${RESET}" >&2
-      exit 1
-    fi
-  fi
-
-  # Verify apiserver certificate on control plane includes required SAN for host access
-  TARGET_CP_SAN="${INVENTORY_CP_HOST:-192.168.56.10}"
-  if [[ -n "${TARGET_CP_SAN}" ]]; then
-    CERT_INFO="$("${BASE_DIR}/scripts/shell.sh" --run "vagrant ssh kube-control-plane -c 'sudo openssl x509 -in /etc/kubernetes/pki/apiserver.crt -noout -text 2>/dev/null'" 2>/dev/null || true)"
-    if [[ -n "${CERT_INFO}" ]] && ! echo "${CERT_INFO}" | grep -q "${TARGET_CP_SAN}"; then
-      echo "${CYAN}[sync-kubeconfig]${RESET} Control plane TLS certificate is missing SAN '${TARGET_CP_SAN}'."
-      echo "                   Regenerating apiserver certificate with extra SANs..."
-      "${BASE_DIR}/scripts/shell.sh" --run "vagrant ssh kube-control-plane -c '
-        sudo cp -f /etc/kubernetes/pki/apiserver.crt /etc/kubernetes/pki/apiserver.crt.bak 2>/dev/null || true
-        sudo cp -f /etc/kubernetes/pki/apiserver.key /etc/kubernetes/pki/apiserver.key.bak 2>/dev/null || true
-        sudo rm -f /etc/kubernetes/pki/apiserver.crt /etc/kubernetes/pki/apiserver.key
-        sudo kubeadm init phase certs apiserver --apiserver-advertise-address=\"${TARGET_CP_SAN}\" --apiserver-cert-extra-sans=\"${TARGET_CP_SAN},192.168.56.10,kube-control-plane,127.0.0.1\" >/dev/null 2>&1
-        sudo crictl pods --name kube-apiserver -q 2>/dev/null | xargs -r sudo crictl stopp >/dev/null 2>&1 || true
-        sudo touch /etc/kubernetes/manifests/kube-apiserver.yaml
-      '" >/dev/null 2>&1 || true
-      sleep 2
-    fi
-  fi
-
-  # Fetch fresh admin.conf directly from the running VM
-  rm -f "${staged_local_conf}"
-  "${BASE_DIR}/scripts/shell.sh" --run \
-    "vagrant ssh kube-control-plane -c 'sudo cat /etc/kubernetes/admin.conf'" > "${staged_local_conf}" 2>/dev/null || true
-  chmod 0600 "${staged_local_conf}"
-else
-  # In production: admin.conf must be fetched via Ansible playbook or staged locally
-  if [[ ! -f "${staged_local_conf}" || ! -s "${staged_local_conf}" ]] || ! grep -q "apiVersion:" "${staged_local_conf}"; then
-    if [[ "${BEST_EFFORT}" == "true" ]]; then
-      echo "${CYAN}[sync-kubeconfig]${RESET} admin.conf not found. Skipping production credentials sync."
-      exit 0
-    else
-      echo "${RED}Error:${RESET} admin.conf not found at ${staged_local_conf}." >&2
-      echo "       For production, run: ${BOLD}./scripts/run-playbook.sh -e prod -p site.yml${RESET}" >&2
-      echo "       or stage the cluster admin.conf to ${staged_local_conf} manually." >&2
-      exit 1
-    fi
-  fi
-fi
-
-echo "${BOLD}${CYAN}[sync-kubeconfig]${RESET} Processing '${ENV}' Kubernetes admin credentials..."
-
-# ------------------------------------------------------------------------------
-# 3. Sanitize and Extract YAML (strip any non-YAML header lines)
-# ------------------------------------------------------------------------------
-RAW_ADMIN="${TMP_DIR}/sanitized-admin.conf"
-sed -n '/^apiVersion:/,$p' "${staged_local_conf}" > "${RAW_ADMIN}"
-if [[ ! -s "${RAW_ADMIN}" ]]; then
-  sed -n '/^kind:/,$p' "${staged_local_conf}" > "${RAW_ADMIN}"
-fi
-
-kubectl --kubeconfig="${RAW_ADMIN}" config view --raw -o json > "${TMP_DIR}/admin.json"
-
-# ------------------------------------------------------------------------------
-# 4. API Server URL Resolution (Ansible Inventory -> Detected Server -> Fallback)
-# ------------------------------------------------------------------------------
-DETECTED_SERVER=$(python3 - "${TMP_DIR}/admin.json" <<'PYEOF'
-import json, sys
-with open(sys.argv[1], "r", encoding="utf-8") as f:
-    data = json.load(f)
-for c in data.get("clusters", []):
-    server = c.get("cluster", {}).get("server", "")
-    if server:
-        print(server)
-        sys.exit(0)
-print("")
-PYEOF
-)
-
-# Extract port from detected server if present (defaults to 6443)
-API_PORT="6443"
-if [[ -n "${DETECTED_SERVER}" ]]; then
-  EXTRACTED_PORT=$(echo "${DETECTED_SERVER}" | sed -n 's/.*:\([0-9]\+\)$/\1/p')
-  if [[ -n "${EXTRACTED_PORT}" ]]; then
-    API_PORT="${EXTRACTED_PORT}"
-  fi
-fi
-
-if [[ -n "${USER_OVERRIDE_API_SERVER}" ]]; then
-  EFFECTIVE_API_SERVER="${USER_OVERRIDE_API_SERVER}"
-elif [[ -n "${INVENTORY_CP_HOST}" ]]; then
-  if [[ "${INVENTORY_CP_HOST}" == http* ]]; then
-    EFFECTIVE_API_SERVER="${INVENTORY_CP_HOST}"
+  if [[ "${FETCH_SUCCESS}" == "true" && -s "${SRC_CONF}" ]] && grep -q "apiVersion:" "${SRC_CONF}"; then
+    cp -f "${SRC_CONF}" "${STAGED_CONF}"
+    chmod 0600 "${STAGED_CONF}"
   else
-    EFFECTIVE_API_SERVER="https://${INVENTORY_CP_HOST}:${API_PORT}"
+    rm -f "${STAGED_CONF}" "${STANDALONE_KUBECONFIG}"
+    if [[ "${BEST_EFFORT}" == "true" ]]; then
+      echo "${CYAN}[sync-kubeconfig]${RESET} Cluster not initialized or VM not running. Skipping credentials sync."
+      exit 0
+    else
+      echo "${RED}Error:${RESET} No initialized Kubernetes cluster found on kube-control-plane." >&2
+      echo "       Please start the cluster first: ${BOLD}make preprod-up${RESET} or ${BOLD}make preprod-deploy${RESET}" >&2
+      exit 1
+    fi
   fi
-elif [[ -n "${DETECTED_SERVER}" && "${DETECTED_SERVER}" != *"127.0.0.1"* && "${DETECTED_SERVER}" != *"localhost"* ]]; then
-  EFFECTIVE_API_SERVER="${DETECTED_SERVER}"
 else
-  EFFECTIVE_API_SERVER="https://192.168.56.10:6443"
+  if [[ "${BEST_EFFORT}" == "true" ]]; then
+    echo "${CYAN}[sync-kubeconfig]${RESET} admin.conf not found. Skipping production credentials sync."
+    exit 0
+  else
+    echo "${RED}Error:${RESET} admin.conf not found at ${STAGED_CONF}." >&2
+    echo "       Stage the cluster admin.conf or run: ${BOLD}./scripts/run-playbook.sh -e prod -p site.yml${RESET}" >&2
+    exit 1
+  fi
 fi
 
-# ------------------------------------------------------------------------------
-# 5. Transform config: namespace cluster, user, and context
-# ------------------------------------------------------------------------------
-python3 - "${TMP_DIR}/admin.json" "${EFFECTIVE_API_SERVER}" "${CLUSTER_NAME}" "${USER_NAME}" "${CONTEXT_NAME}" <<'PYEOF'
-import json
-import sys
+# 2. Resolve Server Endpoint (User Override -> Inventory -> Detected server)
+DETECTED_SERVER="$(kubectl --kubeconfig="${SRC_CONF}" config view --minify -o jsonpath='{.clusters[0].cluster.server}' 2>/dev/null || true)"
+API_PORT="$(echo "${DETECTED_SERVER}" | grep -oE '[0-9]+$' || echo "6443")"
 
-json_file = sys.argv[1]
-api_server = sys.argv[2]
-cluster_name = sys.argv[3]
-user_name = sys.argv[4]
-context_name = sys.argv[5]
+# Lookup control plane host from inventory dynamically
+INV_HOST=""
+INV_FILE="${BASE_DIR}/inventory/${ENV}/hosts.ini"
+if [[ -f "${INV_FILE}" ]]; then
+  INV_HOST="$(awk '/^\[control_plane\]/{flag=1;next}/^\[/{flag=0}flag && NF{for(i=1;i<=NF;i++)if($i ~ /^ansible_host=/){split($i,a,"=");print a[2];exit}}' "${INV_FILE}" 2>/dev/null || true)"
+fi
 
-with open(json_file, "r", encoding="utf-8") as f:
-    data = json.load(f)
+if [[ -n "${API_SERVER:-}" ]]; then
+  EFFECTIVE_SERVER="${API_SERVER}"
+elif [[ -n "${INV_HOST}" ]]; then
+  EFFECTIVE_SERVER="https://${INV_HOST}:${API_PORT}"
+elif [[ -n "${DETECTED_SERVER}" ]]; then
+  EFFECTIVE_SERVER="${DETECTED_SERVER}"
+else
+  EFFECTIVE_SERVER="https://127.0.0.1:6443"
+fi
 
-for c in data.get("clusters", []):
-    c["name"] = cluster_name
-    if "cluster" in c:
-        c["cluster"]["server"] = api_server
+# 3. Extract credentials and assemble standalone kubeconfig
+CLIENT_CERT="$(kubectl --kubeconfig="${SRC_CONF}" config view --raw -o jsonpath='{.users[0].user.client-certificate-data}' 2>/dev/null || true)"
+CLIENT_KEY="$(kubectl --kubeconfig="${SRC_CONF}" config view --raw -o jsonpath='{.users[0].user.client-key-data}' 2>/dev/null || true)"
 
-for u in data.get("users", []):
-    u["name"] = user_name
+rm -f "${STANDALONE_KUBECONFIG}"
+kubectl --kubeconfig="${STANDALONE_KUBECONFIG}" config set-cluster "${CLUSTER_NAME}" \
+  --server="${EFFECTIVE_SERVER}" \
+  --insecure-skip-tls-verify=true >/dev/null
 
-for ctx in data.get("contexts", []):
-    ctx["name"] = context_name
-    if "context" in ctx:
-        ctx["context"]["cluster"] = cluster_name
-        ctx["context"]["user"] = user_name
+kubectl --kubeconfig="${STANDALONE_KUBECONFIG}" config set-credentials "${USER_NAME}" \
+  --client-certificate-data="${CLIENT_CERT}" \
+  --client-key-data="${CLIENT_KEY}" >/dev/null
 
-data["current-context"] = context_name
+kubectl --kubeconfig="${STANDALONE_KUBECONFIG}" config set-context "${CONTEXT_NAME}" \
+  --cluster="${CLUSTER_NAME}" \
+  --user="${USER_NAME}" >/dev/null
 
-with open(json_file, "w", encoding="utf-8") as f:
-    json.dump(data, f, indent=2)
-PYEOF
-
-# ------------------------------------------------------------------------------
-# 6. Generate standalone kubeconfig (mode 0600)
-# ------------------------------------------------------------------------------
-kubectl --kubeconfig="${TMP_DIR}/admin.json" config view --raw > "${STANDALONE_KUBECONFIG}"
+kubectl --kubeconfig="${STANDALONE_KUBECONFIG}" config use-context "${CONTEXT_NAME}" >/dev/null
 chmod 0600 "${STANDALONE_KUBECONFIG}"
 echo "${GREEN}✔${RESET} Standalone kubeconfig written to: ${STANDALONE_KUBECONFIG}"
 
-# ------------------------------------------------------------------------------
-# 7. Non-disruptive merge into local client kubeconfig
-# ------------------------------------------------------------------------------
+# 4. Merge into User's workstation kubeconfig (~/.kube/config)
 CLIENT_DIR="$(dirname "${CLIENT_KUBECONFIG}")"
 mkdir -p "${CLIENT_DIR}"
 
@@ -399,7 +169,6 @@ if [[ ! -f "${CLIENT_KUBECONFIG}" ]]; then
   chmod 0600 "${CLIENT_KUBECONFIG}"
   echo "${GREEN}✔${RESET} Created ${CLIENT_KUBECONFIG} (active context: ${CONTEXT_NAME})"
 else
-  # Backup existing kubeconfig
   BACKUP_DIR="${CLIENT_DIR}/backups"
   mkdir -p "${BACKUP_DIR}"
   BACKUP_FILE="${BACKUP_DIR}/config.backup.$(date +%Y%m%d_%H%M%S)"
@@ -407,10 +176,9 @@ else
   chmod 0600 "${BACKUP_FILE}"
   echo "${GREEN}✔${RESET} Backed up existing kubeconfig to: ${BACKUP_FILE}"
 
-  # Capture current active context
   CURRENT_CTX="$(kubectl --kubeconfig="${CLIENT_KUBECONFIG}" config current-context 2>/dev/null || true)"
 
-  # Remove existing entries for this specific cluster/user/context to ensure updated credentials take precedence
+  # Remove existing entries for this specific cluster/user/context to avoid duplicates
   kubectl --kubeconfig="${CLIENT_KUBECONFIG}" config delete-context "${CONTEXT_NAME}" >/dev/null 2>&1 || true
   kubectl --kubeconfig="${CLIENT_KUBECONFIG}" config delete-cluster "${CLUSTER_NAME}" >/dev/null 2>&1 || true
   kubectl --kubeconfig="${CLIENT_KUBECONFIG}" config delete-user "${USER_NAME}" >/dev/null 2>&1 || true
@@ -421,7 +189,6 @@ else
   mv -f "${MERGED_FILE}" "${CLIENT_KUBECONFIG}"
   chmod 0600 "${CLIENT_KUBECONFIG}"
 
-  # Restore active context without disrupting user's current workflow
   if [[ -n "${CURRENT_CTX}" ]]; then
     kubectl --kubeconfig="${CLIENT_KUBECONFIG}" config use-context "${CURRENT_CTX}" >/dev/null 2>&1 || true
     echo "${GREEN}✔${RESET} Merged context '${CONTEXT_NAME}' into ${CLIENT_KUBECONFIG}"
@@ -432,18 +199,16 @@ else
   fi
 fi
 
-# ------------------------------------------------------------------------------
-# 8. Verification Probe: Test Host Connectivity to Cluster
-# ------------------------------------------------------------------------------
+# 5. Verification Probe: Test Host Connectivity
 echo ""
-echo "Testing host connectivity to cluster endpoint (${EFFECTIVE_API_SERVER})..."
-if kubectl --context="${CONTEXT_NAME}" get nodes -o wide --request-timeout=5s; then
+echo "Testing host connectivity to cluster endpoint (${EFFECTIVE_SERVER})..."
+if kubectl --context="${CONTEXT_NAME}" get nodes -o wide --request-timeout=3s; then
   echo ""
   echo "${BOLD}${GREEN}✔ Kubernetes credentials (${ENV}) synchronized and verified successfully!${RESET}"
 else
   echo ""
-  echo "${YELLOW}Warning: Credentials synchronized, but cluster endpoint did not respond within 5s.${RESET}"
-  echo "         Please ensure kube-apiserver is running on the control plane node."
+  echo "${YELLOW}Warning: Credentials synchronized, but cluster endpoint did not respond within 3s.${RESET}"
+  echo "         Please ensure kube-apiserver is running on ${EFFECTIVE_SERVER}."
 fi
 
 echo ""
@@ -452,7 +217,7 @@ echo "  - Environment: ${CYAN}${ENV}${RESET}"
 echo "  - Cluster:     ${CYAN}${CLUSTER_NAME}${RESET}"
 echo "  - Context:     ${CYAN}${CONTEXT_NAME}${RESET}"
 echo "  - User:        ${CYAN}${USER_NAME}${RESET}"
-echo "  - Server:      ${CYAN}${EFFECTIVE_API_SERVER}${RESET}"
+echo "  - Server:      ${CYAN}${EFFECTIVE_SERVER}${RESET}"
 echo ""
 echo "Usage options:"
 echo "  1. Direct context execution:"
