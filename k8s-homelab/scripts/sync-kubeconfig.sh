@@ -36,9 +36,10 @@
 #      unrelated cluster workflows.
 #   4. Standalone Files: Generates 'kubeconfig.<env>' (mode 0600) in the
 #      repo root for isolated cluster interaction via KUBECONFIG export.
-#   5. Dynamic TLS Server Resolution: Automatically detects the server IP from
-#      the cluster certificates so TLS SAN validation succeeds whether kubeadm
-#      bound to 192.168.121.x (default NAT) or 192.168.56.10 (host-only).
+#   5. Inventory-Driven Server Resolution: Automatically resolves the control
+#      plane address from the Ansible inventory (inventory/<env>/hosts.ini),
+#      preserving TLS SAN validity and ensuring host connectivity via the static
+#      management network (e.g. 192.168.56.10).
 #
 # Usage:
 #   ./scripts/sync-kubeconfig.sh [-e <preprod|prod>] [--best-effort]
@@ -97,10 +98,10 @@ cleanup() {
 trap cleanup EXIT
 
 # ------------------------------------------------------------------------------
-# 1. Resolve Configuration from Ansible group_vars & Environment Variables
+# 1. Resolve Configuration from Ansible Inventory & group_vars
 # ------------------------------------------------------------------------------
 RESOLVED_VARS=$(python3 - "${BASE_DIR}" "${ENV}" <<'PYEOF'
-import os, sys, yaml
+import os, sys, yaml, json, subprocess
 
 base_dir = sys.argv[1]
 env = sys.argv[2]
@@ -126,11 +127,74 @@ ctx = os.environ.get("CONTEXT_NAME") or lookup("k8s_context_name", default_ctx)
 cluster = os.environ.get("CLUSTER_NAME") or lookup("cluster_name", default_cluster)
 user = os.environ.get("USER_NAME") or lookup("k8s_user_name", default_user)
 
-print(f"{ctx}|{cluster}|{user}")
+def get_control_plane_address():
+    # 1. Query ansible-inventory CLI if present in environment
+    try:
+        inv_file = os.path.join(base_dir, f"inventory/{env}/hosts.ini")
+        if os.path.isfile(inv_file):
+            res = subprocess.run(
+                ["ansible-inventory", "-i", inv_file, "--list"],
+                capture_output=True, text=True, timeout=5
+            )
+            if res.returncode == 0:
+                inv_data = json.loads(res.stdout)
+                cp_hosts = inv_data.get("control_plane", {}).get("hosts", [])
+                if cp_hosts:
+                    first_cp = cp_hosts[0]
+                    hvars = inv_data.get("_meta", {}).get("hostvars", {}).get(first_cp, {})
+                    target = (
+                        hvars.get("ansible_host") or
+                        hvars.get("apiserver_advertise_address") or
+                        hvars.get("node_ip") or
+                        first_cp
+                    )
+                    if target and not target.startswith("{{"):
+                        return target
+    except Exception:
+        pass
+
+    # 2. Parse inventory/<env>/hosts.ini directly
+    hosts_file = os.path.join(base_dir, f"inventory/{env}/hosts.ini")
+    if os.path.isfile(hosts_file):
+        in_cp = False
+        with open(hosts_file, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#") or line.startswith(";"):
+                    continue
+                if line.startswith("[") and line.endswith("]"):
+                    in_cp = (line[1:-1].strip() == "control_plane")
+                    continue
+                if in_cp:
+                    parts = line.split()
+                    for p in parts[1:]:
+                        if p.startswith("ansible_host="):
+                            return p.split("=", 1)[1].strip("'\"")
+                    for p in parts[1:]:
+                        if p.startswith("node_ip="):
+                            return p.split("=", 1)[1].strip("'\"")
+                    if parts:
+                        return parts[0]
+
+    # 3. Check group_vars for explicit advertise address
+    for rel_path in [f"group_vars/{env}.yml", f"group_vars/control_plane.yml", "group_vars/all.yml"]:
+        full_path = os.path.join(base_dir, rel_path)
+        if os.path.isfile(full_path):
+            try:
+                with open(full_path, "r", encoding="utf-8") as f:
+                    data = yaml.safe_load(f) or {}
+                    if "apiserver_advertise_address" in data and data["apiserver_advertise_address"]:
+                        return str(data["apiserver_advertise_address"])
+            except Exception:
+                pass
+    return ""
+
+cp_host = get_control_plane_address()
+print(f"{ctx}|{cluster}|{user}|{cp_host}")
 PYEOF
 )
 
-IFS='|' read -r CONTEXT_NAME CLUSTER_NAME USER_NAME <<< "${RESOLVED_VARS}"
+IFS='|' read -r CONTEXT_NAME CLUSTER_NAME USER_NAME INVENTORY_CP_HOST <<< "${RESOLVED_VARS}"
 STANDALONE_KUBECONFIG="${BASE_DIR}/kubeconfig.${ENV}"
 CLIENT_KUBECONFIG="${KUBECONFIG:-${HOME}/.kube/config}"
 USER_OVERRIDE_API_SERVER="${API_SERVER:-}"
@@ -224,7 +288,7 @@ fi
 kubectl --kubeconfig="${RAW_ADMIN}" config view --raw -o json > "${TMP_DIR}/admin.json"
 
 # ------------------------------------------------------------------------------
-# 4. Dynamic API Server URL Resolution (Preserve TLS certificate SAN validity)
+# 4. API Server URL Resolution (Ansible Inventory -> Detected Server -> Fallback)
 # ------------------------------------------------------------------------------
 DETECTED_SERVER=$(python3 - "${TMP_DIR}/admin.json" <<'PYEOF'
 import json, sys
@@ -239,8 +303,23 @@ print("")
 PYEOF
 )
 
+# Extract port from detected server if present (defaults to 6443)
+API_PORT="6443"
+if [[ -n "${DETECTED_SERVER}" ]]; then
+  EXTRACTED_PORT=$(echo "${DETECTED_SERVER}" | sed -n 's/.*:\([0-9]\+\)$/\1/p')
+  if [[ -n "${EXTRACTED_PORT}" ]]; then
+    API_PORT="${EXTRACTED_PORT}"
+  fi
+fi
+
 if [[ -n "${USER_OVERRIDE_API_SERVER}" ]]; then
   EFFECTIVE_API_SERVER="${USER_OVERRIDE_API_SERVER}"
+elif [[ -n "${INVENTORY_CP_HOST}" ]]; then
+  if [[ "${INVENTORY_CP_HOST}" == http* ]]; then
+    EFFECTIVE_API_SERVER="${INVENTORY_CP_HOST}"
+  else
+    EFFECTIVE_API_SERVER="https://${INVENTORY_CP_HOST}:${API_PORT}"
+  fi
 elif [[ -n "${DETECTED_SERVER}" && "${DETECTED_SERVER}" != *"127.0.0.1"* && "${DETECTED_SERVER}" != *"localhost"* ]]; then
   EFFECTIVE_API_SERVER="${DETECTED_SERVER}"
 else
