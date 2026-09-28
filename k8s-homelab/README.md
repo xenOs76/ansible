@@ -12,7 +12,7 @@ documentation and the **Certified Kubernetes Administrator (CKA)** syllabus:
 - **Cluster Bootstrapping**: Official `kubeadm` initialization and joins.
 - **Container Runtime (CRI)**: `containerd.io` with `SystemdCgroup = true`.
 - **CNI**: [Cilium](https://cilium.io/) installed via official Cilium CLI.
-- **Node Topology**: 1 Control Plane and 1 Worker Node (scalable via `WORKER_COUNT`).
+- **Node Topology**: 1 Control Plane and 2 Worker Nodes (scalable via `WORKER_COUNT`).
 - **Preprod Environment**: Integrated Vagrant + Libvirt lab.
 - **Code Quality**: Built-in support for `ansible-lint` and `yamllint`.
 
@@ -357,7 +357,7 @@ k8s-homelab/
 ├── .ansible-lint                  # Strict ansible-lint rules configuration
 ├── ansible.cfg                   # Pipelining, role dirs, YAML output callback
 ├── Makefile                      # Quick targets for lint, preprod, deploy
-├── Vagrantfile                   # 1 CP (192.168.56.10) + 1 Worker (configurable)
+├── Vagrantfile                   # 1 CP (192.168.56.10) + 2 Workers (configurable)
 ├── shell.nix                     # Nix environment with Ansible, Vagrant & libvirt
 ├── .envrc                        # Direnv integration (use nix)
 ├── scripts/                      # Helper & cluster lifecycle scripts
@@ -502,7 +502,8 @@ The first two options will create:
 
 - `kube-control-plane`: `192.168.56.10`
 - `kube-worker-1`: `192.168.56.21`
-*(Additional workers can be spawned by setting `WORKER_COUNT=2` before `make preprod-up`)*
+- `kube-worker-2`: `192.168.56.22`
+*(Worker count can be adjusted by setting `WORKER_COUNT` before `make preprod-up`)*
 
 ### 2. Deploy Kubernetes Cluster
 

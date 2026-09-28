@@ -21,6 +21,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `control_plane_tools_etcd_version` in Ansible role defaults.
 - Documented CKA etcd health check and snapshot verification commands in `README.md`.
 
+### Changed
+
+- Updated default preprod worker node count from 1 to 2 in `Vagrantfile`, added
+  `kube-worker-2` (`192.168.56.22`) to `inventory/preprod/hosts.ini`, and updated
+  topology references across documentation and helper scripts.
+
 ### Fixed
 
 - Fixed `scripts/sync-kubeconfig.sh` incorrectly synchronizing stale credentials
