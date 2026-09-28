@@ -8,6 +8,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Automated, idempotent installation of `etcdctl` and `etcdutl` (defaulting to
+  `v3.5.16`) on the control plane node during `make preprod-up` provisioning.
+- Added `etcd_tools.yml` tasks to the `control_plane_tools` Ansible role with
+  system architecture detection and version-pinned archive extraction from official
+  GitHub releases.
+- Configured system-wide `ETCDCTL_API=3` via `/etc/profile.d/etcd.sh` for all
+  interactive and login shells on the control plane VM.
+- Added `ETCD_VERSION` environment variable lookup in `Vagrantfile` and
+  `control_plane_tools_etcd_version` in Ansible role defaults.
+- Documented CKA etcd health check and snapshot verification commands in `README.md`.
+
 ## [1.2.0] - 2026-09-27
 
 ### Added
