@@ -78,7 +78,7 @@ STAGED_CONF="${BASE_DIR}/admin.conf"
 INV_HOST=""
 INV_FILE="${BASE_DIR}/inventory/${ENV}/hosts.ini"
 if [[ -f "${INV_FILE}" ]]; then
-  INV_HOST="$(awk '/^\[control_plane\]/{flag=1;next}/^\[/{flag=0}flag && NF{for(i=1;i<=NF;i++)if($i ~ /^ansible_host=/){split($i,a,"=");print a[2];exit}}' "${INV_FILE}" 2>/dev/null || true)"
+  INV_HOST="$(sed -n '/^\[control_plane\]/,/^\[/ s/.*ansible_host=\([^ ]*\).*/\1/p' "${INV_FILE}" 2>/dev/null | head -n 1)"
 fi
 
 verify_staged_env() {
@@ -270,13 +270,42 @@ fi
 # 5. Verification Probe: Test Host Connectivity
 echo ""
 echo "Testing host connectivity to cluster endpoint (${EFFECTIVE_SERVER})..."
-if kubectl --context="${CONTEXT_NAME}" get nodes -o wide --request-timeout=3s; then
+PROBE_ERR="${TMP_DIR}/probe-error.log"
+if kubectl --context="${CONTEXT_NAME}" get nodes -o wide --request-timeout=3s 2>"${PROBE_ERR}"; then
   echo ""
   echo "${BOLD}${GREEN}✔ Kubernetes credentials (${ENV}) synchronized and verified successfully!${RESET}"
 else
+  PROBE_MSG="$(cat "${PROBE_ERR}")"
+  echo "${PROBE_MSG}" >&2
   echo ""
-  echo "${YELLOW}Warning: Credentials synchronized, but cluster endpoint did not respond within 3s.${RESET}"
-  echo "         Please ensure kube-apiserver is running on ${EFFECTIVE_SERVER}."
+  if [[ "${PROBE_MSG}" == *"failed to verify certificate"* && -n "${DETECTED_SERVER}" && "${DETECTED_SERVER}" != "${EFFECTIVE_SERVER}" && "${DETECTED_SERVER}" != *"127.0.0.1"* && "${DETECTED_SERVER}" != *"localhost"* ]]; then
+    echo "${CYAN}[sync-kubeconfig]${RESET} Probing cluster via detected server endpoint (${DETECTED_SERVER})..."
+    if kubectl --kubeconfig="${STANDALONE_KUBECONFIG}" --server="${DETECTED_SERVER}" get nodes -o wide --request-timeout=3s >/dev/null 2>&1; then
+      EFFECTIVE_SERVER="${DETECTED_SERVER}"
+      kubectl --kubeconfig="${STANDALONE_KUBECONFIG}" config set-cluster "${CLUSTER_NAME}" --server="${EFFECTIVE_SERVER}" >/dev/null
+      if [[ -f "${CLIENT_KUBECONFIG}" ]]; then
+        kubectl --kubeconfig="${CLIENT_KUBECONFIG}" config set-cluster "${CLUSTER_NAME}" --server="${EFFECTIVE_SERVER}" >/dev/null
+      fi
+      echo ""
+      echo "${BOLD}${GREEN}✔ Connected successfully via detected endpoint: ${EFFECTIVE_SERVER}${RESET}"
+      echo ""
+      echo "${YELLOW}Notice: Control plane certificate SAN drift detected on ${INV_HOST}.${RESET}"
+      echo "        The certificate served by kube-apiserver is valid for ${DETECTED_SERVER}, but missing ${INV_HOST}."
+      echo "        Configured ${EFFECTIVE_SERVER} in kubeconfig for immediate cluster access."
+      echo "        To update the certificate to include ${INV_HOST}, run:"
+      echo "          ${BOLD}make preprod-deploy${RESET}"
+      echo "          (or ${BOLD}./scripts/run-playbook.sh -e ${ENV} -p site.yml --tags certs${RESET})"
+    else
+      echo "${YELLOW}Warning: Certificate SAN drift detected: kube-apiserver certificate is missing ${INV_HOST}.${RESET}"
+      echo "         To reissue the certificate with ${INV_HOST}, run: ${BOLD}make preprod-deploy${RESET} or ${BOLD}./scripts/run-playbook.sh -e ${ENV} -p site.yml --tags certs${RESET}"
+    fi
+  elif [[ "${PROBE_MSG}" == *"failed to verify certificate"* ]]; then
+    echo "${YELLOW}Warning: Certificate verification failed for ${EFFECTIVE_SERVER}.${RESET}"
+    echo "         To reissue the certificate with required SANs, run: ${BOLD}make preprod-deploy${RESET} or ${BOLD}./scripts/run-playbook.sh -e ${ENV} -p site.yml --tags certs${RESET}"
+  else
+    echo "${YELLOW}Warning: Credentials synchronized, but cluster endpoint did not respond within 3s.${RESET}"
+    echo "         Please ensure kube-apiserver is running on ${EFFECTIVE_SERVER}."
+  fi
 fi
 
 echo ""
