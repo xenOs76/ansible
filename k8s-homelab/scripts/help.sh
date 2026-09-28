@@ -53,6 +53,7 @@ ${BOLD}${YELLOW}[3] Provisioning Existing VMs (No Re-creation)${RESET}
   Re-run provisioners on a specific VM:
     ${GREEN}./scripts/shell.sh --run "vagrant provision kube-control-plane"${RESET}
     ${GREEN}./scripts/shell.sh --run "vagrant provision kube-worker-1"${RESET}
+    ${GREEN}./scripts/shell.sh --run "vagrant provision kube-worker-2"${RESET}
   Start stopped VMs AND execute provisioners:
     ${GREEN}./scripts/shell.sh --run "vagrant up --provision"${RESET}
 
@@ -61,6 +62,7 @@ ${BOLD}${YELLOW}[4] SSH Access${RESET}
     ${GREEN}./scripts/shell.sh --run "vagrant ssh kube-control-plane"${RESET}
   Connect to worker node:
     ${GREEN}./scripts/shell.sh --run "vagrant ssh kube-worker-1"${RESET}
+    ${GREEN}./scripts/shell.sh --run "vagrant ssh kube-worker-2"${RESET}
 
 ${BOLD}${YELLOW}[5] Kubernetes Setup Steps (Inside VMs)${RESET}
   1. On ${BOLD}kube-control-plane${RESET}:
@@ -73,9 +75,9 @@ ${BOLD}${YELLOW}[5] Kubernetes Setup Steps (Inside VMs)${RESET}
      Install Metrics Server (via Helm):
        ${GREEN}./install-kube-metrics.sh${RESET}
 
-  2. On ${BOLD}kube-worker-1${RESET}:
+  2. On ${BOLD}kube-worker-1${RESET} / ${BOLD}kube-worker-2${RESET}:
      Join cluster:
-       ${GREEN}sudo /vagrant/scripts/worker.sh 1${RESET}
+       ${GREEN}sudo /vagrant/scripts/worker.sh 1${RESET}  # (use index '2' on kube-worker-2)
 
 ${BOLD}========================================================================${RESET}
 EOF

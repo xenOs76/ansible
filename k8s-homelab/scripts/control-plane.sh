@@ -52,6 +52,7 @@ echo "    Advertise Address: ${API_ADV_ADDRESS}"
 kubeadm init \
   --pod-network-cidr "${POD_CIDR}" \
   --apiserver-advertise-address "${API_ADV_ADDRESS}" \
+  --apiserver-cert-extra-sans "${API_ADV_ADDRESS},192.168.56.10,kube-control-plane,127.0.0.1" \
   | tee /vagrant/kubeadm-init.out
 
 # 2. Configure node IP for kubelet and restart daemon

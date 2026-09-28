@@ -2,9 +2,10 @@
 # vi: set ft=ruby :
 
 BOX_IMAGE = ENV.fetch("BOX_IMAGE", "cloud-image/ubuntu-26.04")
-WORKER_COUNT = ENV.fetch("WORKER_COUNT", "1").to_i
+WORKER_COUNT = ENV.fetch("WORKER_COUNT", "2").to_i
 K8S_VERSION = ENV.fetch("K8S_VERSION", "1.34.1-1.1")
 K9S_VERSION = ENV.fetch("K9S_VERSION", "v0.40.10")
+ETCD_VERSION = ENV.fetch("ETCD_VERSION", "v3.5.16")
 
 Vagrant.configure("2") do |config|
   config.vm.box = BOX_IMAGE
@@ -30,7 +31,7 @@ Vagrant.configure("2") do |config|
     node.vm.provision "shell", inline: "chmod +x /home/vagrant/*.sh && chown vagrant:vagrant /home/vagrant/*.sh"
 
     node.vm.provision "shell", path: "scripts/common.sh", env: { "K8S_VERSION" => K8S_VERSION }
-    node.vm.provision "shell", path: "scripts/control-plane-tools.sh", env: { "K9S_VERSION" => K9S_VERSION }
+    node.vm.provision "shell", path: "scripts/control-plane-tools.sh", env: { "K9S_VERSION" => K9S_VERSION, "ETCD_VERSION" => ETCD_VERSION }
   end
 
   (1..WORKER_COUNT).each do |i|

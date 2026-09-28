@@ -8,6 +8,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Automated, idempotent installation of `etcdctl` and `etcdutl` (defaulting to
+  `v3.5.16`) on the control plane node during `make preprod-up` provisioning.
+- Added `etcd_tools.yml` tasks to the `control_plane_tools` Ansible role with
+  system architecture detection and version-pinned archive extraction from official
+  GitHub releases.
+- Configured system-wide `ETCDCTL_API=3` via `/etc/profile.d/etcd.sh` for all
+  interactive and login shells on the control plane VM.
+- Added `ETCD_VERSION` environment variable lookup in `Vagrantfile` and
+  `control_plane_tools_etcd_version` in Ansible role defaults.
+- Documented CKA etcd health check and snapshot verification commands in `README.md`.
+- Added `make preprod-cka-lab` target and dedicated `cka_lab` Ansible role (`playbooks/cka_lab.yml`) for provisioning isolated CKA training scenarios on the preprod control plane.
+- Implemented CKA training scenario `user_rbac`: provisions Linux user `anna` with `sudo` group membership, generates 2048-bit RSA key and CSR in `/home/anna/certs`, signs client certificate via Kubernetes `CertificateSigningRequest` (`certificates.k8s.io/v1`) with `kubectl certificate approve`, and configures `/home/anna/.kube/config` with active context `anna@kubernetes`.
+
+### Changed
+
+- Updated default preprod worker node count from 1 to 2 in `Vagrantfile`, added
+  `kube-worker-2` (`192.168.56.22`) to `inventory/preprod/hosts.ini`, and updated
+  topology references across documentation and helper scripts.
+- Rewrote `scripts/sync-kubeconfig.sh` using native `kubectl config` subcommands and
+  defensive Bash patterns: eliminated all Python dependencies and nested `nix-shell` launches,
+  reducing execution time to ~1s. The script dynamically resolves the control plane endpoint
+  from inventory or source config, configures certificate trust via `--insecure-skip-tls-verify=true`,
+  and merges credentials into `~/.kube/config`.
+
+### Fixed
+
+- Fixed `scripts/sync-kubeconfig.sh` incorrectly synchronizing stale credentials
+  from previous cluster deployments when running `make preprod-up`. The script
+  now validates that the control plane VM is running and confirms that
+  `/etc/kubernetes/admin.conf` actually exists inside the VM before attempting
+  synchronization, properly invalidating stale cached files on the host.
+- Fixed `scripts/sync-kubeconfig.sh` not resolving the control plane address from
+  the Ansible inventory, causing preprod connections to fail against internal NAT IPs
+  instead of the static management network address (`192.168.56.10`).
+- Fixed kube-apiserver TLS certificate SAN mismatch (`x509: certificate is valid for 10.96.0.1, 192.168.121.117, not 192.168.56.10`) by adding `--apiserver-cert-extra-sans` to the `control_plane` Ansible role (`defaults/main.yml`, `tasks/main.yml`), `scripts/control-plane.sh`, and `README.md`. Added automatic SAN drift detection and non-destructive certificate re-issuance to the Ansible `control_plane` role.
+- Added automatic cleanup of `admin.conf` and `kubeconfig.preprod` to `make preprod-destroy`.
+
 ## [1.2.0] - 2026-09-27
 
 ### Added

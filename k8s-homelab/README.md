@@ -12,7 +12,7 @@ documentation and the **Certified Kubernetes Administrator (CKA)** syllabus:
 - **Cluster Bootstrapping**: Official `kubeadm` initialization and joins.
 - **Container Runtime (CRI)**: `containerd.io` with `SystemdCgroup = true`.
 - **CNI**: [Cilium](https://cilium.io/) installed via official Cilium CLI.
-- **Node Topology**: 1 Control Plane and 1 Worker Node (scalable via `WORKER_COUNT`).
+- **Node Topology**: 1 Control Plane and 2 Worker Nodes (scalable via `WORKER_COUNT`).
 - **Preprod Environment**: Integrated Vagrant + Libvirt lab.
 - **Code Quality**: Built-in support for `ansible-lint` and `yamllint`.
 
@@ -66,7 +66,7 @@ ansible-playbook -i inventory/preprod/hosts.ini playbooks/site.yml
 Isolate and practice individual architectural subsystems for targeted debugging
 and verification:
 
-<!-- markdownlint-disable MD033 MD013 -->
+<!-- markdownlint-disable MD033 -->
 <details>
 <summary><b>Stage nodes right before <code>kubeadm init</code> &amp; CNI (Hands-on CKA Exam Drill)</b></summary>
 
@@ -99,7 +99,8 @@ Once completed, SSH to the nodes to practice the hands-on CKA exam sequence:
 sudo kubeadm init \
   --pod-network-cidr=10.1.0.0/16 \
   --service-cidr=10.96.0.0/12 \
-  --apiserver-advertise-address=192.168.56.10
+  --apiserver-advertise-address=192.168.56.10 \
+  --apiserver-cert-extra-sans=192.168.56.10,kube-control-plane,127.0.0.1
 
 # 3. Configure ~/.kube/config for vagrant user
 mkdir -p $HOME/.kube
@@ -300,7 +301,7 @@ ansible-playbook -i inventory/preprod/hosts.ini playbooks/cni.yml
 ```
 
 </details>
-<!-- markdownlint-enable MD033 MD013 -->
+<!-- markdownlint-enable MD033 -->
 
 ### 3. Automated Cluster Upgrade Playbook
 
@@ -357,7 +358,7 @@ k8s-homelab/
 ├── .ansible-lint                  # Strict ansible-lint rules configuration
 ├── ansible.cfg                   # Pipelining, role dirs, YAML output callback
 ├── Makefile                      # Quick targets for lint, preprod, deploy
-├── Vagrantfile                   # 1 CP (192.168.56.10) + 1 Worker (configurable)
+├── Vagrantfile                   # 1 CP (192.168.56.10) + 2 Workers (configurable)
 ├── shell.nix                     # Nix environment with Ansible, Vagrant & libvirt
 ├── .envrc                        # Direnv integration (use nix)
 ├── scripts/                      # Helper & cluster lifecycle scripts
@@ -367,7 +368,7 @@ k8s-homelab/
 │   ├── run-playbook.sh           # Playbook execution wrapper
 │   ├── common.sh                 # VM provisioning: containerd & k8s packages
 │   ├── control-plane.sh          # VM provisioning: kubeadm init helper
-│   ├── control-plane-tools.sh    # VM provisioning: Helm & k9s installer
+│   ├── control-plane-tools.sh    # VM provisioning: Helm, k9s, etcdctl & etcdutl installer
 │   ├── worker.sh                 # VM provisioning: kubeadm join helper
 │   ├── cni-install-cilium.sh     # Cilium CLI installer
 │   ├── cni-install-calico.sh     # Calico CNI installer
@@ -386,7 +387,7 @@ k8s-homelab/
 │   ├── common/                   # Swap off, kernel modules, sysctl
 │   ├── containerd/               # Docker apt repo, containerd.io
 │   ├── kubernetes_packages/      # pkgs.k8s.io repo, kubeadm, kubelet, kubectl
-│   ├── control_plane_tools/      # Helm (APT), k9s (.deb), metrics installer
+│   ├── control_plane_tools/      # Helm (APT), k9s (.deb), etcdctl/etcdutl, metrics installer
 │   ├── control_plane/            # kubeadm init, kubeconfig, join token
 │   ├── worker/                   # kubeadm join execution, kubelet node-ip
 │   ├── cilium/                   # Cilium CLI download, deployment
@@ -413,19 +414,17 @@ k8s-homelab/
 The playbook is built with fine-grained tags allowing you to trigger only
 specific tasks:
 
-<!-- markdownlint-disable MD013 -->
 | Role | Responsibility | Tags |
 | :--- | :--- | :--- |
 | `common` | Disable swap persistently, load `overlay`/`br_netfilter`, set sysctl, install utils | `common`, `swap`, `modules`, `sysctl`, `packages` |
 | `containerd` | Setup Docker repository, install `containerd.io`, configure `SystemdCgroup = true` | `cri`, `containerd` |
 | `kubernetes_packages` | Add `pkgs.k8s.io` repository, install `kubeadm`/`kubelet`/`kubectl`, hold | `k8s_packages`, `kubeadm`, `kubelet`, `kubectl` |
-| `control_plane_tools` | Install Helm via official APT repo, k9s via release .deb, stage metrics script | `bootstrap`, `tools`, `helm`, `k9s`, `metrics` |
+| `control_plane_tools` | Install Helm via official APT repo, k9s via release .deb, etcdctl/etcdutl, stage metrics script | `bootstrap`, `tools`, `helm`, `k9s`, `etcd`, `metrics` |
 | `control_plane` | Run `kubeadm init`, configure root/user kubeconfig, generate join token | `control_plane`, `init`, `kubeconfig`, `join_token` |
 | `worker` | Execute `kubeadm join`, configure node IP in `/etc/default/kubelet` | `worker`, `join`, `kubelet` |
 | `cilium` | Download Cilium CLI, install Cilium daemonset, wait for status, verify nodes | `cni`, `cilium`, `verify` |
 | `upgrade` | Unhold, upgrade kubeadm, `kubeadm upgrade apply`, upgrade kubelet, hold | `upgrade`, `upgrade_control_plane`, `upgrade_worker` |
 | `reset` | `kubeadm reset -f`, flush iptables, clean CNI & `/var/lib/kubelet` | `reset` |
-<!-- markdownlint-enable MD013 -->
 
 [↑ Back to Table of Contents](#table-of-contents)
 
@@ -504,7 +503,8 @@ The first two options will create:
 
 - `kube-control-plane`: `192.168.56.10`
 - `kube-worker-1`: `192.168.56.21`
-*(Additional workers can be spawned by setting `WORKER_COUNT=2` before `make preprod-up`)*
+- `kube-worker-2`: `192.168.56.22`
+*(Worker count can be adjusted by setting `WORKER_COUNT` before `make preprod-up`)*
 
 ### 2. Deploy Kubernetes Cluster
 
@@ -552,6 +552,25 @@ You can also SSH into the control plane VM directly:
 ./scripts/shell.sh --run "vagrant ssh kube-control-plane"
 kubectl get nodes -o wide
 cilium status
+
+# CKA etcd health check and snapshot verification (ETCDCTL_API=3 is auto-configured):
+sudo etcdctl \
+  --endpoints=https://127.0.0.1:2379 \
+  --cacert=/etc/kubernetes/pki/etcd/ca.crt \
+  --cert=/etc/kubernetes/pki/etcd/healthcheck-client.crt \
+  --key=/etc/kubernetes/pki/etcd/healthcheck-client.key \
+  endpoint health
+
+# Save snapshot using dedicated client credentials:
+sudo etcdctl \
+  --endpoints=https://127.0.0.1:2379 \
+  --cacert=/etc/kubernetes/pki/etcd/ca.crt \
+  --cert=/etc/kubernetes/pki/etcd/healthcheck-client.crt \
+  --key=/etc/kubernetes/pki/etcd/healthcheck-client.key \
+  snapshot save /tmp/snapshot.db
+
+# Check snapshot status with etcdutl:
+sudo etcdutl snapshot status /tmp/snapshot.db
 ```
 
 [↑ Back to Table of Contents](#table-of-contents)

@@ -1,0 +1,91 @@
+---
+- name: Determine system architecture for etcd tools
+  ansible.builtin.set_fact:
+    control_plane_tools_etcd_arch: "{{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}"
+  tags:
+    - bootstrap
+    - tools
+    - etcd
+
+- name: Check installed etcdctl version
+  ansible.builtin.command: etcdctl version
+  register: control_plane_tools_installed_etcdctl
+  failed_when: false
+  changed_when: false
+  tags:
+    - bootstrap
+    - tools
+    - etcd
+
+- name: Check installed etcdutl version
+  ansible.builtin.command: etcdutl version
+  register: control_plane_tools_installed_etcdutl
+  failed_when: false
+  changed_when: false
+  tags:
+    - bootstrap
+    - tools
+    - etcd
+
+- name: Install etcdctl and etcdutl binaries from official release archive
+  when: >-
+    (control_plane_tools_installed_etcdctl.rc != 0) or
+    (control_plane_tools_installed_etcdutl.rc != 0) or
+    ((control_plane_tools_installed_etcdctl.stdout | regex_search('etcdctl version:\s*([0-9.]+)', '\1') | first | default('')) !=
+     (control_plane_tools_etcd_version | regex_replace('^v', ''))) or
+    ((control_plane_tools_installed_etcdutl.stdout | regex_search('etcdutl version:\s*([0-9.]+)', '\1') | first | default('')) !=
+     (control_plane_tools_etcd_version | regex_replace('^v', '')))
+  tags:
+    - bootstrap
+    - tools
+    - etcd
+  block:
+    - name: Create temporary directory for etcd tools archive
+      ansible.builtin.tempfile:
+        state: directory
+        suffix: etcd
+      register: control_plane_tools_etcd_temp_dir
+
+    - name: Download and unpack etcd archive
+      ansible.builtin.unarchive:
+        src: >-
+          {{
+            'https://github.com/etcd-io/etcd/releases/download/' ~
+            control_plane_tools_etcd_version ~
+            '/etcd-' ~ control_plane_tools_etcd_version ~
+            '-linux-' ~ control_plane_tools_etcd_arch ~ '.tar.gz'
+          }}
+        dest: "{{ control_plane_tools_etcd_temp_dir.path }}"
+        remote_src: true
+        extra_opts:
+          - "--strip-components=1"
+
+    - name: Copy etcdctl and etcdutl binaries to /usr/local/bin
+      ansible.builtin.copy:
+        src: "{{ control_plane_tools_etcd_temp_dir.path }}/{{ item }}"
+        dest: "/usr/local/bin/{{ item }}"
+        owner: root
+        group: root
+        mode: "0755"
+        remote_src: true
+      loop:
+        - etcdctl
+        - etcdutl
+
+    - name: Remove temporary etcd archive directory
+      ansible.builtin.file:
+        path: "{{ control_plane_tools_etcd_temp_dir.path }}"
+        state: absent
+
+- name: Configure ETCDCTL_API=3 environment profile
+  ansible.builtin.copy:
+    dest: /etc/profile.d/etcd.sh
+    content: |
+      export ETCDCTL_API=3
+    owner: root
+    group: root
+    mode: "0644"
+  tags:
+    - bootstrap
+    - tools
+    - etcd

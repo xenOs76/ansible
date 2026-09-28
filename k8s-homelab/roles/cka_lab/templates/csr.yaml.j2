@@ -1,0 +1,11 @@
+---
+apiVersion: certificates.k8s.io/v1
+kind: CertificateSigningRequest
+metadata:
+  name: {{ cka_lab_user_rbac_name }}
+spec:
+  request: {{ cka_lab_user_csr.content | trim }}
+  signerName: kubernetes.io/kube-apiserver-client
+  expirationSeconds: {{ cka_lab_user_rbac_csr_expiration_seconds }}
+  usages:
+    - client auth

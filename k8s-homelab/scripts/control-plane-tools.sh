@@ -2,7 +2,7 @@
 # ==============================================================================
 # Script: control-plane-tools.sh
 # Purpose: Install essential Kubernetes administration and operations CLI tools
-#          (Helm v3 and k9s) on the control plane node.
+#          (Helm v3, k9s, etcdctl, and etcdutl) on the control plane node.
 #
 # Context:
 #   Executed inside the 'kube-control-plane' VM with superuser privileges
@@ -11,12 +11,15 @@
 #
 # Usage:
 #   sudo /vagrant/scripts/control-plane-tools.sh
-#   # Or with custom k9s version:
-#   sudo K9S_VERSION="v0.40.10" /vagrant/scripts/control-plane-tools.sh
+#   # Or with custom versions:
+#   sudo K9S_VERSION="v0.40.10" ETCD_VERSION="v3.5.16" /vagrant/scripts/control-plane-tools.sh
 #
 # Environment Variables:
-#   K9S_VERSION - Target release tag of k9s to install from GitHub releases.
-#                 Default: v0.40.10
+#   K9S_VERSION  - Target release tag of k9s to install from GitHub releases.
+#                  Default: v0.40.10
+#   ETCD_VERSION - Target release tag of etcd tools (etcdctl, etcdutl) from
+#                  official GitHub releases.
+#                  Default: v3.5.16
 #
 # Key Subsystems Installed:
 #   1. Helm v3:
@@ -28,18 +31,27 @@
 #      - Detects current installed version to ensure idempotency.
 #      - Downloads official architecture-specific .deb from GitHub releases.
 #      - Installs package via apt-get and removes temporary installer.
+#   3. etcdctl & etcdutl:
+#      - Note: Ubuntu universe repository only provides etcd-client (v3.4.x)
+#        and omits etcdutl entirely. To match Kubernetes 1.34 and CKA standards,
+#        version-matched binaries are installed from official GitHub releases.
+#      - Installs binaries to /usr/local/bin with mode 0755.
+#      - Exports ETCDCTL_API=3 in /etc/profile.d/etcd.sh for all shells.
 #
 # Manual Verification:
 #   helm version --short
 #   k9s version --short
+#   etcdctl version
+#   etcdutl version
 #
 # Troubleshooting:
 #   - If Helm key verification fails: Check curl connectivity to packages.buildkite.com.
 #   - If k9s download fails: Verify GitHub access or inspect /tmp/k9s_linux_*.deb.
+#   - If etcd tools download fails: Verify GitHub access or release tag existence.
 # ==============================================================================
 set -euo pipefail
 
-echo "=== Installing Control Plane Tools (Helm, k9s) ==="
+echo "=== Installing Control Plane Tools (Helm, k9s, etcdctl, etcdutl) ==="
 
 # ------------------------------------------------------------------------------
 # 1. Install Helm via official APT repository with GPG fingerprint verification
@@ -94,4 +106,46 @@ else
   echo "k9s version ${K9S_VERSION} is already installed."
 fi
 
+# ------------------------------------------------------------------------------
+# 3. Install etcdctl and etcdutl via official release archive
+# ------------------------------------------------------------------------------
+ETCD_VERSION="${ETCD_VERSION:-v3.5.16}"
+if [[ "$ETCD_VERSION" != v* ]]; then
+  ETCD_VERSION="v${ETCD_VERSION}"
+fi
+NORMALIZED_ETCD_VERSION="${ETCD_VERSION#v}"
+
+INSTALLED_ETCDCTL_VERSION=""
+if command -v etcdctl >/dev/null 2>&1; then
+  INSTALLED_ETCDCTL_VERSION=$(etcdctl version 2>/dev/null | awk '$1 == "etcdctl" && $2 == "version:" {print $3}' | sed 's/^v//' || true)
+fi
+
+INSTALLED_ETCDUTL_VERSION=""
+if command -v etcdutl >/dev/null 2>&1; then
+  INSTALLED_ETCDUTL_VERSION=$(etcdutl version 2>/dev/null | awk '$1 == "etcdutl" && $2 == "version:" {print $3}' | sed 's/^v//' || true)
+fi
+
+if [ "$INSTALLED_ETCDCTL_VERSION" != "$NORMALIZED_ETCD_VERSION" ] || [ "$INSTALLED_ETCDUTL_VERSION" != "$NORMALIZED_ETCD_VERSION" ]; then
+  ARCH=$(dpkg --print-architecture)
+  echo "Installing etcdctl and etcdutl (${ETCD_VERSION}) via official release archive..."
+  TMP_ETCD_DIR=$(mktemp -d /tmp/etcd.XXXXXX)
+  TMP_ETCD_TGZ="${TMP_ETCD_DIR}/etcd.tar.gz"
+  ETCD_DOWNLOAD_URL="https://github.com/etcd-io/etcd/releases/download/${ETCD_VERSION}/etcd-${ETCD_VERSION}-linux-${ARCH}.tar.gz"
+
+  curl -fsSL "$ETCD_DOWNLOAD_URL" -o "$TMP_ETCD_TGZ"
+  tar -xzf "$TMP_ETCD_TGZ" -C "$TMP_ETCD_DIR" --strip-components=1
+  install -m 0755 "${TMP_ETCD_DIR}/etcdctl" /usr/local/bin/etcdctl
+  install -m 0755 "${TMP_ETCD_DIR}/etcdutl" /usr/local/bin/etcdutl
+  rm -rf "$TMP_ETCD_DIR"
+else
+  echo "etcdctl and etcdutl version ${ETCD_VERSION} are already installed."
+fi
+
+# Configure ETCDCTL_API=3 system-wide for interactive and login shells
+cat <<'EOF' > /etc/profile.d/etcd.sh
+export ETCDCTL_API=3
+EOF
+chmod 0644 /etc/profile.d/etcd.sh
+
 echo "=== Control Plane Tools Installed Successfully ==="
+

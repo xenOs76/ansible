@@ -1,0 +1,250 @@
+---
+- name: Ensure sudo package is installed
+  ansible.builtin.package:
+    name: sudo
+    state: present
+  tags:
+    - cka_lab
+    - user_rbac
+
+- name: "Create Linux user with sudo membership: {{ cka_lab_user_rbac_name }}"
+  ansible.builtin.user:
+    name: "{{ cka_lab_user_rbac_name }}"
+    shell: "{{ cka_lab_user_rbac_shell }}"
+    groups: "{{ cka_lab_user_rbac_groups }}"
+    append: true
+    create_home: true
+    state: present
+  tags:
+    - cka_lab
+    - user_rbac
+
+- name: "Configure passwordless sudo for user: {{ cka_lab_user_rbac_name }}"
+  ansible.builtin.copy:
+    content: "{{ cka_lab_user_rbac_name }} ALL=(ALL) NOPASSWD:ALL\n"
+    dest: "/etc/sudoers.d/{{ cka_lab_user_rbac_name }}"
+    mode: "0440"
+    validate: "visudo -cf %s"
+  when: cka_lab_user_rbac_passwordless_sudo | bool
+  tags:
+    - cka_lab
+    - user_rbac
+
+- name: Create directories for user certificates and kubeconfig
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ cka_lab_user_rbac_name }}"
+    group: "{{ cka_lab_user_rbac_name }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - {path: "{{ cka_lab_user_rbac_cert_dir }}", mode: "0755"}
+    - {path: "{{ cka_lab_user_rbac_kube_dir }}", mode: "0700"}
+  tags:
+    - cka_lab
+    - user_rbac
+
+- name: "Generate private key for user: {{ cka_lab_user_rbac_name }}"
+  ansible.builtin.command: >-
+    openssl genrsa -out {{ cka_lab_user_rbac_cert_dir }}/{{ cka_lab_user_rbac_name }}.key 2048
+  args:
+    creates: "{{ cka_lab_user_rbac_cert_dir }}/{{ cka_lab_user_rbac_name }}.key"
+  tags:
+    - cka_lab
+    - user_rbac
+
+- name: Set secure permissions on private key
+  ansible.builtin.file:
+    path: "{{ cka_lab_user_rbac_cert_dir }}/{{ cka_lab_user_rbac_name }}.key"
+    owner: "{{ cka_lab_user_rbac_name }}"
+    group: "{{ cka_lab_user_rbac_name }}"
+    mode: "0600"
+  tags:
+    - cka_lab
+    - user_rbac
+
+- name: "Generate Certificate Signing Request (CSR) for user: {{ cka_lab_user_rbac_name }}"
+  ansible.builtin.command: >-
+    openssl req -new
+    -key {{ cka_lab_user_rbac_cert_dir }}/{{ cka_lab_user_rbac_name }}.key
+    -out {{ cka_lab_user_rbac_cert_dir }}/{{ cka_lab_user_rbac_name }}.csr
+    -subj "/CN={{ cka_lab_user_rbac_name }}/O={{ cka_lab_user_rbac_k8s_group }}"
+  args:
+    creates: "{{ cka_lab_user_rbac_cert_dir }}/{{ cka_lab_user_rbac_name }}.csr"
+  tags:
+    - cka_lab
+    - user_rbac
+
+- name: Set permissions on Certificate Signing Request (CSR)
+  ansible.builtin.file:
+    path: "{{ cka_lab_user_rbac_cert_dir }}/{{ cka_lab_user_rbac_name }}.csr"
+    owner: "{{ cka_lab_user_rbac_name }}"
+    group: "{{ cka_lab_user_rbac_name }}"
+    mode: "0644"
+  tags:
+    - cka_lab
+    - user_rbac
+
+- name: "Check if signed certificate already exists for user: {{ cka_lab_user_rbac_name }}"
+  ansible.builtin.stat:
+    path: "{{ cka_lab_user_rbac_cert_dir }}/{{ cka_lab_user_rbac_name }}.crt"
+  register: cka_lab_user_cert_stat
+  tags:
+    - cka_lab
+    - user_rbac
+
+- name: Read user Certificate Signing Request (CSR) content
+  ansible.builtin.slurp:
+    src: "{{ cka_lab_user_rbac_cert_dir }}/{{ cka_lab_user_rbac_name }}.csr"
+  register: cka_lab_user_csr
+  when: not cka_lab_user_cert_stat.stat.exists
+  tags:
+    - cka_lab
+    - user_rbac
+
+- name: "Render CertificateSigningRequest manifest for user: {{ cka_lab_user_rbac_name }}"
+  ansible.builtin.template:
+    src: csr.yaml.j2
+    dest: "{{ cka_lab_user_rbac_cert_dir }}/{{ cka_lab_user_rbac_name }}-csr.yaml"
+    owner: "{{ cka_lab_user_rbac_name }}"
+    group: "{{ cka_lab_user_rbac_name }}"
+    mode: "0644"
+  when: not cka_lab_user_cert_stat.stat.exists
+  tags:
+    - cka_lab
+    - user_rbac
+
+- name: "Remove existing CertificateSigningRequest if present for user: {{ cka_lab_user_rbac_name }}"
+  ansible.builtin.command: >-
+    kubectl delete csr {{ cka_lab_user_rbac_name }} --ignore-not-found=true
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  when: not cka_lab_user_cert_stat.stat.exists
+  changed_when: false
+  tags:
+    - cka_lab
+    - user_rbac
+
+- name: "Apply CertificateSigningRequest manifest for user: {{ cka_lab_user_rbac_name }}"
+  ansible.builtin.command: >-
+    kubectl apply -f {{ cka_lab_user_rbac_cert_dir }}/{{ cka_lab_user_rbac_name }}-csr.yaml
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  when: not cka_lab_user_cert_stat.stat.exists
+  changed_when: true
+  tags:
+    - cka_lab
+    - user_rbac
+
+- name: "Approve CertificateSigningRequest for user: {{ cka_lab_user_rbac_name }}"
+  ansible.builtin.command: >-
+    kubectl certificate approve {{ cka_lab_user_rbac_name }}
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  when: not cka_lab_user_cert_stat.stat.exists
+  changed_when: true
+  tags:
+    - cka_lab
+    - user_rbac
+
+- name: Extract signed certificate from approved CertificateSigningRequest
+  ansible.builtin.shell: >-
+    set -o pipefail &&
+    CERT="$(kubectl get csr {{ cka_lab_user_rbac_name }} -o jsonpath='{.status.certificate}')" &&
+    [ -n "$CERT" ] &&
+    echo "$CERT" | base64 -d > {{ cka_lab_user_rbac_cert_dir }}/{{ cka_lab_user_rbac_name }}.crt
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: cka_lab_extract_cert
+  retries: 5
+  delay: 1
+  until: cka_lab_extract_cert.rc == 0
+  when: not cka_lab_user_cert_stat.stat.exists
+  changed_when: true
+  tags:
+    - cka_lab
+    - user_rbac
+
+- name: Set permissions on signed certificate
+  ansible.builtin.file:
+    path: "{{ cka_lab_user_rbac_cert_dir }}/{{ cka_lab_user_rbac_name }}.crt"
+    owner: "{{ cka_lab_user_rbac_name }}"
+    group: "{{ cka_lab_user_rbac_name }}"
+    mode: "0644"
+  tags:
+    - cka_lab
+    - user_rbac
+
+- name: Configure cluster in user kubeconfig
+  ansible.builtin.shell: >-
+    set -o pipefail &&
+    BEFORE="$(sha256sum {{ cka_lab_user_rbac_kube_dir }}/config 2>/dev/null || true)" &&
+    kubectl config set-cluster {{ cka_lab_user_rbac_cluster_name }}
+    --server={{ cka_lab_user_rbac_cluster_server }}
+    --certificate-authority={{ cka_lab_k8s_ca_crt }}
+    --embed-certs=true
+    --kubeconfig={{ cka_lab_user_rbac_kube_dir }}/config >/dev/null &&
+    AFTER="$(sha256sum {{ cka_lab_user_rbac_kube_dir }}/config 2>/dev/null || true)" &&
+    if [ "$BEFORE" != "$AFTER" ]; then echo "CHANGED"; fi
+  register: cka_lab_cluster_config
+  changed_when: "'CHANGED' in cka_lab_cluster_config.stdout_lines"
+  tags:
+    - cka_lab
+    - user_rbac
+
+- name: Configure user credentials in user kubeconfig
+  ansible.builtin.shell: >-
+    set -o pipefail &&
+    BEFORE="$(sha256sum {{ cka_lab_user_rbac_kube_dir }}/config 2>/dev/null || true)" &&
+    kubectl config set-credentials {{ cka_lab_user_rbac_name }}
+    --client-certificate={{ cka_lab_user_rbac_cert_dir }}/{{ cka_lab_user_rbac_name }}.crt
+    --client-key={{ cka_lab_user_rbac_cert_dir }}/{{ cka_lab_user_rbac_name }}.key
+    --embed-certs=true
+    --kubeconfig={{ cka_lab_user_rbac_kube_dir }}/config >/dev/null &&
+    AFTER="$(sha256sum {{ cka_lab_user_rbac_kube_dir }}/config 2>/dev/null || true)" &&
+    if [ "$BEFORE" != "$AFTER" ]; then echo "CHANGED"; fi
+  register: cka_lab_credentials_config
+  changed_when: "'CHANGED' in cka_lab_credentials_config.stdout_lines"
+  tags:
+    - cka_lab
+    - user_rbac
+
+- name: Configure context in user kubeconfig
+  ansible.builtin.shell: >-
+    set -o pipefail &&
+    BEFORE="$(sha256sum {{ cka_lab_user_rbac_kube_dir }}/config 2>/dev/null || true)" &&
+    kubectl config set-context {{ cka_lab_user_rbac_context_name }}
+    --cluster={{ cka_lab_user_rbac_cluster_name }}
+    --user={{ cka_lab_user_rbac_name }}
+    --kubeconfig={{ cka_lab_user_rbac_kube_dir }}/config >/dev/null &&
+    AFTER="$(sha256sum {{ cka_lab_user_rbac_kube_dir }}/config 2>/dev/null || true)" &&
+    if [ "$BEFORE" != "$AFTER" ]; then echo "CHANGED"; fi
+  register: cka_lab_context_config
+  changed_when: "'CHANGED' in cka_lab_context_config.stdout_lines"
+  tags:
+    - cka_lab
+    - user_rbac
+
+- name: Set active context in user kubeconfig
+  ansible.builtin.shell: >-
+    set -o pipefail &&
+    BEFORE="$(sha256sum {{ cka_lab_user_rbac_kube_dir }}/config 2>/dev/null || true)" &&
+    kubectl config use-context {{ cka_lab_user_rbac_context_name }}
+    --kubeconfig={{ cka_lab_user_rbac_kube_dir }}/config >/dev/null &&
+    AFTER="$(sha256sum {{ cka_lab_user_rbac_kube_dir }}/config 2>/dev/null || true)" &&
+    if [ "$BEFORE" != "$AFTER" ]; then echo "CHANGED"; fi
+  register: cka_lab_active_context_config
+  changed_when: "'CHANGED' in cka_lab_active_context_config.stdout_lines"
+  tags:
+    - cka_lab
+    - user_rbac
+
+- name: Set ownership and permissions on user kubeconfig
+  ansible.builtin.file:
+    path: "{{ cka_lab_user_rbac_kube_dir }}/config"
+    owner: "{{ cka_lab_user_rbac_name }}"
+    group: "{{ cka_lab_user_rbac_name }}"
+    mode: "0600"
+  tags:
+    - cka_lab
+    - user_rbac

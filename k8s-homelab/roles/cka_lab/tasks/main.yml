@@ -1,0 +1,7 @@
+---
+- name: Execute CKA Lab Scenario - User Authentication & RBAC (user_rbac)
+  ansible.builtin.include_tasks: scenario_user_rbac.yml
+  when: cka_lab_scenario_user_rbac_enabled | bool
+  tags:
+    - cka_lab
+    - user_rbac
