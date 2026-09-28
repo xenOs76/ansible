@@ -555,10 +555,19 @@ cilium status
 
 # CKA etcd health check and snapshot verification (ETCDCTL_API=3 is auto-configured):
 sudo etcdctl \
+  --endpoints=https://127.0.0.1:2379 \
   --cacert=/etc/kubernetes/pki/etcd/ca.crt \
-  --cert=/etc/kubernetes/pki/etcd/server.crt \
-  --key=/etc/kubernetes/pki/etcd/server.key \
+  --cert=/etc/kubernetes/pki/etcd/healthcheck-client.crt \
+  --key=/etc/kubernetes/pki/etcd/healthcheck-client.key \
   endpoint health
+
+# Save snapshot using dedicated client credentials:
+sudo etcdctl \
+  --endpoints=https://127.0.0.1:2379 \
+  --cacert=/etc/kubernetes/pki/etcd/ca.crt \
+  --cert=/etc/kubernetes/pki/etcd/healthcheck-client.crt \
+  --key=/etc/kubernetes/pki/etcd/healthcheck-client.key \
+  snapshot save /tmp/snapshot.db
 
 # Check snapshot status with etcdutl:
 sudo etcdutl snapshot status /tmp/snapshot.db

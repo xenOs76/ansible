@@ -24,11 +24,29 @@
     - control_plane
     - init
 
-- name: Check apiserver certificate Subject Alternative Names
-  ansible.builtin.command: >-
-    openssl x509 -in /etc/kubernetes/pki/apiserver.crt -noout -text
-  register: control_plane_apiserver_cert_info
+- name: Extract Subject Alternative Names from apiserver certificate
+  ansible.builtin.shell: >-
+    set -o pipefail &&
+    openssl x509 -in /etc/kubernetes/pki/apiserver.crt -noout -ext subjectAltName 2>/dev/null
+    | grep -v 'X509v3'
+    | tr ',' '\n'
+    | sed -E 's/^\s*(DNS:|IP Address:|IP:)//g'
+    | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
+  register: control_plane_apiserver_cert_sans
   changed_when: false
+  when: control_plane_admin_conf.stat.exists
+  tags:
+    - control_plane
+    - certs
+
+- name: Determine required apiserver certificate SANs
+  ansible.builtin.set_fact:
+    control_plane_required_sans: >-
+      {{
+        ((control_plane_apiserver_cert_extra_sans | default('')).split(',') +
+         [apiserver_advertise_address | default(node_ip) | default(ansible_default_ipv4.address)])
+        | map('trim') | select('truthy') | unique | list
+      }}
   when: control_plane_admin_conf.stat.exists
   tags:
     - control_plane
@@ -37,7 +55,7 @@
 - name: Regenerate apiserver certificate if required SAN is missing
   when:
     - control_plane_admin_conf.stat.exists
-    - (ansible_host | default(node_ip | default('192.168.56.10'))) not in control_plane_apiserver_cert_info.stdout
+    - (control_plane_required_sans | difference(control_plane_apiserver_cert_sans.stdout_lines)) | length > 0
   tags:
     - control_plane
     - certs
@@ -63,31 +81,59 @@
     - name: Reissue apiserver certificate with updated SANs
       ansible.builtin.command: >-
         kubeadm init phase certs apiserver
+        --service-cidr={{ control_plane_service_cidr }}
         --apiserver-advertise-address={{ apiserver_advertise_address | default(node_ip) | default(ansible_default_ipv4.address) }}
         {% if control_plane_apiserver_cert_extra_sans | default('') %}
         --apiserver-cert-extra-sans={{ control_plane_apiserver_cert_extra_sans }}
         {% endif %}
       changed_when: true
 
-    - name: Restart kube-apiserver static pod
-      ansible.builtin.command: >-
-        crictl pods --name kube-apiserver -q
-      register: control_plane_apiserver_pod_id
-      changed_when: false
-      failed_when: false
+    - name: Backup kube-apiserver manifest to trigger static pod termination
+      ansible.builtin.copy:
+        src: /etc/kubernetes/manifests/kube-apiserver.yaml
+        dest: /etc/kubernetes/kube-apiserver.yaml.tmp
+        remote_src: true
+        mode: "0600"
 
-    - name: Stop kube-apiserver pod to trigger restart
-      ansible.builtin.command: >-
-        crictl stopp {{ control_plane_apiserver_pod_id.stdout.strip() }}
-      when: control_plane_apiserver_pod_id.stdout.strip() != ""
-      changed_when: true
-      failed_when: false
-
-    - name: Touch kube-apiserver manifest to reload configuration
+    - name: Remove kube-apiserver manifest to terminate running static pod
       ansible.builtin.file:
         path: /etc/kubernetes/manifests/kube-apiserver.yaml
-        state: touch
+        state: absent
+
+    - name: Wait for kube-apiserver port to close
+      ansible.builtin.wait_for:
+        port: 6443
+        state: stopped
+        timeout: 30
+      failed_when: false
+
+    - name: Restore kube-apiserver manifest to start replacement static pod
+      ansible.builtin.copy:
+        src: /etc/kubernetes/kube-apiserver.yaml.tmp
+        dest: /etc/kubernetes/manifests/kube-apiserver.yaml
+        remote_src: true
         mode: "0600"
+
+    - name: Clean up temporary kube-apiserver manifest backup
+      ansible.builtin.file:
+        path: /etc/kubernetes/kube-apiserver.yaml.tmp
+        state: absent
+
+    - name: Wait for kube-apiserver port to become available
+      ansible.builtin.wait_for:
+        port: 6443
+        state: started
+        delay: 2
+        timeout: 60
+
+    - name: Verify replacement API server is healthy and responsive
+      ansible.builtin.command: >-
+        kubectl get --raw=/livez --kubeconfig=/etc/kubernetes/admin.conf
+      register: control_plane_apiserver_livez
+      changed_when: false
+      retries: 20
+      delay: 3
+      until: control_plane_apiserver_livez.rc == 0 and control_plane_apiserver_livez.stdout == 'ok'
 
 - name: Create .kube directory for root
   ansible.builtin.file:

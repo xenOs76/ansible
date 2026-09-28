@@ -91,6 +91,7 @@
     -in {{ cka_lab_user_rbac_cert_dir }}/{{ cka_lab_user_rbac_name }}.csr
     -CA {{ cka_lab_k8s_ca_crt }}
     -CAkey {{ cka_lab_k8s_ca_key }}
+    -CAserial {{ cka_lab_user_rbac_cert_dir }}/ca.srl
     -CAcreateserial
     -out {{ cka_lab_user_rbac_cert_dir }}/{{ cka_lab_user_rbac_name }}.crt
     -days {{ cka_lab_user_rbac_cert_days }}
@@ -111,45 +112,65 @@
     - user_rbac
 
 - name: Configure cluster in user kubeconfig
-  ansible.builtin.command: >-
+  ansible.builtin.shell: >-
+    set -o pipefail &&
+    BEFORE="$(sha256sum {{ cka_lab_user_rbac_kube_dir }}/config 2>/dev/null || true)" &&
     kubectl config set-cluster {{ cka_lab_user_rbac_cluster_name }}
     --server={{ cka_lab_user_rbac_cluster_server }}
     --certificate-authority={{ cka_lab_k8s_ca_crt }}
     --embed-certs=true
-    --kubeconfig={{ cka_lab_user_rbac_kube_dir }}/config
-  changed_when: true
+    --kubeconfig={{ cka_lab_user_rbac_kube_dir }}/config >/dev/null &&
+    AFTER="$(sha256sum {{ cka_lab_user_rbac_kube_dir }}/config 2>/dev/null || true)" &&
+    if [ "$BEFORE" != "$AFTER" ]; then echo "CHANGED"; fi
+  register: cka_lab_cluster_config
+  changed_when: "'CHANGED' in cka_lab_cluster_config.stdout_lines"
   tags:
     - cka_lab
     - user_rbac
 
 - name: Configure user credentials in user kubeconfig
-  ansible.builtin.command: >-
+  ansible.builtin.shell: >-
+    set -o pipefail &&
+    BEFORE="$(sha256sum {{ cka_lab_user_rbac_kube_dir }}/config 2>/dev/null || true)" &&
     kubectl config set-credentials {{ cka_lab_user_rbac_name }}
     --client-certificate={{ cka_lab_user_rbac_cert_dir }}/{{ cka_lab_user_rbac_name }}.crt
     --client-key={{ cka_lab_user_rbac_cert_dir }}/{{ cka_lab_user_rbac_name }}.key
     --embed-certs=true
-    --kubeconfig={{ cka_lab_user_rbac_kube_dir }}/config
-  changed_when: true
+    --kubeconfig={{ cka_lab_user_rbac_kube_dir }}/config >/dev/null &&
+    AFTER="$(sha256sum {{ cka_lab_user_rbac_kube_dir }}/config 2>/dev/null || true)" &&
+    if [ "$BEFORE" != "$AFTER" ]; then echo "CHANGED"; fi
+  register: cka_lab_credentials_config
+  changed_when: "'CHANGED' in cka_lab_credentials_config.stdout_lines"
   tags:
     - cka_lab
     - user_rbac
 
 - name: Configure context in user kubeconfig
-  ansible.builtin.command: >-
+  ansible.builtin.shell: >-
+    set -o pipefail &&
+    BEFORE="$(sha256sum {{ cka_lab_user_rbac_kube_dir }}/config 2>/dev/null || true)" &&
     kubectl config set-context {{ cka_lab_user_rbac_context_name }}
     --cluster={{ cka_lab_user_rbac_cluster_name }}
     --user={{ cka_lab_user_rbac_name }}
-    --kubeconfig={{ cka_lab_user_rbac_kube_dir }}/config
-  changed_when: true
+    --kubeconfig={{ cka_lab_user_rbac_kube_dir }}/config >/dev/null &&
+    AFTER="$(sha256sum {{ cka_lab_user_rbac_kube_dir }}/config 2>/dev/null || true)" &&
+    if [ "$BEFORE" != "$AFTER" ]; then echo "CHANGED"; fi
+  register: cka_lab_context_config
+  changed_when: "'CHANGED' in cka_lab_context_config.stdout_lines"
   tags:
     - cka_lab
     - user_rbac
 
 - name: Set active context in user kubeconfig
-  ansible.builtin.command: >-
+  ansible.builtin.shell: >-
+    set -o pipefail &&
+    BEFORE="$(sha256sum {{ cka_lab_user_rbac_kube_dir }}/config 2>/dev/null || true)" &&
     kubectl config use-context {{ cka_lab_user_rbac_context_name }}
-    --kubeconfig={{ cka_lab_user_rbac_kube_dir }}/config
-  changed_when: true
+    --kubeconfig={{ cka_lab_user_rbac_kube_dir }}/config >/dev/null &&
+    AFTER="$(sha256sum {{ cka_lab_user_rbac_kube_dir }}/config 2>/dev/null || true)" &&
+    if [ "$BEFORE" != "$AFTER" ]; then echo "CHANGED"; fi
+  register: cka_lab_active_context_config
+  changed_when: "'CHANGED' in cka_lab_active_context_config.stdout_lines"
   tags:
     - cka_lab
     - user_rbac

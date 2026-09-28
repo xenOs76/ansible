@@ -74,14 +74,63 @@ STANDALONE_KUBECONFIG="${BASE_DIR}/kubeconfig.${ENV}"
 CLIENT_KUBECONFIG="${KUBECONFIG:-${HOME}/.kube/config}"
 STAGED_CONF="${BASE_DIR}/admin.conf"
 
+# Lookup control plane host from inventory dynamically
+INV_HOST=""
+INV_FILE="${BASE_DIR}/inventory/${ENV}/hosts.ini"
+if [[ -f "${INV_FILE}" ]]; then
+  INV_HOST="$(awk '/^\[control_plane\]/{flag=1;next}/^\[/{flag=0}flag && NF{for(i=1;i<=NF;i++)if($i ~ /^ansible_host=/){split($i,a,"=");print a[2];exit}}' "${INV_FILE}" 2>/dev/null || true)"
+fi
+
+verify_staged_env() {
+  local conf="$1"
+  local env="$2"
+
+  if ! kubectl --kubeconfig="${conf}" config view >/dev/null 2>&1; then
+    return 1
+  fi
+
+  local staged_server staged_cluster staged_ctx
+  staged_server="$(kubectl --kubeconfig="${conf}" config view --raw -o jsonpath='{.clusters[0].cluster.server}' 2>/dev/null || true)"
+  staged_cluster="$(kubectl --kubeconfig="${conf}" config view --raw -o jsonpath='{.clusters[0].name}' 2>/dev/null || true)"
+  staged_ctx="$(kubectl --kubeconfig="${conf}" config view --raw -o jsonpath='{.contexts[0].name}' 2>/dev/null || true)"
+
+  if [[ "${env}" == "preprod" ]]; then
+    # Reject credentials explicitly configured for prod
+    if [[ "${staged_cluster}" == *"prod"* && "${staged_cluster}" != *"preprod"* ]]; then
+      return 1
+    fi
+    if [[ "${staged_ctx}" == *"prod"* && "${staged_ctx}" != *"preprod"* ]]; then
+      return 1
+    fi
+    if [[ -n "${INV_HOST}" && -n "${staged_server}" ]]; then
+      if [[ "${staged_server}" != *"${INV_HOST}"* && "${staged_server}" != *"127.0.0.1"* && "${staged_server}" != *"localhost"* ]]; then
+        return 1
+      fi
+    fi
+  else
+    # Reject preprod credentials when syncing prod
+    if [[ "${staged_cluster}" == *"preprod"* || "${staged_ctx}" == *"preprod"* ]]; then
+      return 1
+    fi
+    if [[ "${staged_server}" == *"192.168.56."* ]]; then
+      return 1
+    fi
+    if [[ -n "${INV_HOST}" && -n "${staged_server}" ]]; then
+      if [[ "${staged_server}" != *"${INV_HOST}"* && "${staged_server}" != *"127.0.0.1"* && "${staged_server}" != *"localhost"* ]]; then
+        return 1
+      fi
+    fi
+  fi
+
+  return 0
+}
+
 echo "${BOLD}${CYAN}[sync-kubeconfig]${RESET} Synchronizing '${ENV}' Kubernetes admin credentials..."
 
 # 1. Locate or fetch admin.conf
 SRC_CONF="${TMP_DIR}/source-admin.conf"
-if [[ -f "${STAGED_CONF}" && -s "${STAGED_CONF}" ]]; then
-  cp -f "${STAGED_CONF}" "${SRC_CONF}"
-elif [[ "${ENV}" == "preprod" ]]; then
-  # Fetch admin.conf from running Vagrant VM in a single fast call
+if [[ "${ENV}" == "preprod" ]]; then
+  # For preprod, refresh credentials from the VM rather than accepting a possibly stale staged file
   FETCH_SUCCESS=false
   if command -v vagrant >/dev/null 2>&1; then
     if vagrant ssh kube-control-plane -c "sudo cat /etc/kubernetes/admin.conf" > "${SRC_CONF}" 2>/dev/null; then
@@ -114,13 +163,23 @@ elif [[ "${ENV}" == "preprod" ]]; then
     fi
   fi
 else
-  if [[ "${BEST_EFFORT}" == "true" ]]; then
-    echo "${CYAN}[sync-kubeconfig]${RESET} admin.conf not found. Skipping production credentials sync."
-    exit 0
+  # Non-preprod environments require staged credentials matching ENV
+  if [[ -f "${STAGED_CONF}" && -s "${STAGED_CONF}" ]]; then
+    if verify_staged_env "${STAGED_CONF}" "${ENV}"; then
+      cp -f "${STAGED_CONF}" "${SRC_CONF}"
+    else
+      echo "${RED}Error:${RESET} Staged credentials in ${STAGED_CONF} do not match the '${ENV}' environment." >&2
+      exit 1
+    fi
   else
-    echo "${RED}Error:${RESET} admin.conf not found at ${STAGED_CONF}." >&2
-    echo "       Stage the cluster admin.conf or run: ${BOLD}./scripts/run-playbook.sh -e prod -p site.yml${RESET}" >&2
-    exit 1
+    if [[ "${BEST_EFFORT}" == "true" ]]; then
+      echo "${CYAN}[sync-kubeconfig]${RESET} admin.conf not found. Skipping production credentials sync."
+      exit 0
+    else
+      echo "${RED}Error:${RESET} admin.conf not found at ${STAGED_CONF}." >&2
+      echo "       Stage the cluster admin.conf or run: ${BOLD}./scripts/run-playbook.sh -e prod -p site.yml${RESET}" >&2
+      exit 1
+    fi
   fi
 fi
 
@@ -131,13 +190,6 @@ sed -i -n '/^\(apiVersion\|kind\):/,$p' "${SRC_CONF}"
 # 2. Resolve Server Endpoint (User Override -> Inventory -> Detected server)
 DETECTED_SERVER="$(kubectl --kubeconfig="${SRC_CONF}" config view --minify -o jsonpath='{.clusters[0].cluster.server}' 2>/dev/null || true)"
 API_PORT="$(echo "${DETECTED_SERVER}" | grep -oE '[0-9]+$' || echo "6443")"
-
-# Lookup control plane host from inventory dynamically
-INV_HOST=""
-INV_FILE="${BASE_DIR}/inventory/${ENV}/hosts.ini"
-if [[ -f "${INV_FILE}" ]]; then
-  INV_HOST="$(awk '/^\[control_plane\]/{flag=1;next}/^\[/{flag=0}flag && NF{for(i=1;i<=NF;i++)if($i ~ /^ansible_host=/){split($i,a,"=");print a[2];exit}}' "${INV_FILE}" 2>/dev/null || true)"
-fi
 
 if [[ -n "${API_SERVER:-}" ]]; then
   EFFECTIVE_SERVER="${API_SERVER}"
@@ -152,17 +204,18 @@ fi
 # 3. Extract credentials and assemble standalone kubeconfig
 CLIENT_CERT="$(kubectl --kubeconfig="${SRC_CONF}" config view --raw -o jsonpath='{.users[0].user.client-certificate-data}' 2>/dev/null || true)"
 CLIENT_KEY="$(kubectl --kubeconfig="${SRC_CONF}" config view --raw -o jsonpath='{.users[0].user.client-key-data}' 2>/dev/null || true)"
+CLUSTER_CA="$(kubectl --kubeconfig="${SRC_CONF}" config view --raw -o jsonpath='{.clusters[0].cluster.certificate-authority-data}' 2>/dev/null || true)"
 
-if [[ -z "${CLIENT_CERT}" || -z "${CLIENT_KEY}" ]]; then
-  echo "${RED}Error:${RESET} Failed to extract client certificate credentials from ${SRC_CONF}." >&2
+if [[ -z "${CLIENT_CERT}" || -z "${CLIENT_KEY}" || -z "${CLUSTER_CA}" ]]; then
+  echo "${RED}Error:${RESET} Failed to extract client credentials or CA data from ${SRC_CONF}." >&2
   echo "       Please verify the cluster is properly initialized." >&2
   exit 1
 fi
 
 rm -f "${STANDALONE_KUBECONFIG}"
 kubectl --kubeconfig="${STANDALONE_KUBECONFIG}" config set-cluster "${CLUSTER_NAME}" \
-  --server="${EFFECTIVE_SERVER}" \
-  --insecure-skip-tls-verify=true >/dev/null
+  --server="${EFFECTIVE_SERVER}" >/dev/null
+kubectl --kubeconfig="${STANDALONE_KUBECONFIG}" config set "clusters.${CLUSTER_NAME}.certificate-authority-data" "${CLUSTER_CA}" >/dev/null
 
 kubectl --kubeconfig="${STANDALONE_KUBECONFIG}" config set "users.${USER_NAME}.client-certificate-data" "${CLIENT_CERT}" >/dev/null
 kubectl --kubeconfig="${STANDALONE_KUBECONFIG}" config set "users.${USER_NAME}.client-key-data" "${CLIENT_KEY}" >/dev/null

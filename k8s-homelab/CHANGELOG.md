@@ -44,7 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed `scripts/sync-kubeconfig.sh` not resolving the control plane address from
   the Ansible inventory, causing preprod connections to fail against internal NAT IPs
   instead of the static management network address (`192.168.56.10`).
-- Fixed kube-apiserver TLS certificate SAN mismatch (`x509: certificate is valid for 10.96.0.1, 192.168.121.117, not 192.168.56.10`) by adding `--apiserver-cert-extra-sans` to the `control_plane` Ansible role (`defaults/main.yml`, `tasks/main.yml`), `scripts/control-plane.sh`, and `README.md`. Added automatic SAN drift detection and non-destructive certificate re-issuance in both `scripts/sync-kubeconfig.sh` and the Ansible `control_plane` role.
+- Fixed kube-apiserver TLS certificate SAN mismatch (`x509: certificate is valid for 10.96.0.1, 192.168.121.117, not 192.168.56.10`) by adding `--apiserver-cert-extra-sans` to the `control_plane` Ansible role (`defaults/main.yml`, `tasks/main.yml`), `scripts/control-plane.sh`, and `README.md`. Added automatic SAN drift detection and non-destructive certificate re-issuance to the Ansible `control_plane` role.
 - Added automatic cleanup of `admin.conf` and `kubeconfig.preprod` to `make preprod-destroy`.
 
 ## [1.2.0] - 2026-09-27

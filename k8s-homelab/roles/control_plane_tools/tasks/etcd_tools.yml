@@ -17,10 +17,11 @@
     - tools
     - etcd
 
-- name: Check if etcdutl binary exists
-  ansible.builtin.stat:
-    path: /usr/local/bin/etcdutl
+- name: Check installed etcdutl version
+  ansible.builtin.command: etcdutl version
   register: control_plane_tools_installed_etcdutl
+  failed_when: false
+  changed_when: false
   tags:
     - bootstrap
     - tools
@@ -29,8 +30,11 @@
 - name: Install etcdctl and etcdutl binaries from official release archive
   when: >-
     (control_plane_tools_installed_etcdctl.rc != 0) or
-    ((control_plane_tools_etcd_version | regex_replace('^v', '')) not in control_plane_tools_installed_etcdctl.stdout) or
-    (not control_plane_tools_installed_etcdutl.stat.exists)
+    (control_plane_tools_installed_etcdutl.rc != 0) or
+    ((control_plane_tools_installed_etcdctl.stdout | regex_search('etcdctl version:\s*([0-9.]+)', '\1') | first | default('')) !=
+     (control_plane_tools_etcd_version | regex_replace('^v', ''))) or
+    ((control_plane_tools_installed_etcdutl.stdout | regex_search('etcdutl version:\s*([0-9.]+)', '\1') | first | default('')) !=
+     (control_plane_tools_etcd_version | regex_replace('^v', '')))
   tags:
     - bootstrap
     - tools
