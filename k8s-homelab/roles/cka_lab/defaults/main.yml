@@ -1,0 +1,23 @@
+---
+# Scenario toggles (organized by CKA exam domain)
+cka_lab_scenario_user_rbac_enabled: true
+
+# Scenario: user_rbac (User Authentication & RBAC Drill)
+cka_lab_user_rbac_name: "anna"
+cka_lab_user_rbac_shell: "/bin/bash"
+cka_lab_user_rbac_groups:
+  - sudo
+cka_lab_user_rbac_passwordless_sudo: true
+
+# Kubernetes PKI & CA configuration
+cka_lab_k8s_ca_crt: "/etc/kubernetes/pki/ca.crt"
+cka_lab_k8s_ca_key: "/etc/kubernetes/pki/ca.key"
+
+# User 'anna' certificate & context attributes
+cka_lab_user_rbac_cert_dir: "/home/{{ cka_lab_user_rbac_name }}/certs"
+cka_lab_user_rbac_kube_dir: "/home/{{ cka_lab_user_rbac_name }}/.kube"
+cka_lab_user_rbac_cert_days: 365
+cka_lab_user_rbac_k8s_group: "developers"
+cka_lab_user_rbac_cluster_name: "kubernetes"
+cka_lab_user_rbac_cluster_server: "https://127.0.0.1:6443"
+cka_lab_user_rbac_context_name: "{{ cka_lab_user_rbac_name }}@kubernetes"

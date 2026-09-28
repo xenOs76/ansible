@@ -1,4 +1,4 @@
-.PHONY: all lint syntax inventory deps check-deps preprod-up preprod-destroy preprod-recreate preprod-status preprod-provision preprod-sync-kubeconfig prod-sync-kubeconfig preprod-deploy preprod-cni preprod-upgrade preprod-reset help
+.PHONY: all lint syntax inventory deps check-deps preprod-up preprod-destroy preprod-recreate preprod-status preprod-provision preprod-sync-kubeconfig prod-sync-kubeconfig preprod-deploy preprod-cni preprod-upgrade preprod-reset preprod-cka-lab help
 
 all: help
 
@@ -21,6 +21,7 @@ help:
 	@echo "make preprod-cni       - Install/verify Cilium CNI on preprod"
 	@echo "make preprod-upgrade   - Run rolling upgrade on preprod"
 	@echo "make preprod-reset     - Teardown/reset cluster on preprod"
+	@echo "make preprod-cka-lab   - Deploy CKA training lab scenarios on preprod"
 
 deps:
 	ansible-galaxy collection install -r requirements.yml
@@ -78,3 +79,6 @@ preprod-upgrade:
 
 preprod-reset:
 	./scripts/run-playbook.sh -e preprod -p reset.yml
+
+preprod-cka-lab:
+	./scripts/run-playbook.sh -e preprod -p cka_lab.yml

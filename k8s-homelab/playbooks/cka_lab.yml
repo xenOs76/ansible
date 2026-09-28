@@ -1,0 +1,9 @@
+---
+- name: Deploy CKA Training Lab Scenarios
+  hosts: control_plane
+  become: true
+  roles:
+    - role: cka_lab
+  tags:
+    - cka_lab
+    - training
