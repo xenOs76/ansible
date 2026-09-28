@@ -13,6 +13,13 @@
     - tools
     - k9s
 
+- name: Install etcdctl and etcdutl CLI tools
+  ansible.builtin.include_tasks: etcd_tools.yml
+  tags:
+    - bootstrap
+    - tools
+    - etcd
+
 - name: Deploy kube-metrics installer script
   ansible.builtin.include_tasks: kube_metrics.yml
   tags:

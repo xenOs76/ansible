@@ -66,7 +66,7 @@ ansible-playbook -i inventory/preprod/hosts.ini playbooks/site.yml
 Isolate and practice individual architectural subsystems for targeted debugging
 and verification:
 
-<!-- markdownlint-disable MD033 MD013 -->
+<!-- markdownlint-disable MD033 -->
 <details>
 <summary><b>Stage nodes right before <code>kubeadm init</code> &amp; CNI (Hands-on CKA Exam Drill)</b></summary>
 
@@ -300,7 +300,7 @@ ansible-playbook -i inventory/preprod/hosts.ini playbooks/cni.yml
 ```
 
 </details>
-<!-- markdownlint-enable MD033 MD013 -->
+<!-- markdownlint-enable MD033 -->
 
 ### 3. Automated Cluster Upgrade Playbook
 
@@ -367,7 +367,7 @@ k8s-homelab/
 │   ├── run-playbook.sh           # Playbook execution wrapper
 │   ├── common.sh                 # VM provisioning: containerd & k8s packages
 │   ├── control-plane.sh          # VM provisioning: kubeadm init helper
-│   ├── control-plane-tools.sh    # VM provisioning: Helm & k9s installer
+│   ├── control-plane-tools.sh    # VM provisioning: Helm, k9s, etcdctl & etcdutl installer
 │   ├── worker.sh                 # VM provisioning: kubeadm join helper
 │   ├── cni-install-cilium.sh     # Cilium CLI installer
 │   ├── cni-install-calico.sh     # Calico CNI installer
@@ -386,7 +386,7 @@ k8s-homelab/
 │   ├── common/                   # Swap off, kernel modules, sysctl
 │   ├── containerd/               # Docker apt repo, containerd.io
 │   ├── kubernetes_packages/      # pkgs.k8s.io repo, kubeadm, kubelet, kubectl
-│   ├── control_plane_tools/      # Helm (APT), k9s (.deb), metrics installer
+│   ├── control_plane_tools/      # Helm (APT), k9s (.deb), etcdctl/etcdutl, metrics installer
 │   ├── control_plane/            # kubeadm init, kubeconfig, join token
 │   ├── worker/                   # kubeadm join execution, kubelet node-ip
 │   ├── cilium/                   # Cilium CLI download, deployment
@@ -413,19 +413,17 @@ k8s-homelab/
 The playbook is built with fine-grained tags allowing you to trigger only
 specific tasks:
 
-<!-- markdownlint-disable MD013 -->
 | Role | Responsibility | Tags |
 | :--- | :--- | :--- |
 | `common` | Disable swap persistently, load `overlay`/`br_netfilter`, set sysctl, install utils | `common`, `swap`, `modules`, `sysctl`, `packages` |
 | `containerd` | Setup Docker repository, install `containerd.io`, configure `SystemdCgroup = true` | `cri`, `containerd` |
 | `kubernetes_packages` | Add `pkgs.k8s.io` repository, install `kubeadm`/`kubelet`/`kubectl`, hold | `k8s_packages`, `kubeadm`, `kubelet`, `kubectl` |
-| `control_plane_tools` | Install Helm via official APT repo, k9s via release .deb, stage metrics script | `bootstrap`, `tools`, `helm`, `k9s`, `metrics` |
+| `control_plane_tools` | Install Helm via official APT repo, k9s via release .deb, etcdctl/etcdutl, stage metrics script | `bootstrap`, `tools`, `helm`, `k9s`, `etcd`, `metrics` |
 | `control_plane` | Run `kubeadm init`, configure root/user kubeconfig, generate join token | `control_plane`, `init`, `kubeconfig`, `join_token` |
 | `worker` | Execute `kubeadm join`, configure node IP in `/etc/default/kubelet` | `worker`, `join`, `kubelet` |
 | `cilium` | Download Cilium CLI, install Cilium daemonset, wait for status, verify nodes | `cni`, `cilium`, `verify` |
 | `upgrade` | Unhold, upgrade kubeadm, `kubeadm upgrade apply`, upgrade kubelet, hold | `upgrade`, `upgrade_control_plane`, `upgrade_worker` |
 | `reset` | `kubeadm reset -f`, flush iptables, clean CNI & `/var/lib/kubelet` | `reset` |
-<!-- markdownlint-enable MD013 -->
 
 [↑ Back to Table of Contents](#table-of-contents)
 
@@ -552,6 +550,16 @@ You can also SSH into the control plane VM directly:
 ./scripts/shell.sh --run "vagrant ssh kube-control-plane"
 kubectl get nodes -o wide
 cilium status
+
+# CKA etcd health check and snapshot verification (ETCDCTL_API=3 is auto-configured):
+sudo etcdctl \
+  --cacert=/etc/kubernetes/pki/etcd/ca.crt \
+  --cert=/etc/kubernetes/pki/etcd/server.crt \
+  --key=/etc/kubernetes/pki/etcd/server.key \
+  endpoint health
+
+# Check snapshot status with etcdutl:
+sudo etcdutl snapshot status /tmp/snapshot.db
 ```
 
 [↑ Back to Table of Contents](#table-of-contents)
