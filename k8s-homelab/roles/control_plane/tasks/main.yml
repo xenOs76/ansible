@@ -13,6 +13,9 @@
     --pod-network-cidr={{ control_plane_pod_network_cidr }}
     --service-cidr={{ control_plane_service_cidr }}
     --apiserver-advertise-address={{ apiserver_advertise_address | default(node_ip) | default(ansible_default_ipv4.address) }}
+    {% if control_plane_apiserver_cert_extra_sans | default('') %}
+    --apiserver-cert-extra-sans={{ control_plane_apiserver_cert_extra_sans }}
+    {% endif %}
     {{ control_plane_kubeadm_init_extra_args }}
   when: not control_plane_admin_conf.stat.exists
   register: control_plane_init_output
@@ -20,6 +23,71 @@
   tags:
     - control_plane
     - init
+
+- name: Check apiserver certificate Subject Alternative Names
+  ansible.builtin.command: >-
+    openssl x509 -in /etc/kubernetes/pki/apiserver.crt -noout -text
+  register: control_plane_apiserver_cert_info
+  changed_when: false
+  when: control_plane_admin_conf.stat.exists
+  tags:
+    - control_plane
+    - certs
+
+- name: Regenerate apiserver certificate if required SAN is missing
+  when:
+    - control_plane_admin_conf.stat.exists
+    - (ansible_host | default(node_ip | default('192.168.56.10'))) not in control_plane_apiserver_cert_info.stdout
+  tags:
+    - control_plane
+    - certs
+  block:
+    - name: Backup existing apiserver certificate files
+      ansible.builtin.copy:
+        src: "/etc/kubernetes/pki/{{ item }}"
+        dest: "/etc/kubernetes/pki/{{ item }}.bak"
+        remote_src: true
+        mode: "0600"
+      loop:
+        - apiserver.crt
+        - apiserver.key
+
+    - name: Remove stale apiserver certificate files
+      ansible.builtin.file:
+        path: "/etc/kubernetes/pki/{{ item }}"
+        state: absent
+      loop:
+        - apiserver.crt
+        - apiserver.key
+
+    - name: Reissue apiserver certificate with updated SANs
+      ansible.builtin.command: >-
+        kubeadm init phase certs apiserver
+        --apiserver-advertise-address={{ apiserver_advertise_address | default(node_ip) | default(ansible_default_ipv4.address) }}
+        {% if control_plane_apiserver_cert_extra_sans | default('') %}
+        --apiserver-cert-extra-sans={{ control_plane_apiserver_cert_extra_sans }}
+        {% endif %}
+      changed_when: true
+
+    - name: Restart kube-apiserver static pod
+      ansible.builtin.command: >-
+        crictl pods --name kube-apiserver -q
+      register: control_plane_apiserver_pod_id
+      changed_when: false
+      failed_when: false
+
+    - name: Stop kube-apiserver pod to trigger restart
+      ansible.builtin.command: >-
+        crictl stopp {{ control_plane_apiserver_pod_id.stdout.strip() }}
+      when: control_plane_apiserver_pod_id.stdout.strip() != ""
+      changed_when: true
+      failed_when: false
+
+    - name: Touch kube-apiserver manifest to reload configuration
+      ansible.builtin.file:
+        path: /etc/kubernetes/manifests/kube-apiserver.yaml
+        state: touch
+        mode: "0600"
 
 - name: Create .kube directory for root
   ansible.builtin.file:

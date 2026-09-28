@@ -254,6 +254,25 @@ if [[ "${ENV}" == "preprod" ]]; then
     fi
   fi
 
+  # Verify apiserver certificate on control plane includes required SAN for host access
+  TARGET_CP_SAN="${INVENTORY_CP_HOST:-192.168.56.10}"
+  if [[ -n "${TARGET_CP_SAN}" ]]; then
+    CERT_INFO="$("${BASE_DIR}/scripts/shell.sh" --run "vagrant ssh kube-control-plane -c 'sudo openssl x509 -in /etc/kubernetes/pki/apiserver.crt -noout -text 2>/dev/null'" 2>/dev/null || true)"
+    if [[ -n "${CERT_INFO}" ]] && ! echo "${CERT_INFO}" | grep -q "${TARGET_CP_SAN}"; then
+      echo "${CYAN}[sync-kubeconfig]${RESET} Control plane TLS certificate is missing SAN '${TARGET_CP_SAN}'."
+      echo "                   Regenerating apiserver certificate with extra SANs..."
+      "${BASE_DIR}/scripts/shell.sh" --run "vagrant ssh kube-control-plane -c '
+        sudo cp -f /etc/kubernetes/pki/apiserver.crt /etc/kubernetes/pki/apiserver.crt.bak 2>/dev/null || true
+        sudo cp -f /etc/kubernetes/pki/apiserver.key /etc/kubernetes/pki/apiserver.key.bak 2>/dev/null || true
+        sudo rm -f /etc/kubernetes/pki/apiserver.crt /etc/kubernetes/pki/apiserver.key
+        sudo kubeadm init phase certs apiserver --apiserver-advertise-address=\"${TARGET_CP_SAN}\" --apiserver-cert-extra-sans=\"${TARGET_CP_SAN},192.168.56.10,kube-control-plane,127.0.0.1\" >/dev/null 2>&1
+        sudo crictl pods --name kube-apiserver -q 2>/dev/null | xargs -r sudo crictl stopp >/dev/null 2>&1 || true
+        sudo touch /etc/kubernetes/manifests/kube-apiserver.yaml
+      '" >/dev/null 2>&1 || true
+      sleep 2
+    fi
+  fi
+
   # Fetch fresh admin.conf directly from the running VM
   rm -f "${staged_local_conf}"
   "${BASE_DIR}/scripts/shell.sh" --run \

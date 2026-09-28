@@ -99,7 +99,8 @@ Once completed, SSH to the nodes to practice the hands-on CKA exam sequence:
 sudo kubeadm init \
   --pod-network-cidr=10.1.0.0/16 \
   --service-cidr=10.96.0.0/12 \
-  --apiserver-advertise-address=192.168.56.10
+  --apiserver-advertise-address=192.168.56.10 \
+  --apiserver-cert-extra-sans=192.168.56.10,kube-control-plane,127.0.0.1
 
 # 3. Configure ~/.kube/config for vagrant user
 mkdir -p $HOME/.kube
