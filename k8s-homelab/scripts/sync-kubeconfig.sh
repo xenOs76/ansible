@@ -148,9 +148,8 @@ kubectl --kubeconfig="${STANDALONE_KUBECONFIG}" config set-cluster "${CLUSTER_NA
   --server="${EFFECTIVE_SERVER}" \
   --insecure-skip-tls-verify=true >/dev/null
 
-kubectl --kubeconfig="${STANDALONE_KUBECONFIG}" config set-credentials "${USER_NAME}" \
-  --client-certificate-data="${CLIENT_CERT}" \
-  --client-key-data="${CLIENT_KEY}" >/dev/null
+kubectl --kubeconfig="${STANDALONE_KUBECONFIG}" config set "users.${USER_NAME}.client-certificate-data" "${CLIENT_CERT}" >/dev/null
+kubectl --kubeconfig="${STANDALONE_KUBECONFIG}" config set "users.${USER_NAME}.client-key-data" "${CLIENT_KEY}" >/dev/null
 
 kubectl --kubeconfig="${STANDALONE_KUBECONFIG}" config set-context "${CONTEXT_NAME}" \
   --cluster="${CLUSTER_NAME}" \
