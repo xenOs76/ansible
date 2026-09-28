@@ -11,12 +11,11 @@ cka_lab_user_rbac_passwordless_sudo: true
 
 # Kubernetes PKI & CA configuration
 cka_lab_k8s_ca_crt: "/etc/kubernetes/pki/ca.crt"
-cka_lab_k8s_ca_key: "/etc/kubernetes/pki/ca.key"
 
 # User 'anna' certificate & context attributes
 cka_lab_user_rbac_cert_dir: "/home/{{ cka_lab_user_rbac_name }}/certs"
 cka_lab_user_rbac_kube_dir: "/home/{{ cka_lab_user_rbac_name }}/.kube"
-cka_lab_user_rbac_cert_days: 365
+cka_lab_user_rbac_csr_expiration_seconds: 86400
 cka_lab_user_rbac_k8s_group: "developers"
 cka_lab_user_rbac_cluster_name: "kubernetes"
 cka_lab_user_rbac_cluster_server: "https://127.0.0.1:6443"

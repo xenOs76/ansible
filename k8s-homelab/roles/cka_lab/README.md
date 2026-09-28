@@ -18,7 +18,7 @@ Dedicated Ansible role for provisioning isolated hands-on Certified Kubernetes A
   1. Creates Linux user `anna` on `kube-control-plane` with membership in the `sudo` group and passwordless sudo privileges.
   2. Creates visible certificate directory `/home/anna/certs` (`0755`).
   3. Generates 2048-bit RSA private key (`anna.key`) and CSR (`anna.csr`) with Subject `/CN=anna/O=developers`.
-  4. Signs certificate (`anna.crt`) with the cluster's local Kubernetes CA (`/etc/kubernetes/pki/ca.crt`).
+  4. Submits a Kubernetes `CertificateSigningRequest` (`certificates.k8s.io/v1`), approves it via `kubectl certificate approve`, and extracts the issued client certificate (`anna.crt`).
   5. Assembles `/home/anna/.kube/config` with embedded client certificates and sets active context to `anna@kubernetes`.
 
 ## Verification inside Control Plane

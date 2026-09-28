@@ -21,7 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `control_plane_tools_etcd_version` in Ansible role defaults.
 - Documented CKA etcd health check and snapshot verification commands in `README.md`.
 - Added `make preprod-cka-lab` target and dedicated `cka_lab` Ansible role (`playbooks/cka_lab.yml`) for provisioning isolated CKA training scenarios on the preprod control plane.
-- Implemented CKA training scenario `user_rbac`: provisions Linux user `anna` with `sudo` group membership, generates 2048-bit RSA key and CSR in `/home/anna/certs`, signs client certificate using the cluster's local CA (`/etc/kubernetes/pki/ca.crt`), and configures `/home/anna/.kube/config` with active context `anna@kubernetes`.
+- Implemented CKA training scenario `user_rbac`: provisions Linux user `anna` with `sudo` group membership, generates 2048-bit RSA key and CSR in `/home/anna/certs`, signs client certificate via Kubernetes `CertificateSigningRequest` (`certificates.k8s.io/v1`) with `kubectl certificate approve`, and configures `/home/anna/.kube/config` with active context `anna@kubernetes`.
 
 ### Changed
 

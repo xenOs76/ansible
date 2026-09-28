@@ -85,18 +85,82 @@
     - cka_lab
     - user_rbac
 
-- name: Sign user certificate with local Kubernetes CA
+- name: "Check if signed certificate already exists for user: {{ cka_lab_user_rbac_name }}"
+  ansible.builtin.stat:
+    path: "{{ cka_lab_user_rbac_cert_dir }}/{{ cka_lab_user_rbac_name }}.crt"
+  register: cka_lab_user_cert_stat
+  tags:
+    - cka_lab
+    - user_rbac
+
+- name: Read user Certificate Signing Request (CSR) content
+  ansible.builtin.slurp:
+    src: "{{ cka_lab_user_rbac_cert_dir }}/{{ cka_lab_user_rbac_name }}.csr"
+  register: cka_lab_user_csr
+  when: not cka_lab_user_cert_stat.stat.exists
+  tags:
+    - cka_lab
+    - user_rbac
+
+- name: "Render CertificateSigningRequest manifest for user: {{ cka_lab_user_rbac_name }}"
+  ansible.builtin.template:
+    src: csr.yaml.j2
+    dest: "{{ cka_lab_user_rbac_cert_dir }}/{{ cka_lab_user_rbac_name }}-csr.yaml"
+    owner: "{{ cka_lab_user_rbac_name }}"
+    group: "{{ cka_lab_user_rbac_name }}"
+    mode: "0644"
+  when: not cka_lab_user_cert_stat.stat.exists
+  tags:
+    - cka_lab
+    - user_rbac
+
+- name: "Remove existing CertificateSigningRequest if present for user: {{ cka_lab_user_rbac_name }}"
   ansible.builtin.command: >-
-    openssl x509 -req
-    -in {{ cka_lab_user_rbac_cert_dir }}/{{ cka_lab_user_rbac_name }}.csr
-    -CA {{ cka_lab_k8s_ca_crt }}
-    -CAkey {{ cka_lab_k8s_ca_key }}
-    -CAserial {{ cka_lab_user_rbac_cert_dir }}/ca.srl
-    -CAcreateserial
-    -out {{ cka_lab_user_rbac_cert_dir }}/{{ cka_lab_user_rbac_name }}.crt
-    -days {{ cka_lab_user_rbac_cert_days }}
-  args:
-    creates: "{{ cka_lab_user_rbac_cert_dir }}/{{ cka_lab_user_rbac_name }}.crt"
+    kubectl delete csr {{ cka_lab_user_rbac_name }} --ignore-not-found=true
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  when: not cka_lab_user_cert_stat.stat.exists
+  changed_when: false
+  tags:
+    - cka_lab
+    - user_rbac
+
+- name: "Apply CertificateSigningRequest manifest for user: {{ cka_lab_user_rbac_name }}"
+  ansible.builtin.command: >-
+    kubectl apply -f {{ cka_lab_user_rbac_cert_dir }}/{{ cka_lab_user_rbac_name }}-csr.yaml
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  when: not cka_lab_user_cert_stat.stat.exists
+  changed_when: true
+  tags:
+    - cka_lab
+    - user_rbac
+
+- name: "Approve CertificateSigningRequest for user: {{ cka_lab_user_rbac_name }}"
+  ansible.builtin.command: >-
+    kubectl certificate approve {{ cka_lab_user_rbac_name }}
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  when: not cka_lab_user_cert_stat.stat.exists
+  changed_when: true
+  tags:
+    - cka_lab
+    - user_rbac
+
+- name: Extract signed certificate from approved CertificateSigningRequest
+  ansible.builtin.shell: >-
+    set -o pipefail &&
+    CERT="$(kubectl get csr {{ cka_lab_user_rbac_name }} -o jsonpath='{.status.certificate}')" &&
+    [ -n "$CERT" ] &&
+    echo "$CERT" | base64 -d > {{ cka_lab_user_rbac_cert_dir }}/{{ cka_lab_user_rbac_name }}.crt
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: cka_lab_extract_cert
+  retries: 5
+  delay: 1
+  until: cka_lab_extract_cert.rc == 0
+  when: not cka_lab_user_cert_stat.stat.exists
+  changed_when: true
   tags:
     - cka_lab
     - user_rbac
