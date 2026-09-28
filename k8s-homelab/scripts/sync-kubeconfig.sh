@@ -139,43 +139,65 @@ USER_OVERRIDE_API_SERVER="${API_SERVER:-}"
 # 2. Discover admin.conf source (local file or preprod Vagrant VM)
 # ------------------------------------------------------------------------------
 staged_local_conf="${BASE_DIR}/admin.conf"
-needs_fetch=true
 
-if [[ -f "${staged_local_conf}" && -s "${staged_local_conf}" ]]; then
-  if grep -q "apiVersion:" "${staged_local_conf}"; then
-    needs_fetch=false
+if [[ "${ENV}" == "preprod" ]]; then
+  # In preprod: probe live kube-control-plane VM to avoid using stale leftover credentials
+  vm_running=false
+  if command -v virsh >/dev/null 2>&1; then
+    if virsh list --state-running --name 2>/dev/null | grep -q "kube-control-plane"; then
+      vm_running=true
+    fi
   fi
-fi
-
-if [[ "${needs_fetch}" == "true" ]]; then
-  if [[ "${ENV}" == "preprod" ]]; then
-    # In preprod: attempt to fetch from running kube-control-plane VM
-    vm_running=true
-    if command -v virsh >/dev/null 2>&1; then
-      if ! virsh list --state-running --name 2>/dev/null | grep -q "kube-control-plane"; then
-        vm_running=false
-      fi
+  if [[ "${vm_running}" == "false" ]] && [[ -x "${BASE_DIR}/scripts/shell.sh" ]]; then
+    if "${BASE_DIR}/scripts/shell.sh" --run "vagrant status kube-control-plane" 2>/dev/null | grep -E "kube-control-plane\s+running" >/dev/null 2>&1; then
+      vm_running=true
     fi
+  fi
 
-    if [[ "${vm_running}" == "false" ]]; then
-      if [[ "${BEST_EFFORT}" == "true" ]]; then
-        echo "${CYAN}[sync-kubeconfig]${RESET} kube-control-plane VM is not running yet. Skipping credentials sync."
-        exit 0
-      else
-        echo "${RED}Error:${RESET} kube-control-plane VM is shut off." >&2
-        echo "       Please start the environment first: ${BOLD}make preprod-up${RESET}" >&2
-        exit 1
-      fi
+  if [[ "${vm_running}" == "false" ]]; then
+    # Invalidate stale credentials left on host from earlier runs
+    rm -f "${staged_local_conf}" "${STANDALONE_KUBECONFIG}"
+    if [[ "${BEST_EFFORT}" == "true" ]]; then
+      echo "${CYAN}[sync-kubeconfig]${RESET} kube-control-plane VM is not running. Skipping credentials sync."
+      exit 0
+    else
+      echo "${RED}Error:${RESET} kube-control-plane VM is shut off." >&2
+      echo "       Please start the environment first: ${BOLD}make preprod-up${RESET}" >&2
+      exit 1
     fi
+  fi
 
-    # VM is running: copy /etc/kubernetes/admin.conf directly to shared /vagrant mount
-    if [[ -x "${BASE_DIR}/scripts/shell.sh" ]]; then
-      "${BASE_DIR}/scripts/shell.sh" --run \
-        "vagrant ssh kube-control-plane -c 'sudo cp -f /etc/kubernetes/admin.conf /vagrant/admin.conf 2>/dev/null && sudo chmod 0644 /vagrant/admin.conf'" \
-        >/dev/null 2>&1 || true
+  # VM is running: check whether Kubernetes has actually been initialized inside it
+  has_cluster=false
+  if [[ -x "${BASE_DIR}/scripts/shell.sh" ]]; then
+    if "${BASE_DIR}/scripts/shell.sh" --run "vagrant ssh kube-control-plane -c 'sudo test -s /etc/kubernetes/admin.conf'" >/dev/null 2>&1; then
+      has_cluster=true
     fi
-  else
-    # In production: admin.conf must be fetched via Ansible playbook or staged locally
+  fi
+
+  if [[ "${has_cluster}" == "false" ]]; then
+    # Cluster not initialized yet: purge stale files so they never trick the host
+    rm -f "${staged_local_conf}" "${STANDALONE_KUBECONFIG}"
+    if [[ "${BEST_EFFORT}" == "true" ]]; then
+      echo "${CYAN}[sync-kubeconfig]${RESET} Kubernetes cluster (${ENV}) not initialized yet. Skipping credentials sync."
+      exit 0
+    else
+      echo "${RED}Error:${RESET} No initialized Kubernetes cluster found on kube-control-plane (/etc/kubernetes/admin.conf missing)." >&2
+      echo "       Initialize the control plane inside the VM first:" >&2
+      echo "         ${GREEN}make preprod-deploy${RESET}" >&2
+      echo "         # or: vagrant ssh kube-control-plane -c 'sudo /vagrant/scripts/control-plane.sh 172.18.0.0/16 192.168.56.10'${RESET}" >&2
+      exit 1
+    fi
+  fi
+
+  # Fetch fresh admin.conf directly from the running VM
+  rm -f "${staged_local_conf}"
+  "${BASE_DIR}/scripts/shell.sh" --run \
+    "vagrant ssh kube-control-plane -c 'sudo cat /etc/kubernetes/admin.conf'" > "${staged_local_conf}" 2>/dev/null || true
+  chmod 0600 "${staged_local_conf}"
+else
+  # In production: admin.conf must be fetched via Ansible playbook or staged locally
+  if [[ ! -f "${staged_local_conf}" || ! -s "${staged_local_conf}" ]] || ! grep -q "apiVersion:" "${staged_local_conf}"; then
     if [[ "${BEST_EFFORT}" == "true" ]]; then
       echo "${CYAN}[sync-kubeconfig]${RESET} admin.conf not found. Skipping production credentials sync."
       exit 0
@@ -185,22 +207,6 @@ if [[ "${needs_fetch}" == "true" ]]; then
       echo "       or stage the cluster admin.conf to ${staged_local_conf} manually." >&2
       exit 1
     fi
-  fi
-fi
-
-# Validate discovered admin.conf
-if [[ ! -f "${staged_local_conf}" || ! -s "${staged_local_conf}" ]] || ! grep -q "apiVersion:" "${staged_local_conf}"; then
-  if [[ "${BEST_EFFORT}" == "true" ]]; then
-    echo "${CYAN}[sync-kubeconfig]${RESET} Kubernetes cluster (${ENV}) not initialized yet. Skipping credentials sync."
-    exit 0
-  else
-    echo "${RED}Error:${RESET} No initialized Kubernetes credentials found for environment '${ENV}'." >&2
-    if [[ "${ENV}" == "preprod" ]]; then
-      echo "       Initialize the control plane inside the VM first:" >&2
-      echo "         ${GREEN}vagrant ssh kube-control-plane -c 'sudo /vagrant/scripts/control-plane.sh 172.18.0.0/16 192.168.56.10'${RESET}" >&2
-      echo "       Then run: ${BOLD}make preprod-sync-kubeconfig${RESET}" >&2
-    fi
-    exit 1
   fi
 fi
 

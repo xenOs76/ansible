@@ -51,6 +51,7 @@ preprod-up:
 
 preprod-destroy:
 	./scripts/shell.sh --run "vagrant destroy -f"
+	@rm -f admin.conf kubeconfig.preprod
 
 preprod-status:
 	./scripts/shell.sh --run "vagrant status"

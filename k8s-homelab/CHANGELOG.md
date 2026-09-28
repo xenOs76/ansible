@@ -21,6 +21,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `control_plane_tools_etcd_version` in Ansible role defaults.
 - Documented CKA etcd health check and snapshot verification commands in `README.md`.
 
+### Fixed
+
+- Fixed `scripts/sync-kubeconfig.sh` incorrectly synchronizing stale credentials
+  from previous cluster deployments when running `make preprod-up`. The script
+  now validates that the control plane VM is running and confirms that
+  `/etc/kubernetes/admin.conf` actually exists inside the VM before attempting
+  synchronization, properly invalidating stale cached files on the host.
+- Added automatic cleanup of `admin.conf` and `kubeconfig.preprod` to `make preprod-destroy`.
+
 ## [1.2.0] - 2026-09-27
 
 ### Added
