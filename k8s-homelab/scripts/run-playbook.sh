@@ -68,6 +68,9 @@ EOF
   exit 1
 }
 
+CUSTOM_INVENTORY=""
+CUSTOM_PLAYBOOK=""
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -e|--env)
@@ -78,6 +81,10 @@ while [[ $# -gt 0 ]]; do
       PLAYBOOK="$2"
       shift 2
       ;;
+    -i|--inventory)
+      CUSTOM_INVENTORY="$2"
+      shift 2
+      ;;
     -t|--tags)
       TAGS="$2"
       shift 2
@@ -86,14 +93,39 @@ while [[ $# -gt 0 ]]; do
       usage
       ;;
     *)
-      EXTRA_ARGS+=("$1")
-      shift
+      if [[ -z "${CUSTOM_PLAYBOOK}" ]] && [[ "$1" =~ \.ya?ml$ ]]; then
+        PLAYBOOK="$1"
+        CUSTOM_PLAYBOOK="1"
+        shift
+      else
+        EXTRA_ARGS+=("$1")
+        shift
+      fi
       ;;
   esac
 done
 
-INVENTORY="${BASE_DIR}/inventory/${ENV}/hosts.ini"
-PLAYBOOK_PATH="${BASE_DIR}/playbooks/${PLAYBOOK}"
+if [[ -n "${CUSTOM_INVENTORY}" ]]; then
+  if [[ -f "${CUSTOM_INVENTORY}" ]]; then
+    INVENTORY="${CUSTOM_INVENTORY}"
+  elif [[ -f "${BASE_DIR}/${CUSTOM_INVENTORY}" ]]; then
+    INVENTORY="${BASE_DIR}/${CUSTOM_INVENTORY}"
+  else
+    INVENTORY="${CUSTOM_INVENTORY}"
+  fi
+else
+  INVENTORY="${BASE_DIR}/inventory/${ENV}/hosts.ini"
+fi
+
+if [[ -f "${PLAYBOOK}" ]]; then
+  PLAYBOOK_PATH="${PLAYBOOK}"
+elif [[ -f "${BASE_DIR}/${PLAYBOOK}" ]]; then
+  PLAYBOOK_PATH="${BASE_DIR}/${PLAYBOOK}"
+elif [[ -f "${BASE_DIR}/playbooks/${PLAYBOOK}" ]]; then
+  PLAYBOOK_PATH="${BASE_DIR}/playbooks/${PLAYBOOK}"
+else
+  PLAYBOOK_PATH="${BASE_DIR}/playbooks/${PLAYBOOK}"
+fi
 
 if [[ ! -f "${INVENTORY}" ]]; then
   echo "Error: Inventory not found at ${INVENTORY}" >&2
@@ -105,7 +137,7 @@ if [[ ! -f "${PLAYBOOK_PATH}" ]]; then
   exit 1
 fi
 
-CMD=(ansible-playbook -i "${INVENTORY}" "${PLAYBOOK_PATH}")
+CMD=(ansible-playbook -i "${INVENTORY}")
 
 if [[ -n "${TAGS}" ]]; then
   CMD+=(--tags "${TAGS}")
@@ -114,6 +146,8 @@ fi
 if [[ ${#EXTRA_ARGS[@]} -gt 0 ]]; then
   CMD+=("${EXTRA_ARGS[@]}")
 fi
+
+CMD+=("${PLAYBOOK_PATH}")
 
 echo "==> Running Ansible Playbook:"
 echo "    Inventory: ${INVENTORY}"
