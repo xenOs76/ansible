@@ -87,7 +87,7 @@ make preprod-down
 make preprod-destroy
 ```
 
-- **`make preprod-up`**: Boots base VMs with containerd and Kubernetes binaries preinstalled. Configures `~/.motd` on the control plane reminding trainees to manually practice initial steps (kubeadm init, ~/.kube backup, kubectl completion, alias k, completion for k, safe deletion kuberc).
+- **`make preprod-up`**: Boots base VMs with containerd and Kubernetes binaries preinstalled. Configures `~/.motd` on the control plane reminding trainees to manually practice initial steps (~/.kube backup, kubectl completion, alias k, completion for k, safe deletion kuberc, and cluster install via kubeadm).
 - **`make preprod-deploy`**: Full automated cluster deployment via Ansible (`site.yml`). Initializes control plane, configures user preferences, joins workers, installs Cilium, and automatically cleans up `~/.motd`.
 - **`make preprod-cka-lab`**: Deploys dedicated hands-on CKA practice scenarios (`playbooks/cka_lab.yml`).
 

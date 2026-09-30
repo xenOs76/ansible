@@ -173,12 +173,12 @@ cat <<'EOF' >/home/vagrant/.motd
 Welcome to the CKA training environment!
 Before starting your practice drills, complete the following initial steps:
 
-  * install the cluster via kubeadm
   * backup ~/.kube directory
   * check or configure autocompletion for the kubectl command
   * check or configure the bash alias k
   * check or configure the autocompletion for the bash alias k
   * check or configure safe deletion via ~/.kube/kuberc file
+  * install the cluster via kubeadm
 
 (Note: Running 'make preprod-deploy' will automatically perform
  these setup steps and remove this reminder.)
