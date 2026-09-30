@@ -24,9 +24,9 @@ Multi-node Kubernetes 1.34+ cluster automated using `kubeadm`, `containerd`, and
 
 | Node Name | IP Address | Roles | vCPU | RAM | Base Image |
 | --- | --- | --- | --- | --- | --- |
-| `kube-control-plane` | `192.168.56.20` | Control Plane, API server, etcd | 2 | 4096 MB | Ubuntu 24.04 (Noble) |
-| `kube-worker-1` | `192.168.56.21` | Worker Node | 2 | 2048 MB | Ubuntu 24.04 (Noble) |
-| `kube-worker-2` | `192.168.56.22` | Worker Node | 2 | 2048 MB | Ubuntu 24.04 (Noble) |
+| `kube-control-plane` | `192.168.56.20` | Control Plane, API server, etcd | 2 | 4096 MB | Ubuntu 26.04 |
+| `kube-worker-1` | `192.168.56.21` | Worker Node | 2 | 2048 MB | Ubuntu 26.04 |
+| `kube-worker-2` | `192.168.56.22` | Worker Node | 2 | 2048 MB | Ubuntu 26.04 |
 
 - **Inventories**: `inventory/preprod/hosts.ini` (local Vagrant VMs) and `inventory/prod/hosts.ini` (bare metal / production nodes).
 - **Group Variables**: Global settings in `group_vars/all.yml` (`k8s_version: 1.34.1-1.1`, `pod_network_cidr: 10.244.0.0/16`, `service_cidr: 10.96.0.0/12`).
