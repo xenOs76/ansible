@@ -126,6 +126,7 @@
     mode: '0644'
   tags:
     - common
+    - completion
 
 - name: Ensure kubectl completion and k alias in user .bashrc
   ansible.builtin.blockinfile:
@@ -142,3 +143,4 @@
     mode: '0644'
   tags:
     - common
+    - completion
