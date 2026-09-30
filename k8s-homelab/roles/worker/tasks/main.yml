@@ -61,7 +61,10 @@
 
 - name: Remove CKA training reminder MOTD if present
   ansible.builtin.file:
-    path: "/home/{{ ansible_user | default('vagrant') }}/.motd"
+    path: "{{ item }}"
     state: absent
+  loop:
+    - "/home/{{ ansible_user | default('vagrant') }}/.motd"
+    - /etc/update-motd.d/99-cka-training
   tags:
     - worker

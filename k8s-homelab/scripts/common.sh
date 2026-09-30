@@ -187,18 +187,15 @@ EOF
 chown vagrant:vagrant /home/vagrant/.motd
 chmod 0644 /home/vagrant/.motd
 
-# Ensure ~/.motd is displayed at every interactive login
-if [[ -f /home/vagrant/.bashrc ]]; then
-  if ! grep -q '\.motd' /home/vagrant/.bashrc; then
-    cat <<'EOF' >>/home/vagrant/.bashrc
-
-# Display CKA training reminder MOTD at login if present
-if [[ -f "$HOME/.motd" ]]; then
-  cat "$HOME/.motd"
+# Register with system update-motd for PAM login display
+mkdir -p /etc/update-motd.d
+cat <<'EOF' >/etc/update-motd.d/99-cka-training
+#!/bin/sh
+if [ -f /home/vagrant/.motd ]; then
+  cat /home/vagrant/.motd
 fi
 EOF
-  fi
-fi
+chmod 0755 /etc/update-motd.d/99-cka-training
 
 echo "==> [common.sh] Node prerequisites installed successfully."
 
