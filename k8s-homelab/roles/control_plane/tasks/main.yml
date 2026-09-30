@@ -170,6 +170,23 @@
     - kubeconfig
     - certs
 
+- name: Add kubectl aliases and bash-completion profile
+  ansible.builtin.copy:
+    dest: /etc/profile.d/k8s-completion.sh
+    content: |
+      if command -v kubectl >/dev/null 2>&1; then
+        source <(kubectl completion bash)
+        alias k=kubectl
+        complete -o default -F __start_kubectl k
+      fi
+      export koyaml="--dry-run=client -o yaml"
+    owner: root
+    group: root
+    mode: '0644'
+  tags:
+    - control_plane
+    - completion
+
 - name: Generate fresh kubeadm join command
   ansible.builtin.command: kubeadm token create --print-join-command
   register: control_plane_join_cmd_raw

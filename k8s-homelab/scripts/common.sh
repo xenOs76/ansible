@@ -37,7 +37,7 @@
 #      - Linux swap disabled immediately and commented out in /etc/fstab.
 #   6. Homelab Tooling:
 #      - OS76 custom APT repo configured for kubectl-netdrill.
-#      - Idempotent 'alias k=kubectl' and bash completion added to /home/vagrant/.bashrc.
+#      - CKA initial steps reminder MOTD provisioned for login display.
 #
 # Manual Verification:
 #   systemctl status containerd
@@ -158,59 +158,47 @@ sudo swapoff -a
 sudo sed -i '/\sswap\s/ s/^\(.*\)$/#\1/g' /etc/fstab
 
 # ------------------------------------------------------------------------------
-# 6. Diagnostic Tooling & Shell Usability
+# 6. Diagnostic Tooling & CKA Training MOTD Reminder
 # ------------------------------------------------------------------------------
-echo "==> [6/6] Installing diagnostic tools and shell aliases..."
+echo "==> [6/6] Installing diagnostic tools and setting up CKA training MOTD..."
 echo "deb [trusted=yes] https://repo.os76.xyz/apt stable main" | sudo tee /etc/apt/sources.list.d/os76.list >/dev/null
 sudo apt-get update -y
 sudo apt-get -y install socat kubectl-netdrill bash-completion
 
-# Idempotent kubectl alias, bash completion, and koyaml variable for vagrant user
+# Provision CKA training initial steps reminder MOTD for SSH user (vagrant)
+cat <<'EOF' >/home/vagrant/.motd
+======================================================================
+                  CKA Training Lab - Next Steps
+======================================================================
+Welcome to the CKA training environment!
+Before starting your practice drills, complete the following initial steps:
+
+  * install the cluster via kubeadm
+  * backup ~/.kube directory
+  * check or configure autocompletion for the kubectl command
+  * check or configure the bash alias k
+  * check or configure the autocompletion for the bash alias k
+  * check or configure safe deletion via ~/.kube/kuberc file
+
+(Note: Running 'make preprod-deploy' will automatically perform
+ these setup steps and remove this reminder.)
+======================================================================
+EOF
+chown vagrant:vagrant /home/vagrant/.motd
+chmod 0644 /home/vagrant/.motd
+
+# Ensure ~/.motd is displayed at every interactive login
 if [[ -f /home/vagrant/.bashrc ]]; then
-  if ! grep -q 'complete -o default -F __start_kubectl k' /home/vagrant/.bashrc; then
+  if ! grep -q '\.motd' /home/vagrant/.bashrc; then
     cat <<'EOF' >>/home/vagrant/.bashrc
 
-# Kubernetes kubectl bash completion & 'k' alias
-if command -v kubectl >/dev/null 2>&1; then
-  source <(kubectl completion bash)
-  alias k=kubectl
-  complete -o default -F __start_kubectl k
+# Display CKA training reminder MOTD at login if present
+if [[ -f "$HOME/.motd" ]]; then
+  cat "$HOME/.motd"
 fi
 EOF
   fi
-  if ! grep -q 'export koyaml=' /home/vagrant/.bashrc; then
-    cat <<'EOF' >>/home/vagrant/.bashrc
-
-# Kubectl dry-run client yaml helper
-export koyaml="--dry-run=client -o yaml"
-EOF
-  fi
 fi
-
-# System-wide profile for kubectl completion, aliases, and dry-run helper
-cat <<'EOF' >/etc/profile.d/k8s-completion.sh
-if command -v kubectl >/dev/null 2>&1; then
-  source <(kubectl completion bash)
-  alias k=kubectl
-  complete -o default -F __start_kubectl k
-fi
-export koyaml="--dry-run=client -o yaml"
-EOF
-chmod 0644 /etc/profile.d/k8s-completion.sh
-
-# Kubectl preference file (~/.kube/kuberc) - interactive deletion by default
-mkdir -p /home/vagrant/.kube
-cat <<'EOF' >/home/vagrant/.kube/kuberc
-apiVersion: kubectl.config.k8s.io/v1beta1
-kind: Preference
-defaults:
-  - command: delete
-    options:
-      - name: interactive
-        default: "true"
-EOF
-chown -R vagrant:vagrant /home/vagrant/.kube
-chmod 0644 /home/vagrant/.kube/kuberc
 
 echo "==> [common.sh] Node prerequisites installed successfully."
 

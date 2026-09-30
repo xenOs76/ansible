@@ -29,10 +29,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `/home/vagrant/cka/helm/README.md` guide explaining Helm addon deployment, verification via `kubectl top` and Prometheus port-forwarding, and CKA drills.
 - Added standalone helper script `scripts/install-kube-prometheus.sh` for deploying the minimal Prometheus Operator setup.
 - Added automatic IPv4 interface address discovery to the `control_plane` Ansible role, automatically including all VM network interface IPs in the kube-apiserver TLS certificate SANs and propagating `admin.conf` to the SSH user's home directory (`~/.kube/config`).
-- Added bash autocompletion for the `k` (`kubectl`) alias across `/home/vagrant/.bashrc` and `/etc/profile.d/k8s-completion.sh` according to official Kubernetes documentation.
-- Added default `kubectl` user preferences file (`~/.kube/kuberc`) enforcing interactive deletion (`delete.options.interactive: "true"`) for the vagrant user in `roles/common` and `scripts/common.sh`.
 - Added `create-user-context.sh` script and practice guide in `/home/vagrant/cka/rbac/` (with convenience symlink in `/home/vagrant/cka/`) during the CKA lab provisioning phase, following the `bmuschko/cka-crash-course` (Exercise 04) pattern to generate private keys, request and approve CSR certificates, and add a minimal-permission user context (`vagrant`) to `~/.kube/config`.
-- Added helper environment variable `export koyaml="--dry-run=client -o yaml"` across `/etc/profile.d/k8s-completion.sh` and `/home/vagrant/.bashrc` in `roles/common` and `scripts/common.sh` for fast CKA declarative manifest generation.
+- Added CKA training initial steps reminder MOTD (`~/.motd`) displayed at login after `make preprod-up` to guide trainees through manual setup drills (kubeadm init, ~/.kube backup, kubectl completion, alias k, completion for k, safe deletion via ~/.kube/kuberc).
+- Automated user shell preferences (autocompletion, `k` alias, `export koyaml="--dry-run=client -o yaml"`, and `~/.kube/kuberc` interactive deletion) during the Ansible cluster initialization phase (`roles/control_plane`, triggered by `make preprod-deploy`), with automatic cleanup of `~/.motd`.
 
 ### Changed
 
