@@ -180,5 +180,19 @@ EOF
   fi
 fi
 
+# Kubectl preference file (~/.kube/kuberc) - interactive deletion by default
+mkdir -p /home/vagrant/.kube
+cat <<'EOF' >/home/vagrant/.kube/kuberc
+apiVersion: kubectl.config.k8s.io/v1beta1
+kind: Preference
+defaults:
+  - command: delete
+    options:
+      - name: interactive
+        default: "true"
+EOF
+chown -R vagrant:vagrant /home/vagrant/.kube
+chmod 0644 /home/vagrant/.kube/kuberc
 
 echo "==> [common.sh] Node prerequisites installed successfully."
+

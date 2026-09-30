@@ -30,13 +30,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added standalone helper script `scripts/install-kube-prometheus.sh` for deploying the minimal Prometheus Operator setup.
 - Added automatic IPv4 interface address discovery to the `control_plane` Ansible role, automatically including all VM network interface IPs in the kube-apiserver TLS certificate SANs and propagating `admin.conf` to the SSH user's home directory (`~/.kube/config`).
 - Added bash autocompletion for the `k` (`kubectl`) alias across `/home/vagrant/.bashrc` and `/etc/profile.d/k8s-completion.sh` according to official Kubernetes documentation.
+- Added default `kubectl` user preferences file (`~/.kube/kuberc`) enforcing interactive deletion (`delete.options.interactive: "true"`) for the vagrant user in `roles/common` and `scripts/common.sh`.
 
 ### Changed
 
 - Updated default preprod worker node count from 1 to 2 in `Vagrantfile`, added
-
   `kube-worker-2` (`192.168.56.22`) to `inventory/preprod/hosts.ini`, and updated
   topology references across documentation and helper scripts.
+
 - Rewrote `scripts/sync-kubeconfig.sh` using native `kubectl config` subcommands and
   defensive Bash patterns: eliminated all Python dependencies and nested `nix-shell` launches,
   reducing execution time to ~1s. The script dynamically resolves the control plane endpoint

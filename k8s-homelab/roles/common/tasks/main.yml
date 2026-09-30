@@ -144,3 +144,34 @@
   tags:
     - common
     - completion
+
+- name: Ensure ~/.kube directory exists for user
+  ansible.builtin.file:
+    path: "/home/{{ ansible_user | default('vagrant') }}/.kube"
+    state: directory
+    owner: "{{ ansible_user | default('vagrant') }}"
+    group: "{{ ansible_user | default('vagrant') }}"
+    mode: '0755'
+  tags:
+    - common
+    - kuberc
+    - preferences
+
+- name: Configure kubectl preference file (kuberc) with interactive deletion
+  ansible.builtin.copy:
+    dest: "/home/{{ ansible_user | default('vagrant') }}/.kube/kuberc"
+    content: |
+      apiVersion: kubectl.config.k8s.io/v1beta1
+      kind: Preference
+      defaults:
+        - command: delete
+          options:
+            - name: interactive
+              default: "true"
+    owner: "{{ ansible_user | default('vagrant') }}"
+    group: "{{ ansible_user | default('vagrant') }}"
+    mode: '0644'
+  tags:
+    - common
+    - kuberc
+    - preferences
