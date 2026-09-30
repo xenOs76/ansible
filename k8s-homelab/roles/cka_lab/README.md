@@ -13,17 +13,23 @@ Dedicated Ansible role for provisioning isolated hands-on Certified Kubernetes A
 ### Scenario 1: User Authentication & RBAC (`user_rbac`)
 
 - **Domain**: Security & RBAC.
-- **Objective**: Create a dedicated Linux and Kubernetes user (`anna`) for RBAC authorization drills.
-- **Actions**:
-  1. Creates Linux user `anna` on `kube-control-plane` with membership in the `sudo` group and passwordless sudo privileges.
-  2. Creates visible certificate directory `/home/anna/certs` (`0755`).
-  3. Generates 2048-bit RSA private key (`anna.key`) and CSR (`anna.csr`) with Subject `/CN=anna/O=developers`.
-  4. Submits a Kubernetes `CertificateSigningRequest` (`certificates.k8s.io/v1`), approves it via `kubectl certificate approve`, and extracts the issued client certificate (`anna.crt`).
-  5. Assembles `/home/anna/.kube/config` with embedded client certificates and sets active context to `anna@kubernetes`.
+- **Objective**: Create dedicated Kubernetes user authentication setups and minimal-permission contexts for RBAC authorization drills:
+  1. **User `anna` Environment**:
+     - Creates Linux user `anna` on `kube-control-plane` with membership in the `sudo` group and passwordless sudo privileges.
+     - Creates visible certificate directory `/home/anna/certs` (`0755`).
+     - Generates 2048-bit RSA private key (`anna.key`) and CSR (`anna.csr`) with Subject `/CN=anna/O=developers`.
+     - Submits a Kubernetes `CertificateSigningRequest` (`certificates.k8s.io/v1`), approves it via `kubectl certificate approve`, and extracts the issued client certificate (`anna.crt`).
+     - Assembles `/home/anna/.kube/config` with embedded client certificates and sets active context to `anna@kubernetes`.
+  2. **Vagrant User Context Script (`create-user-context.sh`)**:
+     - Based on the [bmuschko/cka-crash-course Exercise 04](https://github.com/bmuschko/cka-crash-course/blob/master/exercises/04-rbac/create-user-context.sh) pattern.
+     - Provisions `/home/vagrant/cka/rbac/create-user-context.sh` (with convenience symlink at `/home/vagrant/cka/create-user-context.sh`).
+     - Dynamically generates private key, submits and approves CSR, and registers credentials and context `vagrant` in the vagrant user's `~/.kube/config` with minimal permissions (zero initial RBAC roles bound).
+     - Includes a step-by-step drill guide at `/home/vagrant/cka/rbac/README.md`.
 
 ### Scenario 2: Sample Secrets across Namespaces (`secrets`)
 
 - **Domain**: Configuration & Security.
+
 - **Reference**: [Kubernetes Secrets Documentation](https://kubernetes.io/docs/concepts/configuration/secret/)
 - **Objective**: Ensure the `development` namespace exists and provision sample Secrets representing distinct built-in Kubernetes types across both `default` and `development` namespaces:
   - **`default` Namespace Secrets**:
@@ -80,7 +86,21 @@ Dedicated Ansible role for provisioning isolated hands-on Certified Kubernetes A
 # SSH into control plane VM
 ./scripts/shell.sh --run "vagrant ssh kube-control-plane"
 
-# Switch to trainee user
+# Option A: Run Vagrant User Minimal Context Drill (Exercise 04)
+cd ~/cka/rbac
+./create-user-context.sh
+
+# Switch to the new minimal-permission context
+kubectl config use-context vagrant
+
+# Verify forbidden permissions (expected: no)
+kubectl get pods
+kubectl auth can-i get pods
+
+# Switch back to cluster administrator
+kubectl config use-context kubernetes-admin@kubernetes
+
+# Option B: Switch to trainee user 'anna'
 sudo su - anna
 
 # Inspect credentials and context
@@ -95,6 +115,7 @@ kubectl get pods
 ### Verify Secrets Scenario
 
 ```bash
+
 # List secrets in both namespaces
 kubectl get secrets -n default
 kubectl get secrets -n development

@@ -31,10 +31,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added automatic IPv4 interface address discovery to the `control_plane` Ansible role, automatically including all VM network interface IPs in the kube-apiserver TLS certificate SANs and propagating `admin.conf` to the SSH user's home directory (`~/.kube/config`).
 - Added bash autocompletion for the `k` (`kubectl`) alias across `/home/vagrant/.bashrc` and `/etc/profile.d/k8s-completion.sh` according to official Kubernetes documentation.
 - Added default `kubectl` user preferences file (`~/.kube/kuberc`) enforcing interactive deletion (`delete.options.interactive: "true"`) for the vagrant user in `roles/common` and `scripts/common.sh`.
+- Added `create-user-context.sh` script and practice guide in `/home/vagrant/cka/rbac/` (with convenience symlink in `/home/vagrant/cka/`) during the CKA lab provisioning phase, following the `bmuschko/cka-crash-course` (Exercise 04) pattern to generate private keys, request and approve CSR certificates, and add a minimal-permission user context (`vagrant`) to `~/.kube/config`.
 
 ### Changed
 
 - Updated default preprod worker node count from 1 to 2 in `Vagrantfile`, added
+
   `kube-worker-2` (`192.168.56.22`) to `inventory/preprod/hosts.ini`, and updated
   topology references across documentation and helper scripts.
 

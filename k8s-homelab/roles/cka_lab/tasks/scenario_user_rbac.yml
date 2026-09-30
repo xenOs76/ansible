@@ -248,3 +248,54 @@
   tags:
     - cka_lab
     - user_rbac
+
+- name: Ensure CKA lab RBAC directory exists
+  ansible.builtin.file:
+    path: "{{ cka_lab_rbac_dir }}"
+    state: directory
+    owner: "{{ ansible_user | default('vagrant') }}"
+    group: "{{ ansible_user | default('vagrant') }}"
+    mode: "0755"
+  tags:
+    - cka_lab
+    - user_rbac
+    - rbac
+
+- name: Render create-user-context script and README into CKA rbac directory
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "{{ cka_lab_rbac_dir }}/{{ item.dest }}"
+    owner: "{{ ansible_user | default('vagrant') }}"
+    group: "{{ ansible_user | default('vagrant') }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - {src: "rbac_create_user_context.sh.j2", dest: "create-user-context.sh", mode: "0755"}
+    - {src: "rbac_readme.md.j2", dest: "README.md", mode: "0644"}
+  loop_control:
+    label: "rbac/{{ item.dest }}"
+  tags:
+    - cka_lab
+    - user_rbac
+    - rbac
+
+- name: Create convenience symlink for create-user-context.sh in cka root directory
+  ansible.builtin.file:
+    src: "{{ cka_lab_rbac_dir }}/create-user-context.sh"
+    dest: "/home/{{ ansible_user | default('vagrant') }}/cka/create-user-context.sh"
+    state: link
+    owner: "{{ ansible_user | default('vagrant') }}"
+    group: "{{ ansible_user | default('vagrant') }}"
+  tags:
+    - cka_lab
+    - user_rbac
+    - rbac
+
+- name: Validate syntax of create-user-context.sh
+  ansible.builtin.command: >-
+    bash -n {{ cka_lab_rbac_dir }}/create-user-context.sh
+  register: cka_lab_rbac_syntax_check
+  changed_when: false
+  tags:
+    - cka_lab
+    - user_rbac
+    - rbac

@@ -1,0 +1,126 @@
+# CKA Lab Exercise: User Authentication & RBAC
+
+Hands-on exercise for defining Role-Based Access Control (RBAC) in Kubernetes.
+Follows the exercise pattern from [bmuschko/cka-crash-course (04-rbac)](https://github.com/bmuschko/cka-crash-course/tree/master/exercises/04-rbac).
+
+## Quick Reference
+
+- **Namespace**: `default`
+- **User**: `{{ cka_lab_rbac_user | default('vagrant') }}`
+- **Context**: `{{ cka_lab_rbac_user | default('vagrant') }}`
+- **Documentation**: [Using RBAC Authorization](https://kubernetes.io/docs/reference/access-authn-authz/rbac/) & [Certificate Signing Requests](https://kubernetes.io/docs/reference/access-authn-authz/certificate-signing-requests/#normal-user)
+
+---
+
+## Exercise Steps
+
+### Step 1: Create the User Context
+
+Run the provided script to generate private keys, issue a client certificate via Kubernetes CSR, and register credentials and context in `~/.kube/config`:
+
+```bash
+./create-user-context.sh
+```
+
+This performs the following actions:
+
+1. Generates an RSA private key (`{{ cka_lab_rbac_user | default('vagrant') }}.key`).
+2. Creates and approves a Kubernetes `CertificateSigningRequest` for Subject `/CN={{ cka_lab_rbac_user | default('vagrant') }}`.
+3. Retrieves and saves the signed client certificate (`{{ cka_lab_rbac_user | default('vagrant') }}.crt`).
+4. Adds credentials and context `{{ cka_lab_rbac_user | default('vagrant') }}` to `~/.kube/config`.
+
+---
+
+### Step 2: Check Default User Permissions
+
+Switch to the newly created context:
+
+```bash
+kubectl config use-context {{ cka_lab_rbac_user | default('vagrant') }}
+```
+
+Attempt to list pods or create a pod:
+
+```bash
+kubectl get pods
+kubectl run test-pod --image=nginx
+```
+
+**Expected Result**: Both commands should be forbidden, because no Role or ClusterRole has been bound to user `{{ cka_lab_rbac_user | default('vagrant') }}` yet:
+
+```text
+Error from server (Forbidden): pods is forbidden: User "{{ cka_lab_rbac_user | default('vagrant') }}" cannot list resource "pods" in API group "" in the namespace "default"
+```
+
+---
+
+### Step 3: Grant Access to the User
+
+Switch back to the cluster administrator context:
+
+```bash
+kubectl config use-context kubernetes-admin@kubernetes
+```
+
+1. Create a `Role` named `pod-reader` granting permissions to `get`, `watch`, and `list` pods in namespace `default`:
+
+```bash
+kubectl create role pod-reader \
+  --verb=get,list,watch \
+  --resource=pods \
+  --namespace=default
+```
+
+1. Create a `RoleBinding` named `read-pods` binding user `{{ cka_lab_rbac_user | default('vagrant') }}` to role `pod-reader`:
+
+```bash
+kubectl create rolebinding read-pods \
+  --role=pod-reader \
+  --user={{ cka_lab_rbac_user | default('vagrant') }} \
+  --namespace=default
+```
+
+1. Verify both objects exist:
+
+```bash
+kubectl get role,rolebinding -n default
+```
+
+---
+
+### Step 4: Verify Granted Permissions
+
+Switch back to the user context:
+
+```bash
+kubectl config use-context {{ cka_lab_rbac_user | default('vagrant') }}
+```
+
+1. Verify that listing pods now succeeds:
+
+```bash
+kubectl get pods
+```
+
+1. Test authorization queries via `kubectl auth can-i`:
+
+```bash
+# Should return 'yes'
+
+kubectl auth can-i get pods
+
+# Should return 'no'
+kubectl auth can-i create pods
+kubectl auth can-i delete pods
+kubectl auth can-i get deployments
+```
+
+---
+
+### Step 5: Clean Up / Switch Back
+
+Return to the cluster administrator context:
+
+```bash
+kubectl config use-context kubernetes-admin@kubernetes
+```

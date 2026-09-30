@@ -24,6 +24,12 @@ cka_lab_user_rbac_cluster_name: "kubernetes"
 cka_lab_user_rbac_cluster_server: "https://127.0.0.1:6443"
 cka_lab_user_rbac_context_name: "{{ cka_lab_user_rbac_name }}@kubernetes"
 
+# Vagrant user context creation script settings
+# Reference: https://github.com/bmuschko/cka-crash-course/blob/master/exercises/04-rbac/create-user-context.sh
+cka_lab_rbac_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/rbac"
+cka_lab_rbac_user: "{{ ansible_user | default('vagrant') }}"
+cka_lab_rbac_csr_expiration_seconds: 86400
+
 # Scenario: secrets (Kubernetes Secrets Drill)
 # Reference: https://kubernetes.io/docs/concepts/configuration/secret/
 cka_lab_secrets_default_namespace: "default"

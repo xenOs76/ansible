@@ -1,0 +1,117 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# Script: create-user-context.sh
+# Purpose: Generate client credentials, submit and approve a Kubernetes CSR,
+#          and add a minimal-permission user context to ~/.kube/config.
+# Reference: https://github.com/bmuschko/cka-crash-course/blob/master/exercises/04-rbac/create-user-context.sh
+# Documentation: https://kubernetes.io/docs/reference/access-authn-authz/certificate-signing-requests/#normal-user
+# ==============================================================================
+set -euo pipefail
+
+USER_NAME="${1:-{{ cka_lab_rbac_user | default('vagrant') }}}"
+EXPIRATION_SECONDS="{{ cka_lab_rbac_csr_expiration_seconds | default('86400') }}"
+WORK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Ensure proper KUBECONFIG discovery if running as non-root without ~/.kube/config
+if [[ -z "${KUBECONFIG:-}" ]]; then
+  if [[ -f "${HOME}/.kube/config" ]]; then
+    export KUBECONFIG="${HOME}/.kube/config"
+  elif [[ -f "/home/vagrant/.kube/config" ]]; then
+    export KUBECONFIG="/home/vagrant/.kube/config"
+  elif [[ -f "/etc/kubernetes/admin.conf" ]]; then
+    export KUBECONFIG="/etc/kubernetes/admin.conf"
+  fi
+fi
+
+echo "==> [1/5] Generating 2048-bit RSA private key for '${USER_NAME}'..."
+openssl genrsa -out "${WORK_DIR}/${USER_NAME}.key" 2048 2>/dev/null
+chmod 0600 "${WORK_DIR}/${USER_NAME}.key"
+
+echo "==> [2/5] Creating Certificate Signing Request (CSR) with Subject /CN=${USER_NAME}..."
+openssl req -new -key "${WORK_DIR}/${USER_NAME}.key" \
+  -out "${WORK_DIR}/${USER_NAME}.csr" \
+  -subj "/CN=${USER_NAME}" 2>/dev/null
+
+csr_base64="$(base64 < "${WORK_DIR}/${USER_NAME}.csr" | tr -d "\r\n")"
+
+echo "==> [3/5] Submitting CertificateSigningRequest to Kubernetes..."
+# Remove any existing CSR with the same name to ensure idempotency
+kubectl delete csr "${USER_NAME}" --ignore-not-found=true --interactive=false >/dev/null 2>&1 || true
+
+cat <<EOF | kubectl apply -f -
+apiVersion: certificates.k8s.io/v1
+kind: CertificateSigningRequest
+metadata:
+  name: ${USER_NAME}
+spec:
+  request: ${csr_base64}
+  signerName: kubernetes.io/kube-apiserver-client
+  expirationSeconds: ${EXPIRATION_SECONDS}
+  usages:
+  - client auth
+EOF
+
+echo "==> [4/5] Approving CertificateSigningRequest '${USER_NAME}'..."
+kubectl certificate approve "${USER_NAME}"
+
+# Wait up to 5 seconds for the controller to issue the certificate
+CERT=""
+for _ in {1..10}; do
+  CERT="$(kubectl get csr "${USER_NAME}" -o jsonpath='{.status.certificate}' 2>/dev/null || true)"
+  if [[ -n "${CERT}" ]]; then
+    break
+  fi
+  sleep 0.5
+done
+
+if [[ -z "${CERT}" ]]; then
+  echo "Error: Certificate for '${USER_NAME}' was not issued in time." >&2
+  exit 1
+fi
+
+echo "${CERT}" | base64 -d > "${WORK_DIR}/${USER_NAME}.crt"
+chmod 0644 "${WORK_DIR}/${USER_NAME}.crt"
+
+echo "==> [5/5] Configuring credentials and context in active kubeconfig..."
+# Extract active cluster name from kubeconfig, falling back to 'kubernetes'
+CLUSTER_NAME="$(kubectl config view --minify -o jsonpath='{.clusters[0].name}' 2>/dev/null || true)"
+if [[ -z "${CLUSTER_NAME}" ]]; then
+  CLUSTER_NAME="$(kubectl config get-clusters 2>/dev/null | sed 1d | head -n 1 || true)"
+fi
+CLUSTER_NAME="${CLUSTER_NAME:-kubernetes}"
+
+# Embed credentials in active kubeconfig
+kubectl config set-credentials "${USER_NAME}" \
+  --client-key="${WORK_DIR}/${USER_NAME}.key" \
+  --client-certificate="${WORK_DIR}/${USER_NAME}.crt" \
+  --embed-certs=true
+
+# Add context for user pointing to the cluster
+kubectl config set-context "${USER_NAME}" \
+  --cluster="${CLUSTER_NAME}" \
+  --user="${USER_NAME}"
+
+echo ""
+echo "=============================================================================="
+echo " User context '${USER_NAME}' created successfully!"
+echo "=============================================================================="
+echo " Cluster:         ${CLUSTER_NAME}"
+echo " User:            ${USER_NAME} (CN=${USER_NAME}, no Roles bound)"
+echo " Context:         ${USER_NAME}"
+echo " Credentials:     Embedded in ${KUBECONFIG:-~/.kube/config}"
+echo ""
+echo " Verification Commands:"
+echo "   1. View available contexts:"
+echo "      kubectl config get-contexts"
+echo ""
+echo "   2. Switch to minimal-permission user:"
+echo "      kubectl config use-context ${USER_NAME}"
+echo ""
+echo "   3. Verify authorization fails (expected for minimal permissions):"
+echo "      kubectl get pods"
+echo "      kubectl auth can-i get pods"
+echo "      kubectl auth can-i create deployments"
+echo ""
+echo "   4. Switch back to cluster administrator context:"
+echo "      kubectl config use-context kubernetes-admin@kubernetes"
+echo "=============================================================================="
