@@ -1,0 +1,15 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: webapp-service
+  labels:
+    app.kubernetes.io/name: webapp
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: webapp
+  ports:
+    - port: 80
+      targetPort: 8080
+      name: http

@@ -1,6 +1,9 @@
 ---
 # Scenario toggles (organized by CKA exam domain)
 cka_lab_scenario_user_rbac_enabled: true
+cka_lab_scenario_secrets_enabled: true
+cka_lab_scenario_configmaps_enabled: true
+cka_lab_scenario_helm_enabled: true
 
 # Scenario: user_rbac (User Authentication & RBAC Drill)
 cka_lab_user_rbac_name: "anna"
@@ -20,3 +23,127 @@ cka_lab_user_rbac_k8s_group: "developers"
 cka_lab_user_rbac_cluster_name: "kubernetes"
 cka_lab_user_rbac_cluster_server: "https://127.0.0.1:6443"
 cka_lab_user_rbac_context_name: "{{ cka_lab_user_rbac_name }}@kubernetes"
+
+# Scenario: secrets (Kubernetes Secrets Drill)
+# Reference: https://kubernetes.io/docs/concepts/configuration/secret/
+cka_lab_secrets_default_namespace: "default"
+cka_lab_secrets_dev_namespace: "development"
+cka_lab_secrets_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/secrets"
+
+# Default namespace secret parameters
+cka_lab_secret_opaque_username: "appadmin"
+cka_lab_secret_opaque_password: "AppSuperSecretPassword123!"
+cka_lab_secret_opaque_db_url: "postgresql://appadmin:AppSuperSecretPassword123!@postgres.default.svc.cluster.local:5432/appdb"
+cka_lab_secret_opaque_api_key: "sample-dummy-api-key-test-value"
+cka_lab_secret_basic_username: "admin"
+cka_lab_secret_basic_password: "t0p-Secret-BasicAuth-Password"
+
+# Development namespace secret parameters
+cka_lab_dev_secret_opaque_username: "devadmin"
+cka_lab_dev_secret_opaque_password: "DevSecretPass2026!"
+cka_lab_dev_secret_opaque_db_url: "postgresql://devadmin:DevSecretPass2026!@postgres.development.svc.cluster.local:5432/devdb"
+cka_lab_dev_secret_opaque_api_key: "dev-dummy-api-key-test-value"
+cka_lab_dev_secret_opaque_jwt: "dev-jwt-signing-secret-key-32b"
+cka_lab_dev_secret_basic_username: "dev-user"
+cka_lab_dev_secret_basic_password: "DevAuthPass#456"
+
+# Scenario: configmaps (Kubernetes ConfigMaps Drill)
+# Reference: https://kubernetes.io/docs/concepts/configuration/configmap/
+cka_lab_configmaps_default_namespace: "default"
+cka_lab_configmaps_dev_namespace: "development"
+cka_lab_configmaps_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/configmaps"
+cka_lab_kustomize_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/kustomize"
+
+cka_lab_configmaps_definitions:
+  - namespace: "{{ cka_lab_configmaps_default_namespace }}"
+    configmaps:
+      - name: sample-app-config
+        labels:
+          app.kubernetes.io/part-of: cka-lab
+          cka.practice/scenario: configmaps
+        data:
+          APP_ENV: "production"
+          LOG_LEVEL: "info"
+          MAX_CONNECTIONS: "100"
+          FEATURE_FLAG_ANALYTICS: "true"
+          SERVER_PORT: "8080"
+      - name: sample-service-config
+        labels:
+          app.kubernetes.io/part-of: cka-lab
+          cka.practice/scenario: configmaps
+        data:
+          application.properties: |
+            server.port=8080
+            logging.level.root=INFO
+            spring.datasource.hikari.maximum-pool-size=20
+            management.endpoints.web.exposure.include=health,info,metrics
+          nginx.conf: |
+            server {
+                listen 80;
+                server_name sample.default.svc.cluster.local;
+                location / {
+                    proxy_pass http://localhost:8080;
+                }
+            }
+      - name: sample-system-config
+        immutable: true
+        labels:
+          app.kubernetes.io/part-of: cka-lab
+          cka.practice/scenario: configmaps
+        data:
+          cluster_id: "homelab-preprod-01"
+          region: "eu-west-home"
+          dns_domain: "cluster.local"
+          static_routing_mode: "direct"
+  - namespace: "{{ cka_lab_configmaps_dev_namespace }}"
+    configmaps:
+      - name: dev-app-config
+        labels:
+          app.kubernetes.io/part-of: cka-lab
+          cka.practice/scenario: configmaps
+          environment: "{{ cka_lab_configmaps_dev_namespace }}"
+        data:
+          APP_ENV: "development"
+          LOG_LEVEL: "debug"
+          MAX_CONNECTIONS: "20"
+          FEATURE_FLAG_DEBUG_BAR: "true"
+          DEV_HOT_RELOAD: "enabled"
+          SERVER_PORT: "3000"
+      - name: dev-service-config
+        labels:
+          app.kubernetes.io/part-of: cka-lab
+          cka.practice/scenario: configmaps
+          environment: "{{ cka_lab_configmaps_dev_namespace }}"
+        data:
+          application-dev.properties: |
+            server.port=3000
+            logging.level.root=DEBUG
+            spring.datasource.hikari.maximum-pool-size=5
+            management.endpoints.web.exposure.include=*
+            dev.mock.services=true
+          nginx-dev.conf: |
+            server {
+                listen 80;
+                server_name dev.development.svc.cluster.local;
+                location / {
+                    proxy_pass http://localhost:3000;
+                }
+            }
+      - name: dev-system-config
+        immutable: true
+        labels:
+          app.kubernetes.io/part-of: cka-lab
+          cka.practice/scenario: configmaps
+          environment: "{{ cka_lab_configmaps_dev_namespace }}"
+        data:
+          environment: "development"
+          sandbox_mode: "permissive"
+          debug_profiling: "enabled"
+          mock_upstream_endpoint: "http://wiremock.development.svc.cluster.local:8080"
+
+# Scenario: helm (Helm Monitoring & Addon Drill)
+# Reference: https://helm.sh/docs/ and https://github.com/prometheus-operator/kube-prometheus
+cka_lab_helm_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/helm"
+cka_lab_helm_monitoring_namespace: "monitoring"
+cka_lab_helm_metrics_server_chart_version: ""
+cka_lab_helm_kube_prometheus_chart_version: ""

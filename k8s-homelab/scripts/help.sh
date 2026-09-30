@@ -73,7 +73,10 @@ ${BOLD}${YELLOW}[5] Kubernetes Setup Steps (Inside VMs)${RESET}
      Install Calico CNI (Option B):
        ${GREEN}./cni-install-calico.sh${RESET}
      Install Metrics Server (via Helm):
-       ${GREEN}./install-kube-metrics.sh${RESET}
+       ${GREEN}./cka/helm/install-kube-metrics.sh${RESET}
+     Install Prometheus Operator (via Helm):
+       ${GREEN}./cka/helm/install-kube-prometheus.sh${RESET}
+
 
   2. On ${BOLD}kube-worker-1${RESET} / ${BOLD}kube-worker-2${RESET}:
      Join cluster:

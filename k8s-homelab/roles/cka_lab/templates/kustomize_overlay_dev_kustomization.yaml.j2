@@ -1,0 +1,36 @@
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: {{ cka_lab_configmaps_dev_namespace }}
+
+namePrefix: dev-
+
+commonLabels:
+  environment: {{ cka_lab_configmaps_dev_namespace }}
+  cka.practice/layer: overlay
+
+resources:
+  - ../../base
+
+configMapGenerator:
+  - name: webapp-config
+    behavior: merge
+    literals:
+      - APP_ENV=development
+      - APP_MSG=Development Sandbox Environment
+      - FEATURE_DEBUG_BAR=true
+    files:
+      - dev-settings.properties
+
+generatorOptions:
+  disableNameSuffixHash: true
+
+patches:
+  - target:
+      kind: Deployment
+      name: webapp-deployment
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: 32Mi

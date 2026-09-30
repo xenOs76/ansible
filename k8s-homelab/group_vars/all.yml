@@ -35,9 +35,8 @@ os76_apt_repo: "deb [trusted=yes] https://repo.os76.xyz/apt stable main"
 os76_apt_packages:
   - kubectl-netdrill
 
-# Control plane bootstrap tooling (Helm, k9s, kube-metrics installer)
+# Control plane bootstrap tooling (Helm, k9s, etcdctl, etcdutl)
 k9s_version: "v0.40.10"
 helm_apt_repo: "deb [signed-by=/etc/apt/keyrings/helm.gpg] https://packages.buildkite.com/helm-linux/helm-debian/any/ any main"
 helm_apt_key_url: "https://packages.buildkite.com/helm-linux/helm-debian/gpgkey"
 helm_apt_key_fingerprint: "DDF78C3E6EBB2D2CC223C95C62BA89D07698DBC6"  # gitleaks:allow
-install_kube_metrics_script_dest: "/home/{{ ansible_user | default('vagrant') }}/install-kube-metrics.sh"

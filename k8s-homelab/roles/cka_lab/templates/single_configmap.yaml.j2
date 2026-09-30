@@ -1,0 +1,26 @@
+---
+# ==============================================================================
+# CKA Training Lab: Individual ConfigMap Manifest
+# Reference: https://kubernetes.io/docs/concepts/configuration/configmap/
+# ==============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ current_configmap.name }}
+  namespace: {{ current_configmap_namespace }}
+  labels:
+{% for lk, lv in current_configmap.labels.items() %}
+    {{ lk }}: {{ lv }}
+{% endfor %}
+{% if current_configmap.immutable | default(false) %}
+immutable: true
+{% endif %}
+data:
+{% for dk, dv in current_configmap.data.items() %}
+{% if '\n' in dv %}
+  {{ dk }}: |
+{{ dv | indent(4, first=True) }}
+{% else %}
+  {{ dk }}: "{{ dv }}"
+{% endif %}
+{% endfor %}

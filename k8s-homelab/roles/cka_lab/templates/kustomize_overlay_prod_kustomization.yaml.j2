@@ -1,0 +1,29 @@
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: {{ cka_lab_configmaps_default_namespace }}
+
+namePrefix: prod-
+
+commonLabels:
+  environment: production
+  cka.practice/layer: overlay
+
+resources:
+  - ../../base
+
+configMapGenerator:
+  - name: webapp-config
+    behavior: merge
+    literals:
+      - APP_ENV=production
+      - APP_MSG=Production High-Availability Service
+      - FEATURE_ANALYTICS=true
+      - CACHE_ENABLED=true
+
+generatorOptions:
+  disableNameSuffixHash: true
+
+patches:
+  - path: replica-patch.yaml

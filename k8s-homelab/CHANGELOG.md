@@ -22,6 +22,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Documented CKA etcd health check and snapshot verification commands in `README.md`.
 - Added `make preprod-cka-lab` target and dedicated `cka_lab` Ansible role (`playbooks/cka_lab.yml`) for provisioning isolated CKA training scenarios on the preprod control plane.
 - Implemented CKA training scenario `user_rbac`: provisions Linux user `anna` with `sudo` group membership, generates 2048-bit RSA key and CSR in `/home/anna/certs`, signs client certificate via Kubernetes `CertificateSigningRequest` (`certificates.k8s.io/v1`) with `kubectl certificate approve`, and configures `/home/anna/.kube/config` with active context `anna@kubernetes`.
+- Implemented CKA training scenario `secrets` (`scenario_secrets.yml`): provisions sample Secrets across `default` and `development` namespaces covering `Opaque`, `kubernetes.io/basic-auth`, and `kubernetes.io/ssh-auth` types, base64 data encoding, and copies the rendered manifest to `/home/vagrant/cka/secrets/sample-secrets.yaml`.
+- Implemented CKA training scenario `configmaps` (`scenario_configmaps.yml`): dynamically renders sample ConfigMaps across `default` and `development` namespaces via Jinja2 iteration over structured definitions (`cka_lab_configmaps_definitions`), outputting both a combined manifest (`sample-configmaps.yaml`) and individual per-ConfigMap YAML files into `/home/vagrant/cka/configmaps/{default,development}/`.
+- Added self-contained Kustomize training lab in `/home/vagrant/cka/kustomize/` featuring `base/`, `overlays/development/`, and `overlays/production/`, with a comprehensive `README.md` guide covering `configMapGenerator`, `behavior: merge`, `disableNameSuffixHash`, name prefixes, common labels, strategic merge patches, and CKA/CKAD exam drills.
+- Implemented CKA training scenario `helm` (`scenario_helm.yml`): provisions `/home/vagrant/cka/helm/` containing `install-kube-metrics.sh` (Metrics Server with `--kubelet-insecure-tls`) and `install-kube-prometheus.sh` (lightweight Prometheus Operator deployment with Grafana, Alertmanager, node-exporter, and kube-state-metrics disabled).
+- Added `/home/vagrant/cka/helm/README.md` guide explaining Helm addon deployment, verification via `kubectl top` and Prometheus port-forwarding, and CKA drills.
+- Added standalone helper script `scripts/install-kube-prometheus.sh` for deploying the minimal Prometheus Operator setup.
+- Added automatic IPv4 interface address discovery to the `control_plane` Ansible role, automatically including all VM network interface IPs in the kube-apiserver TLS certificate SANs and propagating `admin.conf` to the SSH user's home directory (`~/.kube/config`).
 
 ### Changed
 
@@ -33,6 +40,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reducing execution time to ~1s. The script dynamically resolves the control plane endpoint
   from inventory or source config, configures certificate trust via `--insecure-skip-tls-verify=true`,
   and merges credentials into `~/.kube/config`.
+- Moved `install-kube-metrics.sh` from the control plane VM home root (`/home/vagrant/`) to the CKA practice environment at `/home/vagrant/cka/helm/install-kube-metrics.sh`.
+- Updated `scripts/help.sh` to reference `./cka/helm/install-kube-metrics.sh` and `./cka/helm/install-kube-prometheus.sh`.
+
+### Removed
+
+- Removed `install-kube-metrics.sh` file provisioning from `Vagrantfile` during `make preprod-up`.
+- Removed `kube_metrics.yml` tasks, installer script file, and `control_plane_tools_script_dest` from the `control_plane_tools` Ansible role and `group_vars/all.yml`.
 
 ### Fixed
 

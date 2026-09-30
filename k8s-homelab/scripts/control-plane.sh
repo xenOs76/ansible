@@ -48,19 +48,23 @@ echo "==> [control-plane.sh] Initializing Kubernetes Control Plane..."
 echo "    Pod CIDR:          ${POD_CIDR}"
 echo "    Advertise Address: ${API_ADV_ADDRESS}"
 
-# 1. Run kubeadm init and capture join token output to shared /vagrant folder
+# 1. Discover all non-loopback, non-CNI IPv4 interface addresses for certificate SANs
+INTERFACE_IPS=$(ip -4 -o addr show 2>/dev/null | awk '$2 != "lo" && $2 !~ /^(cilium|lxc|flannel|cbr|docker|calico|cni|veth|tunl|dummy|kube-ipvs)/ {print $4}' | cut -d/ -f1 | sort -u || true)
+EXTRA_SANS=$(printf '%s\n' "${API_ADV_ADDRESS}" "192.168.56.10" "kube-control-plane" "127.0.0.1" "localhost" "${INTERFACE_IPS}" | grep -v '^[[:space:]]*$' | sort -u | paste -sd, -)
+
+# 2. Run kubeadm init and capture join token output to shared /vagrant folder
 kubeadm init \
   --pod-network-cidr "${POD_CIDR}" \
   --apiserver-advertise-address "${API_ADV_ADDRESS}" \
-  --apiserver-cert-extra-sans "${API_ADV_ADDRESS},192.168.56.10,kube-control-plane,127.0.0.1" \
+  --apiserver-cert-extra-sans "${EXTRA_SANS}" \
   | tee /vagrant/kubeadm-init.out
 
-# 2. Configure node IP for kubelet and restart daemon
+# 3. Configure node IP for kubelet and restart daemon
 systemctl daemon-reload
 echo "KUBELET_EXTRA_ARGS=--node-ip=${API_ADV_ADDRESS} --cgroup-driver=systemd" > /etc/default/kubelet
 systemctl restart kubelet
 
-# 3. Configure kubectl credentials for vagrant and root users
+# 4. Configure kubectl credentials for vagrant and root users
 mkdir -p /home/vagrant/.kube
 cp -f /etc/kubernetes/admin.conf /home/vagrant/.kube/config
 chown vagrant:vagrant /home/vagrant/.kube/config
@@ -68,7 +72,7 @@ chown vagrant:vagrant /home/vagrant/.kube/config
 mkdir -p /root/.kube
 cp -f /etc/kubernetes/admin.conf /root/.kube/config
 
-# 4. Copy admin.conf to shared /vagrant directory for host & worker node access
+# 5. Copy admin.conf to shared /vagrant directory for host & worker node access
 cp -f /etc/kubernetes/admin.conf /vagrant/admin.conf
 chmod 0644 /vagrant/admin.conf
 

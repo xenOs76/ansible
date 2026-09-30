@@ -5,3 +5,24 @@
   tags:
     - cka_lab
     - user_rbac
+
+- name: Execute CKA Lab Scenario - Sample Secrets (secrets)
+  ansible.builtin.include_tasks: scenario_secrets.yml
+  when: cka_lab_scenario_secrets_enabled | bool
+  tags:
+    - cka_lab
+    - secrets
+
+- name: Execute CKA Lab Scenario - Sample ConfigMaps (configmaps)
+  ansible.builtin.include_tasks: scenario_configmaps.yml
+  when: cka_lab_scenario_configmaps_enabled | bool
+  tags:
+    - cka_lab
+    - configmaps
+
+- name: Execute CKA Lab Scenario - Helm Tools & Monitoring (helm)
+  ansible.builtin.include_tasks: scenario_helm.yml
+  when: cka_lab_scenario_helm_enabled | bool
+  tags:
+    - cka_lab
+    - helm

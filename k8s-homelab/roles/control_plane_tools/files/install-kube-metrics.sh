@@ -1,1 +1,0 @@
-../../../scripts/install-kube-metrics.sh

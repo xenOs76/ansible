@@ -7,5 +7,3 @@ control_plane_tools_helm_apt_key_url: "{{ helm_apt_key_url | default('https://pa
 control_plane_tools_helm_apt_key_fingerprint: >-
   {{ helm_apt_key_fingerprint | default('DDF78C3E6EBB2D2CC223C95C62BA89D07698DBC6') }}  # gitleaks:allow
 control_plane_tools_user: "{{ ansible_user | default('vagrant') }}"
-control_plane_tools_script_dest: >-
-  {{ install_kube_metrics_script_dest | default('/home/' ~ control_plane_tools_user ~ '/install-kube-metrics.sh') }}

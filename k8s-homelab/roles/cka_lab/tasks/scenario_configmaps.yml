@@ -1,0 +1,133 @@
+---
+- name: Ensure CKA lab configmaps and kustomize directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ ansible_user | default('vagrant') }}"
+    group: "{{ ansible_user | default('vagrant') }}"
+    mode: "0755"
+  loop:
+    - "{{ cka_lab_configmaps_dir }}"
+    - "{{ cka_lab_configmaps_dir }}/{{ cka_lab_configmaps_default_namespace }}"
+    - "{{ cka_lab_configmaps_dir }}/{{ cka_lab_configmaps_dev_namespace }}"
+    - "{{ cka_lab_kustomize_dir }}/base"
+    - "{{ cka_lab_kustomize_dir }}/overlays/development"
+    - "{{ cka_lab_kustomize_dir }}/overlays/production"
+  tags:
+    - cka_lab
+    - configmaps
+
+- name: Remove legacy kustomize directory under configmaps if present
+  ansible.builtin.file:
+    path: "{{ cka_lab_configmaps_dir }}/kustomize"
+    state: absent
+  tags:
+    - cka_lab
+    - configmaps
+
+- name: Render individual ConfigMap YAML files into vagrant home directory
+  ansible.builtin.template:
+    src: single_configmap.yaml.j2
+    dest: "{{ cka_lab_configmaps_dir }}/{{ item.0.namespace }}/{{ item.1.name }}.yaml"
+    owner: "{{ ansible_user | default('vagrant') }}"
+    group: "{{ ansible_user | default('vagrant') }}"
+    mode: "0644"
+  loop: "{{ cka_lab_configmaps_definitions | subelements('configmaps') }}"
+  loop_control:
+    label: "{{ item.0.namespace }}/{{ item.1.name }}"
+  vars:
+    current_configmap_namespace: "{{ item.0.namespace }}"
+    current_configmap: "{{ item.1 }}"
+  tags:
+    - cka_lab
+    - configmaps
+
+- name: Render combined Kubernetes sample configmaps manifest
+  ansible.builtin.template:
+    src: configmaps.yaml.j2
+    dest: "{{ cka_lab_configmaps_dir }}/sample-configmaps.yaml"
+    owner: "{{ ansible_user | default('vagrant') }}"
+    group: "{{ ansible_user | default('vagrant') }}"
+    mode: "0644"
+  tags:
+    - cka_lab
+    - configmaps
+
+- name: Render Kustomize practice files into vagrant home directory
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "{{ cka_lab_kustomize_dir }}/{{ item.dest }}"
+    owner: "{{ ansible_user | default('vagrant') }}"
+    group: "{{ ansible_user | default('vagrant') }}"
+    mode: "0644"
+  loop:
+    - {src: "kustomize_readme.md.j2", dest: "README.md"}
+    - {src: "kustomize_base_kustomization.yaml.j2", dest: "base/kustomization.yaml"}
+    - {src: "kustomize_base_configmap.yaml.j2", dest: "base/configmap.yaml"}
+    - {src: "kustomize_base_deployment.yaml.j2", dest: "base/deployment.yaml"}
+    - {src: "kustomize_base_service.yaml.j2", dest: "base/service.yaml"}
+    - {src: "kustomize_overlay_dev_kustomization.yaml.j2", dest: "overlays/development/kustomization.yaml"}
+    - {src: "kustomize_overlay_dev_settings.properties.j2", dest: "overlays/development/dev-settings.properties"}
+    - {src: "kustomize_overlay_prod_kustomization.yaml.j2", dest: "overlays/production/kustomization.yaml"}
+    - {src: "kustomize_overlay_prod_replica_patch.yaml.j2", dest: "overlays/production/replica-patch.yaml"}
+  loop_control:
+    label: "kustomize/{{ item.dest }}"
+  tags:
+    - cka_lab
+    - configmaps
+
+- name: Apply sample configmaps manifest to Kubernetes cluster
+  ansible.builtin.command: >-
+    kubectl apply -f {{ cka_lab_configmaps_dir }}/sample-configmaps.yaml
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: cka_lab_apply_configmaps
+  changed_when: "'created' in cka_lab_apply_configmaps.stdout or 'configured' in cka_lab_apply_configmaps.stdout"
+  tags:
+    - cka_lab
+    - configmaps
+
+- name: Verify configmaps exist in default namespace
+  ansible.builtin.command: >-
+    kubectl get configmap {{ item }} -n {{ cka_lab_configmaps_default_namespace }} -o name
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  loop:
+    - sample-app-config
+    - sample-service-config
+    - sample-system-config
+  register: cka_lab_verify_default_configmaps
+  changed_when: false
+  tags:
+    - cka_lab
+    - configmaps
+
+- name: Verify configmaps exist in development namespace
+  ansible.builtin.command: >-
+    kubectl get configmap {{ item }} -n {{ cka_lab_configmaps_dev_namespace }} -o name
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  loop:
+    - dev-app-config
+    - dev-service-config
+    - dev-system-config
+  register: cka_lab_verify_dev_configmaps
+  changed_when: false
+  tags:
+    - cka_lab
+    - configmaps
+
+- name: Test Kustomize preview build for base and overlays
+  ansible.builtin.command: >-
+    kubectl kustomize {{ cka_lab_kustomize_dir }}/{{ item }}
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  loop:
+    - base
+    - overlays/development
+    - overlays/production
+  register: cka_lab_kustomize_check
+  changed_when: false
+  tags:
+    - cka_lab
+    - configmaps

@@ -1,0 +1,165 @@
+# Kustomize Practice Guide: ConfigMaps & Overlays (CKA / CKAD)
+
+This directory contains a complete, self-contained Kustomize lab designed for hands-on practice with Kubernetes declarative configuration customization, overlays, and `configMapGenerator`.
+
+Kustomize is natively integrated into `kubectl` (`kubectl kustomize` and `kubectl apply -k`). It allows you to customize raw, template-free YAML files for multiple environments without altering original base manifests.
+
+---
+
+## 1. Directory Structure
+
+```text
+/home/vagrant/cka/kustomize/
+├── README.md                          # This practice guide
+├── base/                              # Common baseline resources
+│   ├── kustomization.yaml             # Base resource list
+│   ├── configmap.yaml                 # Baseline application configuration
+│   ├── deployment.yaml                # Workload referencing webapp-config
+│   └── service.yaml                   # ClusterIP service exposing webapp
+└── overlays/
+    ├── development/                   # Development environment customizations
+    │   ├── kustomization.yaml         # Dev overlay (merges config, adds namePrefix)
+    │   └── dev-settings.properties    # File input for configMapGenerator
+    └── production/                    # Production environment customizations
+        ├── kustomization.yaml         # Prod overlay (sets namespace, adds replicas)
+        └── replica-patch.yaml         # Strategic merge patch for HA & resources
+```
+
+---
+
+## 2. Core Kustomize Concepts Illustrated
+
+| Concept | File / Directive | Purpose |
+| :--- | :--- | :--- |
+| **Base Resources** | `base/kustomization.yaml` | Declares raw YAML files (`resources: [...]`) shared across environments. |
+| **Namespace Override** | `overlays/*/kustomization.yaml` | Sets `namespace: development` or `namespace: default` on all generated objects. |
+| **Name Prefix** | `namePrefix: dev-` / `prod-` | Prefixes names of all resources to avoid collision across teams or stages. |
+| **Common Labels** | `commonLabels: { ... }` | Injects metadata labels into all resources and pod template selectors. |
+| **configMapGenerator** | `configMapGenerator: [...]` | Generates ConfigMaps from literals, key-value files, or merges with existing base configs. |
+| **Merge Behavior** | `behavior: merge` | Overwrites existing keys and appends new keys into the base ConfigMap. |
+| **Hash Suffix Control** | `disableNameSuffixHash: true` | Disables random content-hash suffix (e.g. `webapp-config-4k58m279b9`) for predictable drill names. |
+| **Strategic Merge Patch** | `patches: [path: ...]` | Overlays changes (e.g. replica count, resources) directly into targeted resources. |
+| **JSON 6902 Patch** | `patch: [- op: replace, ...]` | Precise JSON patch for specific attribute modification. |
+
+---
+
+## 3. How to Use the Examples
+
+### Step 1: Inspect the Baseline
+
+View the untransformed base manifests:
+
+```bash
+kubectl kustomize base
+```
+
+*Expected observation*: Generates `webapp-config`, `webapp-deployment` (1 replica, no prefix, default namespace), and `webapp-service`.
+
+---
+
+### Step 2: Preview Overlays (Dry-Run / Client-Side)
+
+Before applying to the cluster, preview the output of any overlay using `kubectl kustomize`:
+
+```bash
+# Preview Development Overlay
+kubectl kustomize overlays/development
+
+# Key items to observe in development:
+# 1. Namespace is set to 'development' on all resources.
+# 2. Names are prefixed: 'dev-webapp-deployment', 'dev-webapp-config', 'dev-webapp-service'.
+# 3. 'webapp-config' contains merged values from base, literals, and dev-settings.properties.
+# 4. Deployment container memory request is patched to 32Mi.
+
+# Preview Production Overlay
+kubectl kustomize overlays/production
+
+# Key items to observe in production:
+# 1. Names are prefixed with 'prod-'.
+# 2. Replicas are scaled from 1 to 3 via replica-patch.yaml.
+# 3. CPU/Memory requests and limits are configured for production load.
+# 4. ConfigMap contains production flags (FEATURE_ANALYTICS=true, CACHE_ENABLED=true).
+```
+
+---
+
+### Step 3: Compare Overlays Against Base
+
+Use standard Unix diffing to visualize exact modifications applied by an overlay:
+
+```bash
+diff -u <(kubectl kustomize base) <(kubectl kustomize overlays/development)
+diff -u <(kubectl kustomize base) <(kubectl kustomize overlays/production)
+```
+
+---
+
+### Step 4: Apply to Kubernetes Cluster
+
+Deploy either overlay using `kubectl apply -k`:
+
+```bash
+# Deploy development overlay
+kubectl apply -k overlays/development
+
+# Verify deployed resources in the development namespace
+kubectl get all,configmap -n development -l environment=development
+
+# Inspect the merged ConfigMap content
+kubectl describe configmap dev-webapp-config -n development
+
+# Test running Pod environment variables injected from ConfigMap
+DEV_POD=$(kubectl get pod -n development -l app.kubernetes.io/name=webapp -o jsonpath='{.items[0].metadata.name}')
+kubectl exec -n development "${DEV_POD}" -- env | grep -E '^(APP_|FEATURE_|DEV_)'
+```
+
+---
+
+### Step 5: Test Production Overlay Deployment
+
+```bash
+# Deploy production overlay
+kubectl apply -k overlays/production
+
+# Verify 3 running replicas in default namespace
+kubectl get pods -n default -l environment=production
+
+# Inspect production ConfigMap
+kubectl describe configmap prod-webapp-config -n default
+```
+
+---
+
+### Step 6: Cleanup
+
+Delete resources managed by the overlay using `kubectl delete -k`:
+
+```bash
+kubectl delete -k overlays/development
+kubectl delete -k overlays/production
+```
+
+---
+
+## 4. Hands-on CKA Exam Practice Drills
+
+### Drill 1: Add a New ConfigMap Key via configMapGenerator
+
+1. Edit `overlays/development/kustomization.yaml`.
+2. Under `configMapGenerator[0].literals`, add `- NEW_FEATURE_ENABLED=true`.
+3. Run `kubectl kustomize overlays/development | grep -A 5 "data:"`.
+4. Verify the new key appears in the generated manifest.
+
+### Drill 2: Modify Resource Limits via Strategic Merge Patch
+
+1. Edit `overlays/production/replica-patch.yaml`.
+2. Change `replicas: 3` to `replicas: 5`.
+3. Increase memory limit to `512Mi`.
+4. Run `kubectl kustomize overlays/production | grep replicas:` to verify.
+
+### Drill 3: Enable Content Hash Suffixes
+
+1. Edit `overlays/development/kustomization.yaml`.
+2. Change `disableNameSuffixHash: true` to `disableNameSuffixHash: false` (or remove the line).
+3. Run `kubectl kustomize overlays/development`.
+4. Notice how `dev-webapp-config-<HASH>` is generated and how `dev-webapp-deployment` automatically updates its `envFrom.configMapRef.name` to match the exact hash!

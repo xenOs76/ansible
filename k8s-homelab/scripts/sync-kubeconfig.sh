@@ -130,7 +130,17 @@ echo "${BOLD}${CYAN}[sync-kubeconfig]${RESET} Synchronizing '${ENV}' Kubernetes 
 # 1. Locate or fetch admin.conf
 SRC_CONF="${TMP_DIR}/source-admin.conf"
 if [[ "${ENV}" == "preprod" ]]; then
-  # For preprod, refresh credentials from the VM rather than accepting a possibly stale staged file
+  # For preprod, ensure apiserver certificate includes all VM network interface IPs
+  if [[ -f "${BASE_DIR}/scripts/update-apiserver-sans.sh" ]]; then
+    UPDATE_CMD="if [ -x /vagrant/scripts/update-apiserver-sans.sh ]; then sudo /vagrant/scripts/update-apiserver-sans.sh; else sudo bash -s; fi"
+    if command -v vagrant >/dev/null 2>&1; then
+      vagrant ssh kube-control-plane -c "${UPDATE_CMD}" < "${BASE_DIR}/scripts/update-apiserver-sans.sh" 2>/dev/null || true
+    elif [[ -x "${BASE_DIR}/scripts/shell.sh" ]]; then
+      "${BASE_DIR}/scripts/shell.sh" --run "vagrant ssh kube-control-plane -c '${UPDATE_CMD}'" < "${BASE_DIR}/scripts/update-apiserver-sans.sh" 2>/dev/null || true
+    fi
+  fi
+
+  # Refresh credentials from the VM rather than accepting a possibly stale staged file
   FETCH_SUCCESS=false
   if command -v vagrant >/dev/null 2>&1; then
     if vagrant ssh kube-control-plane -c "sudo cat /etc/kubernetes/admin.conf" > "${SRC_CONF}" 2>/dev/null; then

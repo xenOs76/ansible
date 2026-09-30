@@ -1,0 +1,45 @@
+---
+# ==============================================================================
+# CKA Training Lab: Namespaces & Sample ConfigMaps Manifest
+# Reference: https://kubernetes.io/docs/concepts/configuration/configmap/
+# Generated dynamically via Jinja2 templates from cka_lab_configmaps_definitions
+# ==============================================================================
+
+# Ensure development namespace exists
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ cka_lab_configmaps_dev_namespace }}
+  labels:
+    environment: {{ cka_lab_configmaps_dev_namespace }}
+    app.kubernetes.io/part-of: cka-lab
+{% for group in cka_lab_configmaps_definitions %}
+---
+# ==============================================================================
+# ConfigMaps in Namespace: {{ group.namespace }}
+# ==============================================================================
+{% for cm in group.configmaps %}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ cm.name }}
+  namespace: {{ group.namespace }}
+  labels:
+{% for lk, lv in cm.labels.items() %}
+    {{ lk }}: {{ lv }}
+{% endfor %}
+{% if cm.immutable | default(false) %}
+immutable: true
+{% endif %}
+data:
+{% for dk, dv in cm.data.items() %}
+{% if '\n' in dv %}
+  {{ dk }}: |
+{{ dv | indent(4, first=True) }}
+{% else %}
+  {{ dk }}: "{{ dv }}"
+{% endif %}
+{% endfor %}
+{% endfor %}
+{% endfor %}

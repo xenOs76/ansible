@@ -1,0 +1,124 @@
+# Helm Practice & Cluster Addons Guide (CKA)
+
+This directory contains standalone Helm automation scripts designed for hands-on Certified Kubernetes Administrator (CKA) practice with package management, cluster monitoring, and metrics addons.
+
+---
+
+## 1. Directory Structure
+
+```text
+/home/vagrant/cka/helm/
+├── README.md                      # This guide
+├── install-kube-metrics.sh        # Metrics Server Helm installer (--kubelet-insecure-tls)
+└── install-kube-prometheus.sh     # Lightweight Prometheus Operator installer (Prometheus only)
+```
+
+---
+
+## 2. Overview of Addon Scripts
+
+| Script | Helm Chart | Target Namespace | Description & Footprint |
+| :--- | :--- | :--- | :--- |
+| `install-kube-metrics.sh` | `metrics-server/metrics-server` | `kube-system` | Enables `kubectl top nodes` and `kubectl top pods`. Configured with `--kubelet-insecure-tls` for homelab kubelet scraping. |
+| `install-kube-prometheus.sh` | `prometheus-community/kube-prometheus-stack` | `monitoring` | Deploys Prometheus Operator and a single-replica Prometheus instance. Grafana, Alertmanager, node-exporter, and kube-state-metrics are disabled for a minimal footprint on lab VMs. |
+
+---
+
+## 3. Usage Instructions
+
+### Script 1: Install Kubernetes Metrics Server
+
+Run the installer:
+
+```bash
+cd /home/vagrant/cka/helm
+./install-kube-metrics.sh
+```
+
+#### Verification
+
+Wait 60–90 seconds for initial metric gathering, then run:
+
+```bash
+# Verify Metrics Server deployment
+kubectl get deployment metrics-server -n kube-system
+
+# Verify node metrics collection
+kubectl top nodes
+
+# Verify pod metrics collection across all namespaces
+kubectl top pods -A
+```
+
+#### Uninstallation
+
+```bash
+helm uninstall metrics-server -n kube-system
+```
+
+---
+
+### Script 2: Install Minimal Prometheus Operator
+
+Run the installer:
+
+```bash
+cd /home/vagrant/cka/helm
+./install-kube-prometheus.sh
+```
+
+#### Verification
+
+```bash
+# Verify Prometheus operator and instance pods
+kubectl get pods -n monitoring
+
+# Verify Prometheus custom resource
+kubectl get prometheus -n monitoring
+
+# Verify registered ServiceMonitors
+kubectl get servicemonitors -A
+```
+
+#### Accessing Prometheus Web UI
+
+Forward the Prometheus server port to localhost:
+
+```bash
+kubectl port-forward -n monitoring svc/kube-prometheus-kube-prome-prometheus 9090:9090
+```
+
+From another terminal or via curl:
+
+```bash
+curl -s http://localhost:9090/-/ready
+```
+
+#### Uninstallation
+
+```bash
+helm uninstall kube-prometheus -n monitoring
+kubectl delete namespace monitoring
+```
+
+---
+
+## 4. Hands-on CKA Exam Practice Drills
+
+### Drill 1: Inspect and Add Helm Repositories
+
+1. Check currently configured Helm repositories:
+   `helm repo list`
+2. Search for available charts in `prometheus-community`:
+   `helm search repo prometheus-community`
+
+### Drill 2: Override Helm Chart Values via CLI
+
+1. Run `helm show values prometheus-community/kube-prometheus-stack | head -n 30` to inspect configurable properties.
+2. Upgrade the release to adjust scrape intervals:
+   `helm upgrade kube-prometheus prometheus-community/kube-prometheus-stack -n monitoring --reuse-values --set prometheus.prometheusSpec.scrapeInterval=15s`
+
+### Drill 3: Create a Custom ServiceMonitor
+
+1. Create a ServiceMonitor to scrape a target application in the `default` namespace.
+2. Verify Prometheus discovers the new target via the Prometheus web UI (`Status -> Targets`).
