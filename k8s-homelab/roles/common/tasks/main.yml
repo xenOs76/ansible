@@ -121,6 +121,7 @@
         alias k=kubectl
         complete -o default -F __start_kubectl k
       fi
+      export koyaml="--dry-run=client -o yaml"
     owner: root
     group: root
     mode: '0644'
@@ -138,6 +139,7 @@
         alias k=kubectl
         complete -o default -F __start_kubectl k
       fi
+      export koyaml="--dry-run=client -o yaml"
     owner: "{{ ansible_user | default('vagrant') }}"
     group: "{{ ansible_user | default('vagrant') }}"
     mode: '0644'

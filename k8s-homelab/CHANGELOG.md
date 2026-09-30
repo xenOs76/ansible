@@ -32,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added bash autocompletion for the `k` (`kubectl`) alias across `/home/vagrant/.bashrc` and `/etc/profile.d/k8s-completion.sh` according to official Kubernetes documentation.
 - Added default `kubectl` user preferences file (`~/.kube/kuberc`) enforcing interactive deletion (`delete.options.interactive: "true"`) for the vagrant user in `roles/common` and `scripts/common.sh`.
 - Added `create-user-context.sh` script and practice guide in `/home/vagrant/cka/rbac/` (with convenience symlink in `/home/vagrant/cka/`) during the CKA lab provisioning phase, following the `bmuschko/cka-crash-course` (Exercise 04) pattern to generate private keys, request and approve CSR certificates, and add a minimal-permission user context (`vagrant`) to `~/.kube/config`.
+- Added helper environment variable `export koyaml="--dry-run=client -o yaml"` across `/etc/profile.d/k8s-completion.sh` and `/home/vagrant/.bashrc` in `roles/common` and `scripts/common.sh` for fast CKA declarative manifest generation.
 
 ### Changed
 

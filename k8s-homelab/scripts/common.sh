@@ -165,7 +165,7 @@ echo "deb [trusted=yes] https://repo.os76.xyz/apt stable main" | sudo tee /etc/a
 sudo apt-get update -y
 sudo apt-get -y install socat kubectl-netdrill bash-completion
 
-# Idempotent kubectl alias and bash completion for vagrant user
+# Idempotent kubectl alias, bash completion, and koyaml variable for vagrant user
 if [[ -f /home/vagrant/.bashrc ]]; then
   if ! grep -q 'complete -o default -F __start_kubectl k' /home/vagrant/.bashrc; then
     cat <<'EOF' >>/home/vagrant/.bashrc
@@ -178,7 +178,25 @@ if command -v kubectl >/dev/null 2>&1; then
 fi
 EOF
   fi
+  if ! grep -q 'export koyaml=' /home/vagrant/.bashrc; then
+    cat <<'EOF' >>/home/vagrant/.bashrc
+
+# Kubectl dry-run client yaml helper
+export koyaml="--dry-run=client -o yaml"
+EOF
+  fi
 fi
+
+# System-wide profile for kubectl completion, aliases, and dry-run helper
+cat <<'EOF' >/etc/profile.d/k8s-completion.sh
+if command -v kubectl >/dev/null 2>&1; then
+  source <(kubectl completion bash)
+  alias k=kubectl
+  complete -o default -F __start_kubectl k
+fi
+export koyaml="--dry-run=client -o yaml"
+EOF
+chmod 0644 /etc/profile.d/k8s-completion.sh
 
 # Kubectl preference file (~/.kube/kuberc) - interactive deletion by default
 mkdir -p /home/vagrant/.kube
