@@ -158,16 +158,9 @@
     - preferences
 
 - name: Configure kubectl preference file (kuberc) with interactive deletion
-  ansible.builtin.copy:
+  ansible.builtin.template:
+    src: kuberc.j2
     dest: "/home/{{ ansible_user | default('vagrant') }}/.kube/kuberc"
-    content: |
-      apiVersion: kubectl.config.k8s.io/v1beta1
-      kind: Preference
-      defaults:
-        - command: delete
-          options:
-            - name: interactive
-              default: "true"
     owner: "{{ ansible_user | default('vagrant') }}"
     group: "{{ ansible_user | default('vagrant') }}"
     mode: '0644'
