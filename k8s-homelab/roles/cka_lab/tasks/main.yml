@@ -1,4 +1,11 @@
 ---
+- name: Execute CKA Lab Scenario - Initial Steps Reminder MOTD (motd)
+  ansible.builtin.include_tasks: scenario_motd.yml
+  when: cka_lab_scenario_motd_enabled | bool
+  tags:
+    - cka_lab
+    - motd
+
 - name: Execute CKA Lab Scenario - User Authentication & RBAC (user_rbac)
   ansible.builtin.include_tasks: scenario_user_rbac.yml
   when: cka_lab_scenario_user_rbac_enabled | bool

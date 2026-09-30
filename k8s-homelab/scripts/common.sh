@@ -37,7 +37,7 @@
 #      - Linux swap disabled immediately and commented out in /etc/fstab.
 #   6. Homelab Tooling:
 #      - OS76 custom APT repo configured for kubectl-netdrill.
-#      - CKA initial steps reminder MOTD provisioned for login display.
+#      - Base diagnostic packages (socat, kubectl-netdrill, bash-completion) installed.
 #
 # Manual Verification:
 #   systemctl status containerd
@@ -158,44 +158,12 @@ sudo swapoff -a
 sudo sed -i '/\sswap\s/ s/^\(.*\)$/#\1/g' /etc/fstab
 
 # ------------------------------------------------------------------------------
-# 6. Diagnostic Tooling & CKA Training MOTD Reminder
+# 6. Diagnostic Tooling
 # ------------------------------------------------------------------------------
-echo "==> [6/6] Installing diagnostic tools and setting up CKA training MOTD..."
+echo "==> [6/6] Installing diagnostic tools..."
 echo "deb [trusted=yes] https://repo.os76.xyz/apt stable main" | sudo tee /etc/apt/sources.list.d/os76.list >/dev/null
 sudo apt-get update -y
 sudo apt-get -y install socat kubectl-netdrill bash-completion
-
-# Provision CKA training initial steps reminder MOTD for SSH user (vagrant)
-cat <<'EOF' >/home/vagrant/.motd
-======================================================================
-                  CKA Training Lab - Next Steps
-======================================================================
-Welcome to the CKA training environment!
-Before starting your practice drills, complete the following initial steps:
-
-  * backup ~/.kube directory
-  * check or configure autocompletion for the kubectl command
-  * check or configure the bash alias k
-  * check or configure the autocompletion for the bash alias k
-  * check or configure safe deletion via ~/.kube/kuberc file
-  * install the cluster via kubeadm
-
-(Note: Running 'make preprod-deploy' will automatically perform
- these setup steps and remove this reminder.)
-======================================================================
-EOF
-chown vagrant:vagrant /home/vagrant/.motd
-chmod 0644 /home/vagrant/.motd
-
-# Register with system update-motd for PAM login display
-mkdir -p /etc/update-motd.d
-cat <<'EOF' >/etc/update-motd.d/99-cka-training
-#!/bin/sh
-if [ -f /home/vagrant/.motd ]; then
-  cat /home/vagrant/.motd
-fi
-EOF
-chmod 0755 /etc/update-motd.d/99-cka-training
 
 echo "==> [common.sh] Node prerequisites installed successfully."
 

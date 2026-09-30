@@ -1,9 +1,15 @@
 ---
 # Scenario toggles (organized by CKA exam domain)
+cka_lab_scenario_motd_enabled: true
 cka_lab_scenario_user_rbac_enabled: true
 cka_lab_scenario_secrets_enabled: true
 cka_lab_scenario_configmaps_enabled: true
 cka_lab_scenario_helm_enabled: true
+
+# Scenario: motd (CKA Initial Steps Reminder Announcement)
+cka_lab_motd_user: "{{ ansible_user | default('vagrant') }}"
+cka_lab_motd_file: "/home/{{ ansible_user | default('vagrant') }}/.motd"
+cka_lab_update_motd_hook: "/etc/update-motd.d/99-cka-training"
 
 # Scenario: user_rbac (User Authentication & RBAC Drill)
 cka_lab_user_rbac_name: "anna"

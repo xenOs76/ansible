@@ -1,0 +1,26 @@
+---
+- name: Render CKA training initial steps reminder MOTD
+  ansible.builtin.template:
+    src: motd.j2
+    dest: "{{ cka_lab_motd_file }}"
+    owner: "{{ cka_lab_motd_user }}"
+    group: "{{ cka_lab_motd_user }}"
+    mode: '0644'
+  tags:
+    - cka_lab
+    - motd
+
+- name: Register CKA training reminder hook in system update-motd
+  ansible.builtin.copy:
+    dest: "{{ cka_lab_update_motd_hook }}"
+    content: |
+      #!/bin/sh
+      if [ -f {{ cka_lab_motd_file }} ]; then
+        cat {{ cka_lab_motd_file }}
+      fi
+    owner: root
+    group: root
+    mode: '0755'
+  tags:
+    - cka_lab
+    - motd

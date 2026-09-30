@@ -10,6 +10,20 @@ Dedicated Ansible role for provisioning isolated hands-on Certified Kubernetes A
 
 ## Scenarios
 
+### Scenario 0: Initial Steps Reminder MOTD (`motd`)
+
+- **Domain**: Exam Workflow & Orientation.
+- **Objective**: Activate dynamic system MOTD reminder on `kube-control-plane` guiding trainees through manual preliminary setup steps:
+  - Provisions `/home/vagrant/.motd` and registers system hook `/etc/update-motd.d/99-cka-training` (`0755`) for PAM SSH login display.
+  - Reminds trainees to manually practice:
+    1. Backup `~/.kube` directory.
+    2. Check/configure autocompletion for `kubectl`.
+    3. Check/configure bash alias `k`.
+    4. Check/configure autocompletion for bash alias `k`.
+    5. Check/configure safe deletion via `~/.kube/kuberc`.
+    6. Install cluster via `kubeadm`.
+  - Automatically deleted upon running full cluster deployment via `make preprod-deploy`.
+
 ### Scenario 1: User Authentication & RBAC (`user_rbac`)
 
 - **Domain**: Security & RBAC.
