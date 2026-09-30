@@ -1,18 +1,20 @@
 # AGENTS.md
 
-Context, architecture, workflows, and operational standards for AI coding agents operating on the `ansible` repository (`xenOs76/ansible`).
+Context, architecture, workflows, and operational standards for AI coding agents operating on the `os76-ansible` repository.
 
 ---
 
 ## 1. Repository Identity & Scope
 
-`ansible` is a public infrastructure-as-code repository containing production-grade Ansible automation playbooks, modular roles, and hands-on lab environments.
+`os76-ansible` is a private infrastructure-as-code monorepo containing Ansible automation playbooks, roles, and lab environments for the OS76 infrastructure.
 
 ### Repository Layout
 
-- **`k8s-homelab/`** — Primary project: automated multi-node Kubernetes (`kubeadm`) cluster provisioning on Libvirt/KVM via Vagrant, CKA practice labs, rolling upgrades, and cluster maintenance.
-- **`.yamllint` & `.markdownlint.yaml`** — Repository-wide static analysis and linting configuration rules.
-- **`LICENSE` & `README.md`** — Open-source license (MIT) and curated project overview documentation.
+- **`k8s-homelab/`** — Primary active project: automated multi-node Kubernetes (`kubeadm`) cluster provisioning on Libvirt/KVM via Vagrant, CKA practice labs, rolling upgrades, and cluster maintenance.
+- **`os76_priv_lan_mgmt/`** — LAN network infrastructure automation (gateway routers, hostapd access points, dnsmasq/unbound DNS resolvers, node exporter metrics, and Let's Encrypt certificates).
+- **`os76_priv_ca/`** — Private Certificate Authority (PKI) management playbooks.
+- **`os76_k3s/` & `archived/`** — Historical and legacy K3s homelab playbooks and Helm charts.
+- **`docs/` & `Docs.md`** — Reference documentation, Ansible filter guides, and upstream bookmarks.
 
 ---
 
@@ -89,7 +91,7 @@ make preprod-destroy
 
 - **`make preprod-up`**: Boots base VMs with containerd and Kubernetes binaries preinstalled.
 - **`make preprod-deploy`**: Full automated cluster deployment via Ansible (`site.yml`). Initializes control plane, configures user preferences, joins workers, installs Cilium, and automatically cleans up `~/.motd`.
-- **`make preprod-cka-lab`**: Deploys dedicated hands-on CKA practice scenarios (`playbooks/cka_lab.yml`) and activates the initial steps reminder MOTD on the control plane (~/.kube backup, kubectl completion, alias k, completion for k, safe deletion kuberc, and cluster install via kubeadm).
+- **`make preprod-cka-lab`**: Deploys dedicated hands-on CKA practice scenarios (`playbooks/cka_lab.yml`) and activates the initial steps reminder MOTD on the control plane (~/.kube backup, kubectl completion, alias k, completion for k, and safe deletion kuberc).
 
 ### Playbook Execution Wrapper (`run-playbook.sh`)
 
@@ -160,14 +162,17 @@ nix shell nixpkgs#ansible-lint --command bash -c \
 
 ---
 
-## 6. Git & Contribution Conventions
+## 6. Git & Mirroring Conventions
 
 1. **Commit Messages**: Follow Conventional Commits format:
    - `feat(k8s-homelab): ...`
    - `fix(scripts): ...`
    - `refactor(common): ...`
    - `docs(cka_lab): ...`
-2. **Upstream Remote**:
-   - `origin` is `git@github.com:xenOs76/ansible.git` on branch `main`.
-3. **Changelog**:
+2. **Gitea Upstream Remote**:
+   - `origin` is `git@git.priv.os76.xyz:xeno/os76-ansible.git` on branch `master`.
+3. **Public GitHub Mirror**:
+   - The `k8s-homelab/` subproject is mirrored publicly at `/home/xeno/git/github/public/ansible/` (`git@github.com:xenOs76/ansible.git` on branch `main`).
+   - When modifying `k8s-homelab`, synchronize changed files to `/home/xeno/git/github/public/ansible/k8s-homelab/`, ensure clean git status, and push to GitHub `origin/main`.
+4. **Changelog**:
    - Every user-facing feature, fix, or scenario addition must be documented under `## [Unreleased]` in `k8s-homelab/CHANGELOG.md`.

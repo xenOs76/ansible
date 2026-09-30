@@ -21,7 +21,6 @@ Dedicated Ansible role for provisioning isolated hands-on Certified Kubernetes A
     3. Check/configure bash alias `k`.
     4. Check/configure autocompletion for bash alias `k`.
     5. Check/configure safe deletion via `~/.kube/kuberc`.
-    6. Install cluster via `kubeadm`.
   - Automatically deleted upon running full cluster deployment via `make preprod-deploy`.
 
 ### Scenario 1: User Authentication & RBAC (`user_rbac`)
