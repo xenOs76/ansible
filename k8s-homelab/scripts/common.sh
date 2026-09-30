@@ -37,7 +37,7 @@
 #      - Linux swap disabled immediately and commented out in /etc/fstab.
 #   6. Homelab Tooling:
 #      - OS76 custom APT repo configured for kubectl-netdrill.
-#      - Idempotent 'alias k=kubectl' added to /home/vagrant/.bashrc.
+#      - Idempotent 'alias k=kubectl' and bash completion added to /home/vagrant/.bashrc.
 #
 # Manual Verification:
 #   systemctl status containerd
@@ -163,11 +163,22 @@ sudo sed -i '/\sswap\s/ s/^\(.*\)$/#\1/g' /etc/fstab
 echo "==> [6/6] Installing diagnostic tools and shell aliases..."
 echo "deb [trusted=yes] https://repo.os76.xyz/apt stable main" | sudo tee /etc/apt/sources.list.d/os76.list >/dev/null
 sudo apt-get update -y
-sudo apt-get -y install socat kubectl-netdrill
+sudo apt-get -y install socat kubectl-netdrill bash-completion
 
-# Idempotent kubectl alias for vagrant user
+# Idempotent kubectl alias and bash completion for vagrant user
 if [[ -f /home/vagrant/.bashrc ]]; then
-  grep -qxF 'alias k=kubectl' /home/vagrant/.bashrc || echo "alias k=kubectl" >>/home/vagrant/.bashrc
+  if ! grep -q 'complete -o default -F __start_kubectl k' /home/vagrant/.bashrc; then
+    cat <<'EOF' >>/home/vagrant/.bashrc
+
+# Kubernetes kubectl bash completion & 'k' alias
+if command -v kubectl >/dev/null 2>&1; then
+  source <(kubectl completion bash)
+  alias k=kubectl
+  complete -o default -F __start_kubectl k
 fi
+EOF
+  fi
+fi
+
 
 echo "==> [common.sh] Node prerequisites installed successfully."

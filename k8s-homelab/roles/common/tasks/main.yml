@@ -116,11 +116,29 @@
   ansible.builtin.copy:
     dest: /etc/profile.d/k8s-completion.sh
     content: |
-      alias k=kubectl
-      complete -o default -F __start_kubectl k 2>/dev/null || true
-      source <(kubectl completion bash 2>/dev/null) 2>/dev/null || true
+      if command -v kubectl >/dev/null 2>&1; then
+        source <(kubectl completion bash)
+        alias k=kubectl
+        complete -o default -F __start_kubectl k
+      fi
     owner: root
     group: root
+    mode: '0644'
+  tags:
+    - common
+
+- name: Ensure kubectl completion and k alias in user .bashrc
+  ansible.builtin.blockinfile:
+    path: "/home/{{ ansible_user | default('vagrant') }}/.bashrc"
+    marker: "# {mark} ANSIBLE MANAGED BLOCK: kubectl completion"
+    block: |
+      if command -v kubectl >/dev/null 2>&1; then
+        source <(kubectl completion bash)
+        alias k=kubectl
+        complete -o default -F __start_kubectl k
+      fi
+    owner: "{{ ansible_user | default('vagrant') }}"
+    group: "{{ ansible_user | default('vagrant') }}"
     mode: '0644'
   tags:
     - common
