@@ -17,7 +17,7 @@ help:
 	@echo "make preprod-provision - Run Vagrant provisioners on running preprod VMs"
 	@echo "make preprod-sync-kubeconfig - Sync preprod credentials (context: k8s-homelab-preprod)"
 	@echo "make prod-sync-kubeconfig    - Sync prod credentials (context: k8s-homelab)"
-	@echo "make preprod-deploy    - Run full site.yml deployment on preprod"
+	@echo "make preprod-deploy    - Run full Ansible playbook deployment on preprod"
 	@echo "make preprod-cni       - Install/verify Cilium CNI on preprod"
 	@echo "make preprod-upgrade   - Run rolling upgrade on preprod"
 	@echo "make preprod-reset     - Teardown/reset cluster on preprod"
