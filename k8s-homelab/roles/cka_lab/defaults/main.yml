@@ -159,3 +159,9 @@ cka_lab_helm_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/helm"
 cka_lab_helm_monitoring_namespace: "monitoring"
 cka_lab_helm_metrics_server_chart_version: ""
 cka_lab_helm_kube_prometheus_chart_version: ""
+cka_lab_helm_ngf_release_name: "ngf"
+cka_lab_helm_ngf_namespace: "nginx-gateway"
+cka_lab_helm_ngf_chart_version: ""
+cka_lab_helm_ngf_service_type: "NodePort"
+cka_lab_helm_ngf_http_port: 30080
+cka_lab_helm_ngf_https_port: 30443

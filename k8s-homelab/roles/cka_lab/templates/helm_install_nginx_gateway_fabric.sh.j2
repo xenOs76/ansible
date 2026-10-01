@@ -1,0 +1,118 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# Script: install-nginx-gateway-fabric.sh
+# Purpose: Deploy or upgrade NGINX Gateway Fabric (Kubernetes Gateway API
+#          implementation) via Helm using the official OCI chart from GitHub Container
+#          Registry (ghcr.io/nginx/charts/nginx-gateway-fabric).
+#
+# Context:
+#   Can be executed directly on the control plane node or from the workstation
+#   when pointing to a valid kubeconfig. Requires 'helm' and 'kubectl'.
+#
+# Usage:
+#   ./install-nginx-gateway-fabric.sh [CHART_VERSION] [SERVICE_TYPE] [HTTP_PORT] [HTTPS_PORT]
+#
+# Arguments:
+#   $1 - CHART_VERSION  (Optional) Pinned Helm chart version to install.
+#                       Default: Latest stable from oci://ghcr.io/nginx/charts/nginx-gateway-fabric.
+#   $2 - SERVICE_TYPE   (Optional) Kubernetes service type (NodePort, LoadBalancer, ClusterIP).
+#                       Default: NodePort (suitable for Libvirt/bare-metal homelab).
+#   $3 - HTTP_PORT      (Optional) Host and NodePort for HTTP traffic. Default: 30080.
+#   $4 - HTTPS_PORT     (Optional) Host and NodePort for HTTPS traffic. Default: 30443.
+#
+# Environment Variables:
+#   KUBECONFIG          - Path to kubeconfig. Defaults to /etc/kubernetes/admin.conf
+#                         if run inside control plane without ~/.kube/config.
+#   RELEASE_NAME        - Helm release name (Default: ngf).
+#   NAMESPACE           - Target namespace for NGINX Gateway Fabric (Default: nginx-gateway).
+#   SERVICE_TYPE        - Service type override (Default: NodePort).
+#   HTTP_PORT           - Port for HTTP ingress (Default: 30080).
+#   HTTPS_PORT          - Port for HTTPS ingress (Default: 30443).
+#
+# Technical Notes:
+#   - Kubernetes Gateway API requires Gateway API Custom Resource Definitions (CRDs)
+#     (GatewayClass, Gateway, HTTPRoute, etc.) to be present prior to controller startup.
+#     This script verifies CRD availability and installs standard Gateway API CRDs if missing.
+#   - Binds host ports 30080 and 30443 on the NGINX container (hostPorts) and assigns matching
+#     deterministic nodePorts on the NGINX Service.
+#
+# Manual Verification:
+#   kubectl get pods,svc -n nginx-gateway
+#   kubectl get gatewayclasses
+#   kubectl rollout status deployment -n nginx-gateway -l app.kubernetes.io/name=nginx-gateway-fabric
+# ==============================================================================
+set -euo pipefail
+
+echo "=== Installing NGINX Gateway Fabric via Helm ==="
+
+# Validate prerequisite CLI tools
+if ! command -v helm >/dev/null 2>&1; then
+  echo "Error: helm is not installed or not in PATH." >&2
+  exit 1
+fi
+
+if ! command -v kubectl >/dev/null 2>&1; then
+  echo "Error: kubectl is not installed or not in PATH." >&2
+  exit 1
+fi
+
+# Detect KUBECONFIG if running as non-root without ~/.kube/config
+if [ -z "${KUBECONFIG:-}" ] && [ -f /etc/kubernetes/admin.conf ] && [ ! -f "${HOME}/.kube/config" ]; then
+  export KUBECONFIG=/etc/kubernetes/admin.conf
+fi
+
+RELEASE_NAME="${RELEASE_NAME:-{{ cka_lab_helm_ngf_release_name }}}"
+TARGET_NAMESPACE="${NAMESPACE:-{{ cka_lab_helm_ngf_namespace }}}"
+CHART_VERSION="${1:-{{ cka_lab_helm_ngf_chart_version }}}"
+SERVICE_TYPE="${2:-${SERVICE_TYPE:-{{ cka_lab_helm_ngf_service_type }}}}"
+HTTP_PORT="${3:-${HTTP_PORT:-{{ cka_lab_helm_ngf_http_port }}}}"
+HTTPS_PORT="${4:-${HTTPS_PORT:-{{ cka_lab_helm_ngf_https_port }}}}"
+
+EXTRA_ARGS=()
+if [ -n "${CHART_VERSION}" ]; then
+  EXTRA_ARGS+=(--version "${CHART_VERSION}")
+fi
+
+# ------------------------------------------------------------------------------
+# 1. Install Gateway API Standard CRDs (if not already installed)
+# ------------------------------------------------------------------------------
+echo "Checking Kubernetes Gateway API CRD availability..."
+if ! kubectl get crd gatewayclasses.gateway.networking.k8s.io >/dev/null 2>&1; then
+  echo "Installing Gateway API standard CRDs from upstream repository..."
+  kubectl apply -k "https://github.com/nginx/nginx-gateway-fabric/config/crd/gateway-api/standard"
+  echo "Gateway API CRDs installed successfully."
+else
+  echo "Gateway API CRDs already present in cluster."
+fi
+
+# ------------------------------------------------------------------------------
+# 2. Deploy or Upgrade NGINX Gateway Fabric Chart
+# ------------------------------------------------------------------------------
+echo "Installing/upgrading NGINX Gateway Fabric release '${RELEASE_NAME}' in namespace '${TARGET_NAMESPACE}'..."
+helm upgrade --install "${RELEASE_NAME}" oci://ghcr.io/nginx/charts/nginx-gateway-fabric \
+  --namespace "${TARGET_NAMESPACE}" \
+  --create-namespace \
+  --set nginx.service.type="${SERVICE_TYPE}" \
+  --set "nginx.service.nodePorts[0].port=${HTTP_PORT}" \
+  --set "nginx.service.nodePorts[0].listenerPort=80" \
+  --set "nginx.service.nodePorts[1].port=${HTTPS_PORT}" \
+  --set "nginx.service.nodePorts[1].listenerPort=443" \
+  --set "nginx.container.hostPorts[0].port=${HTTP_PORT}" \
+  --set "nginx.container.hostPorts[0].containerPort=80" \
+  --set "nginx.container.hostPorts[1].port=${HTTPS_PORT}" \
+  --set "nginx.container.hostPorts[1].containerPort=443" \
+  "${EXTRA_ARGS[@]}"
+
+echo "Waiting for NGINX Gateway Fabric deployment rollout..."
+kubectl rollout status deployment -n "${TARGET_NAMESPACE}" -l app.kubernetes.io/name=nginx-gateway-fabric --timeout=180s
+
+echo "=== NGINX Gateway Fabric installed successfully ==="
+echo ""
+echo "Active workloads and Gateway API resources:"
+kubectl get pods,svc -n "${TARGET_NAMESPACE}"
+echo ""
+echo "Registered GatewayClasses:"
+kubectl get gatewayclasses
+echo ""
+echo "To practice creating a Gateway and HTTPRoute, refer to:"
+echo "  https://docs.nginx.com/nginx-gateway-fabric/"

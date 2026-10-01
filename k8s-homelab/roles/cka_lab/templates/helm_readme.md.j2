@@ -10,7 +10,8 @@ This directory contains standalone Helm automation scripts designed for hands-on
 /home/vagrant/cka/helm/
 ├── README.md                      # This guide
 ├── install-kube-metrics.sh        # Metrics Server Helm installer (--kubelet-insecure-tls)
-└── install-kube-prometheus.sh     # Lightweight Prometheus Operator installer (Prometheus only)
+├── install-kube-prometheus.sh     # Lightweight Prometheus Operator installer (Prometheus only)
+└── install-nginx-gateway-fabric.sh # NGINX Gateway Fabric installer (Gateway API)
 ```
 
 ---
@@ -21,6 +22,7 @@ This directory contains standalone Helm automation scripts designed for hands-on
 | :--- | :--- | :--- | :--- |
 | `install-kube-metrics.sh` | `metrics-server/metrics-server` | `kube-system` | Enables `kubectl top nodes` and `kubectl top pods`. Configured with `--kubelet-insecure-tls` for homelab kubelet scraping. |
 | `install-kube-prometheus.sh` | `prometheus-community/kube-prometheus-stack` | `monitoring` | Deploys Prometheus Operator and a single-replica Prometheus instance. Grafana, Alertmanager, node-exporter, and kube-state-metrics are disabled for a minimal footprint on lab VMs. |
+| `install-nginx-gateway-fabric.sh` | `oci://ghcr.io/nginx/charts/nginx-gateway-fabric` | `nginx-gateway` | Deploys NGINX Gateway Fabric and standard Kubernetes Gateway API CRDs (`gatewayclasses`, `gateways`, `httproutes`). Configured with `NodePort` service type for lab VM accessibility. |
 
 ---
 
@@ -103,6 +105,40 @@ kubectl delete namespace monitoring
 
 ---
 
+### Script 3: Install NGINX Gateway Fabric
+
+Run the installer:
+
+```bash
+cd /home/vagrant/cka/helm
+./install-nginx-gateway-fabric.sh
+```
+
+#### Verification
+
+```bash
+# Verify Gateway API CRDs
+kubectl get crds | grep -i gateway
+
+# Verify GatewayClass registered by controller
+kubectl get gatewayclasses
+
+# Verify NGINX Gateway Fabric deployment and service (NodePorts 30080/30443)
+kubectl get pods,svc -n nginx-gateway
+
+# Test connectivity from control plane or workstation on host/NodePort 30080
+curl -I http://192.168.56.20:30080/
+```
+
+#### Uninstallation
+
+```bash
+helm uninstall ngf -n nginx-gateway
+kubectl delete namespace nginx-gateway
+```
+
+---
+
 ## 4. Hands-on CKA Exam Practice Drills
 
 ### Drill 1: Inspect and Add Helm Repositories
@@ -122,3 +158,9 @@ kubectl delete namespace monitoring
 
 1. Create a ServiceMonitor to scrape a target application in the `default` namespace.
 2. Verify Prometheus discovers the new target via the Prometheus web UI (`Status -> Targets`).
+
+### Drill 4: Inspect GatewayClass and Create a Gateway
+
+1. Verify the `nginx` GatewayClass is accepted:
+   `kubectl get gatewayclass nginx -o yaml`
+2. Inspect the Gateway API HTTPRoute specification and create a route pointing to a test service.

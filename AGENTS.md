@@ -56,7 +56,7 @@ Dedicated CKA certification scenarios provisioned on `kube-control-plane`:
 - **ConfigMaps & Kustomize (`configmaps`)**:
   - Sample ConfigMaps across namespaces at `/home/vagrant/cka/configmaps/sample-configmaps.yaml`.
   - Self-contained Kustomize lab at `/home/vagrant/cka/kustomize/` (`base/`, `overlays/development/`, `overlays/production/`).
-- **Helm & Addons (`helm`)**: Standalone installation scripts for Metrics Server (`install-kube-metrics.sh`) and Prometheus Operator (`install-kube-prometheus.sh`) at `/home/vagrant/cka/helm/`.
+- **Helm & Addons (`helm`)**: Standalone installation scripts for Metrics Server (`install-kube-metrics.sh`) Prometheus Operator (`install-kube-prometheus.sh`), and NGINX Gateway Fabric (`install-nginx-gateway-fabric.sh`) at `/home/vagrant/cka/helm/`.
 
 ---
 

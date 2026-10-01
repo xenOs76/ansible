@@ -79,16 +79,17 @@ Dedicated Ansible role for provisioning isolated hands-on Certified Kubernetes A
   - Individual ConfigMap files: `/home/vagrant/cka/configmaps/default/` and `/home/vagrant/cka/configmaps/development/`
   - Kustomize directory: `/home/vagrant/cka/kustomize/`
 
-### Scenario 4: Helm Tools & Monitoring (`helm`)
+### Scenario 4: Helm Tools, Monitoring & Gateway API (`helm`)
 
 - **Domain**: Cluster Architecture, Installation & Configuration.
-- **Reference**: [Helm Documentation](https://helm.sh/docs/) & [Prometheus Community Helm Charts](https://github.com/prometheus-community/helm-charts)
-- **Objective**: Provision standalone Helm deployment scripts for hands-on cluster addon management and monitoring:
+- **Reference**: [Helm Documentation](https://helm.sh/docs/), [Prometheus Community Helm Charts](https://github.com/prometheus-community/helm-charts) & [NGINX Gateway Fabric](https://github.com/nginx/nginx-gateway-fabric)
+- **Objective**: Provision standalone Helm deployment scripts for hands-on cluster addon management, monitoring, and Gateway API:
   1. `install-kube-metrics.sh`: Deploys Kubernetes Metrics Server with `--kubelet-insecure-tls` enabling `kubectl top nodes` and `kubectl top pods`.
   2. `install-kube-prometheus.sh`: Deploys the Prometheus Operator (`kube-prometheus-stack`) configured with Prometheus ONLY (Alertmanager, Grafana, node-exporter, and kube-state-metrics disabled) for minimal resource footprint on lab VMs.
+  3. `install-nginx-gateway-fabric.sh`: Deploys NGINX Gateway Fabric via the official OCI Helm chart (`oci://ghcr.io/nginx/charts/nginx-gateway-fabric`) along with required Kubernetes Gateway API CRDs (`gatewayclasses`, `gateways`, `httproutes`).
 - **Artifacts**:
   - Helm scripts and guide directory: `/home/vagrant/cka/helm/`
-  - Installer scripts: `install-kube-metrics.sh` and `install-kube-prometheus.sh`
+  - Installer scripts: `install-kube-metrics.sh`, `install-kube-prometheus.sh`, and `install-nginx-gateway-fabric.sh`
   - Practice guide: `/home/vagrant/cka/helm/README.md`
 
 ## Verification inside Control Plane
@@ -211,4 +212,10 @@ kubectl top nodes
 ./install-kube-prometheus.sh
 kubectl get pods,svc -n monitoring
 kubectl get prometheus -n monitoring
+
+# Deploy NGINX Gateway Fabric (Gateway API)
+./install-nginx-gateway-fabric.sh
+kubectl get pods,svc -n nginx-gateway
+kubectl get gatewayclasses
+curl -I http://192.168.56.20:30080/
 ```
