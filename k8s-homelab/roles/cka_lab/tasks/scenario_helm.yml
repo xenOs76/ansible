@@ -30,8 +30,20 @@
     - {src: "helm_install_kube_metrics.sh.j2", dest: "install-kube-metrics.sh", mode: "0755"}
     - {src: "helm_install_kube_prometheus.sh.j2", dest: "install-kube-prometheus.sh", mode: "0755"}
     - {src: "helm_install_nginx_gateway_fabric.sh.j2", dest: "install-nginx-gateway-fabric.sh", mode: "0755"}
+    - {src: "helm_install_httpbin_go.sh.j2", dest: "install-httpbin-go.sh", mode: "0755"}
   loop_control:
     label: "helm/{{ item.dest }}"
+  tags:
+    - cka_lab
+    - helm
+
+- name: Create symlink for install-httpbingo.sh alias
+  ansible.builtin.file:
+    src: install-httpbin-go.sh
+    dest: "{{ cka_lab_helm_dir }}/install-httpbingo.sh"
+    state: link
+    owner: "{{ ansible_user | default('vagrant') }}"
+    group: "{{ ansible_user | default('vagrant') }}"
   tags:
     - cka_lab
     - helm
@@ -43,6 +55,7 @@
     - install-kube-metrics.sh
     - install-kube-prometheus.sh
     - install-nginx-gateway-fabric.sh
+    - install-httpbin-go.sh
   register: cka_lab_helm_syntax_check
   changed_when: false
   tags:

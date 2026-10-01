@@ -1,0 +1,108 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# Script: install-httpbin-go.sh
+# Purpose: Deploy or upgrade httpbin-go (mccutchen/go-httpbin) via Helm from the
+#          official estahn chart repository (https://github.com/estahn/charts/tree/main/charts/httpbingo)
+#          with minimal resource footprint for homelab CKA drills.
+#
+# Context:
+#   Can be executed directly on the control plane node or from the workstation
+#   when pointing to a valid kubeconfig. Requires 'helm' and 'kubectl'.
+#
+# Usage:
+#   ./install-httpbin-go.sh [CHART_VERSION] [SERVICE_TYPE]
+#
+# Arguments:
+#   $1 - CHART_VERSION  (Optional) Pinned Helm chart version to install.
+#                       Default: Latest available from upstream Helm repo.
+#   $2 - SERVICE_TYPE   (Optional) Kubernetes service type (ClusterIP, NodePort, LoadBalancer).
+#                       Default: ClusterIP.
+#
+# Environment Variables:
+#   KUBECONFIG          - Path to kubeconfig. Automatically defaults to
+#                         /etc/kubernetes/admin.conf if run inside the control plane VM
+#                         without an existing ~/.kube/config.
+#   RELEASE_NAME        - Helm release name (Default: httpbingo).
+#   NAMESPACE           - Target namespace for httpbin-go (Default: default).
+#   SERVICE_TYPE        - Service type override (Default: ClusterIP).
+#   CPU_REQUEST         - Container CPU request (Default: 10m).
+#   MEM_REQUEST         - Container memory request (Default: 16Mi).
+#   CPU_LIMIT           - Container CPU limit (Default: 100m).
+#   MEM_LIMIT           - Container memory limit (Default: 64Mi).
+#
+# Technical Notes:
+#   - httpbin-go is a compiled Go rewrite of httpbin.org providing HTTP echo
+#     endpoints (/get, /post, /headers, /status/:code, /delay/:n, etc.).
+#   - Configured with a single replica and lean resource requests (10m CPU, 16Mi RAM)
+#     to minimize memory pressure on 2GB worker nodes while providing an ideal
+#     upstream target for Gateway API, Ingress, and NetworkPolicy CKA scenarios.
+#
+# Manual Verification:
+#   kubectl rollout status deployment httpbingo -n default
+#   kubectl get pods,svc -l app.kubernetes.io/name=httpbingo
+#   kubectl run test-curl --rm -i --restart=Never --image=curlimages/curl:latest -- http://httpbingo.default.svc.cluster.local/get
+# ==============================================================================
+set -euo pipefail
+
+echo "=== Installing httpbin-go via Helm ==="
+
+# Validate prerequisite CLI tools
+if ! command -v helm >/dev/null 2>&1; then
+  echo "Error: helm is not installed or not in PATH." >&2
+  exit 1
+fi
+
+if ! command -v kubectl >/dev/null 2>&1; then
+  echo "Error: kubectl is not installed or not in PATH." >&2
+  exit 1
+fi
+
+# Detect KUBECONFIG if running as non-root without ~/.kube/config
+if [ -z "${KUBECONFIG:-}" ] && [ -f /etc/kubernetes/admin.conf ] && [ ! -f "${HOME}/.kube/config" ]; then
+  export KUBECONFIG=/etc/kubernetes/admin.conf
+fi
+
+RELEASE_NAME="${RELEASE_NAME:-{{ cka_lab_helm_httpbingo_release_name }}}"
+TARGET_NAMESPACE="${NAMESPACE:-{{ cka_lab_helm_httpbingo_namespace }}}"
+CHART_VERSION="${1:-{{ cka_lab_helm_httpbingo_chart_version }}}"
+SERVICE_TYPE="${2:-${SERVICE_TYPE:-{{ cka_lab_helm_httpbingo_service_type }}}}"
+CPU_REQUEST="${CPU_REQUEST:-{{ cka_lab_helm_httpbingo_cpu_request }}}"
+MEM_REQUEST="${MEM_REQUEST:-{{ cka_lab_helm_httpbingo_memory_request }}}"
+CPU_LIMIT="${CPU_LIMIT:-{{ cka_lab_helm_httpbingo_cpu_limit }}}"
+MEM_LIMIT="${MEM_LIMIT:-{{ cka_lab_helm_httpbingo_memory_limit }}}"
+
+EXTRA_ARGS=()
+if [ -n "${CHART_VERSION}" ]; then
+  EXTRA_ARGS+=(--version "${CHART_VERSION}")
+fi
+
+echo "Adding and updating estahn Helm repository..."
+helm repo add estahn https://estahn.github.io/charts/ >/dev/null 2>&1 || true
+helm repo update estahn
+
+echo "Installing/upgrading httpbin-go release '${RELEASE_NAME}' in namespace '${TARGET_NAMESPACE}'..."
+helm upgrade --install "${RELEASE_NAME}" estahn/httpbingo \
+  --namespace "${TARGET_NAMESPACE}" \
+  --create-namespace \
+  --set replicaCount=1 \
+  --set service.type="${SERVICE_TYPE}" \
+  --set resources.requests.cpu="${CPU_REQUEST}" \
+  --set resources.requests.memory="${MEM_REQUEST}" \
+  --set resources.limits.cpu="${CPU_LIMIT}" \
+  --set resources.limits.memory="${MEM_LIMIT}" \
+  "${EXTRA_ARGS[@]}"
+
+echo "Waiting for httpbin-go deployment rollout..."
+kubectl rollout status deployment "${RELEASE_NAME}" -n "${TARGET_NAMESPACE}" --timeout=120s
+
+echo "=== httpbin-go installed successfully ==="
+echo ""
+echo "Active workloads in namespace '${TARGET_NAMESPACE}':"
+kubectl get pods,svc -n "${TARGET_NAMESPACE}" -l "app.kubernetes.io/instance=${RELEASE_NAME}"
+echo ""
+echo "To test httpbin-go endpoints within the cluster:"
+echo "  kubectl run test-curl --rm -i --restart=Never --image=curlimages/curl:latest -- http://${RELEASE_NAME}.${TARGET_NAMESPACE}.svc.cluster.local/get"
+echo ""
+echo "Or forward port locally:"
+echo "  kubectl port-forward -n ${TARGET_NAMESPACE} svc/${RELEASE_NAME} 8080:80"
+echo "  curl http://localhost:8080/get"

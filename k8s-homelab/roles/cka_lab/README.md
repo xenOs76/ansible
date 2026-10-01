@@ -82,14 +82,15 @@ Dedicated Ansible role for provisioning isolated hands-on Certified Kubernetes A
 ### Scenario 4: Helm Tools, Monitoring & Gateway API (`helm`)
 
 - **Domain**: Cluster Architecture, Installation & Configuration.
-- **Reference**: [Helm Documentation](https://helm.sh/docs/), [Prometheus Community Helm Charts](https://github.com/prometheus-community/helm-charts) & [NGINX Gateway Fabric](https://github.com/nginx/nginx-gateway-fabric)
+- **Reference**: [Helm Documentation](https://helm.sh/docs/), [Prometheus Community Helm Charts](https://github.com/prometheus-community/helm-charts), [NGINX Gateway Fabric](https://github.com/nginx/nginx-gateway-fabric) & [estahn/httpbingo Chart](https://github.com/estahn/charts/tree/main/charts/httpbingo)
 - **Objective**: Provision standalone Helm deployment scripts for hands-on cluster addon management, monitoring, and Gateway API:
   1. `install-kube-metrics.sh`: Deploys Kubernetes Metrics Server with `--kubelet-insecure-tls` enabling `kubectl top nodes` and `kubectl top pods`.
-  2. `install-kube-prometheus.sh`: Deploys the Prometheus Operator (`kube-prometheus-stack`) configured with Prometheus ONLY (Alertmanager, Grafana, node-exporter, and kube-state-metrics disabled) for minimal resource footprint on lab VMs.
-  3. `install-nginx-gateway-fabric.sh`: Deploys NGINX Gateway Fabric via the official OCI Helm chart (`oci://ghcr.io/nginx/charts/nginx-gateway-fabric`) along with required Kubernetes Gateway API CRDs (`gatewayclasses`, `gateways`, `httproutes`).
+  1. `install-kube-prometheus.sh`: Deploys the Prometheus Operator (`kube-prometheus-stack`) configured with Prometheus ONLY (Alertmanager, Grafana, node-exporter, and kube-state-metrics disabled) for minimal resource footprint on lab VMs.
+  1. `install-nginx-gateway-fabric.sh`: Deploys NGINX Gateway Fabric via the official OCI Helm chart (`oci://ghcr.io/nginx/charts/nginx-gateway-fabric`) along with required Kubernetes Gateway API CRDs (`gatewayclasses`, `gateways`, `httproutes`).
+  1. `install-httpbin-go.sh`: Deploys `go-httpbin` (`mccutchen/go-httpbin`) via `estahn/httpbingo` with minimal resource footprint (10m CPU / 16Mi RAM) as a lightweight HTTP echo target for Gateway API and Ingress routing drills.
 - **Artifacts**:
   - Helm scripts and guide directory: `/home/vagrant/cka/helm/`
-  - Installer scripts: `install-kube-metrics.sh`, `install-kube-prometheus.sh`, and `install-nginx-gateway-fabric.sh`
+  - Installer scripts: `install-kube-metrics.sh`, `install-kube-prometheus.sh`, `install-nginx-gateway-fabric.sh`, and `install-httpbin-go.sh`
   - Practice guide: `/home/vagrant/cka/helm/README.md`
 
 ## Verification inside Control Plane
@@ -218,4 +219,9 @@ kubectl get prometheus -n monitoring
 kubectl get pods,svc -n nginx-gateway
 kubectl get gatewayclasses
 curl -I http://192.168.56.20:30080/
+
+# Deploy Lightweight httpbin-go (Target Backend)
+./install-httpbin-go.sh
+kubectl get pods,svc -l app.kubernetes.io/instance=httpbingo
+kubectl run test-curl --rm -i --restart=Never --image=curlimages/curl:latest -- http://httpbingo.default.svc.cluster.local/get
 ```

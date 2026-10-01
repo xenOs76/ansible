@@ -165,3 +165,11 @@ cka_lab_helm_ngf_chart_version: ""
 cka_lab_helm_ngf_service_type: "NodePort"
 cka_lab_helm_ngf_http_port: 30080
 cka_lab_helm_ngf_https_port: 30443
+cka_lab_helm_httpbingo_release_name: "httpbingo"
+cka_lab_helm_httpbingo_namespace: "default"
+cka_lab_helm_httpbingo_chart_version: ""
+cka_lab_helm_httpbingo_service_type: "ClusterIP"
+cka_lab_helm_httpbingo_cpu_request: "10m"
+cka_lab_helm_httpbingo_memory_request: "16Mi"
+cka_lab_helm_httpbingo_cpu_limit: "100m"
+cka_lab_helm_httpbingo_memory_limit: "64Mi"

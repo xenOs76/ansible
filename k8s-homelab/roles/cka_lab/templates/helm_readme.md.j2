@@ -9,6 +9,8 @@ This directory contains standalone Helm automation scripts designed for hands-on
 ```text
 /home/vagrant/cka/helm/
 ├── README.md                      # This guide
+├── install-httpbin-go.sh          # Lightweight httpbin-go installer (mccutchen/go-httpbin)
+├── install-httpbingo.sh -> install-httpbin-go.sh # Convenience alias symlink
 ├── install-kube-metrics.sh        # Metrics Server Helm installer (--kubelet-insecure-tls)
 ├── install-kube-prometheus.sh     # Lightweight Prometheus Operator installer (Prometheus only)
 └── install-nginx-gateway-fabric.sh # NGINX Gateway Fabric installer (Gateway API)
@@ -20,6 +22,7 @@ This directory contains standalone Helm automation scripts designed for hands-on
 
 | Script | Helm Chart | Target Namespace | Description & Footprint |
 | :--- | :--- | :--- | :--- |
+| `install-httpbin-go.sh` | `estahn/httpbingo` | `default` | Deploys Go-based `httpbin` service with minimal footprint (10m CPU / 16Mi RAM). Ideal test backend for Ingress, Gateway API, and NetworkPolicy drills. |
 | `install-kube-metrics.sh` | `metrics-server/metrics-server` | `kube-system` | Enables `kubectl top nodes` and `kubectl top pods`. Configured with `--kubelet-insecure-tls` for homelab kubelet scraping. |
 | `install-kube-prometheus.sh` | `prometheus-community/kube-prometheus-stack` | `monitoring` | Deploys Prometheus Operator and a single-replica Prometheus instance. Grafana, Alertmanager, node-exporter, and kube-state-metrics are disabled for a minimal footprint on lab VMs. |
 | `install-nginx-gateway-fabric.sh` | `oci://ghcr.io/nginx/charts/nginx-gateway-fabric` | `nginx-gateway` | Deploys NGINX Gateway Fabric and standard Kubernetes Gateway API CRDs (`gatewayclasses`, `gateways`, `httproutes`). Configured with `NodePort` service type for lab VM accessibility. |
@@ -137,6 +140,36 @@ helm uninstall ngf -n nginx-gateway
 kubectl delete namespace nginx-gateway
 ```
 
+### Script 4: Install httpbin-go (Test Target Backend)
+
+Run the installer:
+
+```bash
+cd /home/vagrant/cka/helm
+./install-httpbin-go.sh
+```
+
+*(Note: `install-httpbingo.sh` is provided as a convenience symlink).*
+
+#### Verification
+
+```bash
+# Verify httpbin-go deployment rollout
+kubectl rollout status deployment httpbingo -n default
+
+# Inspect pods and services
+kubectl get pods,svc -l app.kubernetes.io/instance=httpbingo
+
+# Query /get endpoint via ephemeral curl pod
+kubectl run test-curl --rm -i --restart=Never --image=curlimages/curl:latest -- http://httpbingo.default.svc.cluster.local/get
+```
+
+#### Uninstallation
+
+```bash
+helm uninstall httpbingo -n default
+```
+
 ---
 
 ## 4. Hands-on CKA Exam Practice Drills
@@ -145,22 +178,28 @@ kubectl delete namespace nginx-gateway
 
 1. Check currently configured Helm repositories:
    `helm repo list`
-2. Search for available charts in `prometheus-community`:
+1. Search for available charts in `prometheus-community`:
    `helm search repo prometheus-community`
 
 ### Drill 2: Override Helm Chart Values via CLI
 
 1. Run `helm show values prometheus-community/kube-prometheus-stack | head -n 30` to inspect configurable properties.
-2. Upgrade the release to adjust scrape intervals:
+1. Upgrade the release to adjust scrape intervals:
    `helm upgrade kube-prometheus prometheus-community/kube-prometheus-stack -n monitoring --reuse-values --set prometheus.prometheusSpec.scrapeInterval=15s`
 
 ### Drill 3: Create a Custom ServiceMonitor
 
 1. Create a ServiceMonitor to scrape a target application in the `default` namespace.
-2. Verify Prometheus discovers the new target via the Prometheus web UI (`Status -> Targets`).
+1. Verify Prometheus discovers the new target via the Prometheus web UI (`Status -> Targets`).
 
 ### Drill 4: Inspect GatewayClass and Create a Gateway
 
 1. Verify the `nginx` GatewayClass is accepted:
    `kubectl get gatewayclass nginx -o yaml`
-2. Inspect the Gateway API HTTPRoute specification and create a route pointing to a test service.
+1. Inspect the Gateway API HTTPRoute specification and create a route pointing to a test service.
+
+### Drill 5: Connect Gateway API HTTPRoute to httpbin-go
+
+1. Deploy httpbin-go via `./install-httpbin-go.sh`.
+1. Create an `HTTPRoute` in namespace `default` matching `/headers` and forwarding traffic to `httpbingo:80`.
+1. Curl the NodePort endpoint (e.g. `http://192.168.56.20:30080/headers`) and verify request headers are reflected in JSON.
