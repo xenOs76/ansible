@@ -1,0 +1,24 @@
+---
+- name: Deploy Caddy environment configuration file
+  ansible.builtin.template:
+    src: caddy.env.j2
+    dest: "{{ caddy_config_dir }}/caddy.env"
+    owner: root
+    group: "{{ caddy_group }}"
+    mode: "0600"
+  notify: Restart Caddy
+  tags:
+    - caddy
+    - caddy_config
+
+- name: Deploy Caddyfile configuration
+  ansible.builtin.template:
+    src: Caddyfile.j2
+    dest: "{{ caddy_config_dir }}/Caddyfile"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload Caddy
+  tags:
+    - caddy
+    - caddy_config

@@ -6,6 +6,8 @@ ignore: |
   archived/
   back/
   .git/
+  *.sops.yaml
+  *.sops.yml
 
 rules:
   comments:

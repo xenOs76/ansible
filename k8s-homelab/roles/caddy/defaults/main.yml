@@ -1,59 +1,28 @@
 ---
-# Playbook suite version
-playbook_version: "1.2.0"
+# ==============================================================================
+# Role Defaults: Caddy Ingress Reverse Proxy
+# ==============================================================================
 
-# Kubernetes versions and repositories
-k8s_version: "1.34.1-1.1"
-k8s_version_major_minor: "v1.34"
-
-# Cluster networking
-pod_network_cidr: "10.1.0.0/16"
-cluster_name: "k8s-homelab"
-
-# Kubernetes context and credential naming for local client sync
-k8s_context_name: "k8s-homelab"
-k8s_user_name: "k8s-homelab-admin"
-
-# Container runtime (CRI)
-container_runtime: "containerd"
-cri_socket: "unix:///run/containerd/containerd.sock"
-cni_plugins_version: "v1.6.0"
-
-# CNI (Cilium)
-cni_type: "cilium"
-cilium_cli_version: "v0.16.24"
-cilium_install_extra_args: ""
-
-# User config for kubeconfig setup
-cluster_admin_users:
-  - root
-  - "{{ ansible_user | default('vagrant') }}"
-
-# OS76 Custom APT Repository (kubectl-netdrill, etc.)
-os76_apt_repo_enabled: true
-os76_apt_repo: "deb [trusted=yes] https://repo.os76.xyz/apt stable main"
-os76_apt_packages:
-  - kubectl-netdrill
-
-# Control plane bootstrap tooling (Helm, k9s, etcdctl, etcdutl)
-k9s_version: "v0.51.0"
-k9s_skin: "nord"
-helm_apt_repo: "deb [signed-by=/etc/apt/keyrings/helm.gpg] https://packages.buildkite.com/helm-linux/helm-debian/any/ any main"
-helm_apt_key_url: "https://packages.buildkite.com/helm-linux/helm-debian/gpgkey"
-helm_apt_key_fingerprint: "DDF78C3E6EBB2D2CC223C95C62BA89D07698DBC6"  # gitleaks:allow
-
-# Caddy ingress reverse proxy and DNS-01 ACME
+# Caddy & xcaddy release versions
 caddy_version: "v2.11.4"
 caddy_xcaddy_version: "v0.4.4"
 caddy_dns_plugin: "github.com/caddy-dns/powerdns@v1.0.2"
 caddy_check_upstream_release: true
+caddy_arch: "{{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}"
+
+# Domain settings (preprod defaults to k8s-pre.os76.xyz; prod to k8s.os76.xyz)
 caddy_domain_suffix: "{{ 'k8s-pre.os76.xyz' if ('preprod' in groups) else 'k8s.os76.xyz' }}"
 caddy_domains:
   - "*.{{ caddy_domain_suffix }}"
   - "{{ caddy_domain_suffix }}"
+
+# Reverse proxy backend settings (points to NodePort 30443 on worker nodes)
 caddy_upstream_port: 30443
+caddy_upstream_nodes: []  # Defaults to IPs from groups['workers'] or groups['k8s_cluster']
 caddy_backend_tls: true
 caddy_backend_tls_insecure: true
+
+# PowerDNS API configuration for DNS-01 ACME challenge
 caddy_sops_secrets_file: >-
   {{ playbook_dir ~ '/../secrets.sops.yaml' if (playbook_dir ~ '/../secrets.sops.yaml') is file else (playbook_dir ~ '/secrets.sops.yaml') }}
 caddy_powerdns_server_url: >-
@@ -67,10 +36,8 @@ caddy_powerdns_api_token: >-
     (lookup('community.sops.sops', caddy_sops_secrets_file, errors='ignore') | default('{}', true) | from_yaml).caddy_powerdns_api_token
     | default(lookup('ansible.builtin.env', 'POWERDNS_API_TOKEN') | default('', true))
   }}
-caddy_acme_email: ""
-caddy_acme_ca: ""
 
-# Caddy Garage S3 binary cache settings (retrieves prebuilt binary if present, saves if built)
+# Garage S3 binary cache settings (retrieves prebuilt binary if present, saves if built)
 caddy_s3_cache_enabled: true
 caddy_s3_cache_upload: true
 caddy_garage_endpoint: "https://garage-s3.0.os76.xyz"
@@ -87,4 +54,17 @@ caddy_garage_secret_key: >-
     (lookup('community.sops.sops', caddy_sops_secrets_file, errors='ignore') | default('{}', true) | from_yaml).caddy_garage_secret_key
     | default(lookup('ansible.builtin.env', 'GARAGE_SECRET_KEY') | default(lookup('ansible.builtin.env', 'AWS_SECRET_ACCESS_KEY') | default('', true)))
   }}
+
+# Let's Encrypt / ACME settings
+caddy_acme_email: ""
+caddy_acme_ca: ""  # Set e.g. to https://acme-staging-v02.api.letsencrypt.org/directory for staging
+
+# User and paths
+caddy_user: "caddy"
+caddy_group: "caddy"
+caddy_bin_path: "/usr/local/bin/caddy"
+caddy_xcaddy_bin_path: "/usr/local/bin/xcaddy"
+caddy_config_dir: "/etc/caddy"
+caddy_data_dir: "/var/lib/caddy"
+caddy_log_dir: "/var/log/caddy"
 caddy_build_dir: "/var/cache/caddy-build"

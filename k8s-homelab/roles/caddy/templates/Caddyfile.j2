@@ -1,0 +1,57 @@
+# ==============================================================================
+# Managed by Ansible - role caddy
+# Ingress reverse proxy configuration for Kubernetes homelab
+# ==============================================================================
+{
+{% if caddy_acme_email | default('') | length > 0 %}
+	email {{ caddy_acme_email }}
+{% endif %}
+{% if caddy_acme_ca | default('') | length > 0 %}
+	acme_ca {{ caddy_acme_ca }}
+{% endif %}
+}
+
+(logging) {
+	log {
+		output file {{ caddy_log_dir }}/access.log {
+			roll_size 10mb
+			roll_keep 5
+			roll_keep_for 720h
+		}
+		format console
+	}
+}
+
+(tls_powerdns) {
+	tls {
+		dns powerdns {env.POWERDNS_SERVER_URL} {env.POWERDNS_API_TOKEN}
+{% if caddy_acme_ca | default('') | length > 0 %}
+		ca {{ caddy_acme_ca }}
+{% endif %}
+	}
+}
+
+(reverse_proxy_cluster) {
+	reverse_proxy {
+		to {% if (caddy_upstream_nodes | default([])) | length > 0 %}{% for node in caddy_upstream_nodes %}{{ node }}:{{ caddy_upstream_port }} {% endfor %}{% else %}{% for host in (groups['workers'] | default(groups['k8s_cluster']) | default([])) %}{{ hostvars[host]['node_ip'] | default(hostvars[host]['ansible_host']) }}:{{ caddy_upstream_port }} {% endfor %}{% endif %}
+
+{% if caddy_backend_tls | default(true) | bool %}
+		transport http {
+			tls
+			tls_server_name {host}
+{% if caddy_backend_tls_insecure | default(true) | bool %}
+			tls_insecure_skip_verify
+{% endif %}
+		}
+{% endif %}
+	}
+}
+
+{% for domain in caddy_domains %}
+{{ domain }} {
+	import logging
+	import tls_powerdns
+	import reverse_proxy_cluster
+}
+
+{% endfor %}

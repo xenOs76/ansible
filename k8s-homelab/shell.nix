@@ -12,6 +12,8 @@ pkgs.mkShell {
     yamllint
     jq
     vagrant
+    sops
+    age
   ];
 
   shellHook = ''

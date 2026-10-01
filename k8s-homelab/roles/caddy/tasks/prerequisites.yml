@@ -1,0 +1,53 @@
+---
+- name: Ensure caddy system group exists
+  ansible.builtin.group:
+    name: "{{ caddy_group }}"
+    system: true
+    state: present
+  tags:
+    - caddy
+    - caddy_install
+
+- name: Ensure caddy system user exists
+  ansible.builtin.user:
+    name: "{{ caddy_user }}"
+    group: "{{ caddy_group }}"
+    system: true
+    shell: /usr/sbin/nologin
+    home: "{{ caddy_data_dir }}"
+    create_home: false
+    state: present
+  tags:
+    - caddy
+    - caddy_install
+
+- name: Install build and runtime prerequisites for Caddy and S3 caching
+  ansible.builtin.apt:
+    name:
+      - golang-go
+      - git
+      - build-essential
+      - libcap2-bin
+      - python3-boto3
+      - python3-botocore
+    state: present
+    update_cache: false
+  tags:
+    - caddy
+    - caddy_install
+
+- name: Ensure Caddy directories exist
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner }}"
+    group: "{{ item.group }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - {path: "{{ caddy_config_dir }}", owner: "root", group: "root", mode: "0755"}
+    - {path: "{{ caddy_data_dir }}", owner: "{{ caddy_user }}", group: "{{ caddy_group }}", mode: "0750"}
+    - {path: "{{ caddy_log_dir }}", owner: "{{ caddy_user }}", group: "{{ caddy_group }}", mode: "0755"}
+    - {path: "{{ caddy_build_dir }}", owner: "root", group: "root", mode: "0755"}
+  tags:
+    - caddy
+    - caddy_config

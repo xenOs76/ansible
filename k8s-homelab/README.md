@@ -391,6 +391,7 @@ k8s-homelab/
 │   ├── control_plane/            # kubeadm init, kubeconfig, join token
 │   ├── worker/                   # kubeadm join execution, kubelet node-ip
 │   ├── cilium/                   # Cilium CLI download, deployment
+│   ├── caddy/                    # Caddy ingress reverse proxy (PowerDNS DNS-01 ACME)
 │   ├── upgrade/                  # CKA-style rolling cluster upgrade
 │   └── reset/                    # kubeadm reset, iptables flush, cleanup
 ├── playbooks/
@@ -399,6 +400,7 @@ k8s-homelab/
 │   ├── init.yml                  # Control plane initialization
 │   ├── join.yml                  # Worker node join execution
 │   ├── cni.yml                   # Deploy & verify Cilium
+│   ├── caddy.yml                 # Deploy & configure Caddy ingress reverse proxy
 │   ├── upgrade.yml               # Rolling upgrade for CP and workers
 │   └── reset.yml                 # Cluster teardown for repeat practice
 ├── CHANGELOG.md                  # Release notes & version history (SemVer)
@@ -423,6 +425,7 @@ specific tasks:
 | `control_plane` | Run `kubeadm init`, configure root/user kubeconfig, generate join token | `control_plane`, `init`, `kubeconfig`, `join_token` |
 | `worker` | Execute `kubeadm join`, configure node IP in `/etc/default/kubelet` | `worker`, `join`, `kubelet` |
 | `cilium` | Download Cilium CLI, install Cilium daemonset, wait for status, verify nodes | `cni`, `cilium`, `verify` |
+| `caddy` | Build Caddy via xcaddy with PowerDNS plugin, reverse proxy 443 to NodePort 30443 | `caddy`, `ingress`, `caddy_install`, `caddy_config`, `caddy_service`, `caddy_version` |
 | `upgrade` | Unhold, upgrade kubeadm, `kubeadm upgrade apply`, upgrade kubelet, hold | `upgrade`, `upgrade_control_plane`, `upgrade_worker` |
 | `reset` | `kubeadm reset -f`, flush iptables, clean CNI & `/var/lib/kubelet` | `reset` |
 

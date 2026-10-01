@@ -1,0 +1,36 @@
+---
+- name: Query latest Caddy release from GitHub API
+  ansible.builtin.uri:
+    url: https://api.github.com/repos/caddyserver/caddy/releases/latest
+    return_content: true
+    headers:
+      Accept: application/vnd.github.v3+json
+      User-Agent: ansible-caddy-role
+    status_code:
+      - 200
+      - 403
+      - 404
+    timeout: 5
+  register: caddy_latest_release_response
+  failed_when: false
+  changed_when: false
+  when: caddy_check_upstream_release | default(true) | bool
+  tags:
+    - caddy
+    - caddy_version
+
+- name: Notify if upstream Caddy release is newer than configured version
+  ansible.builtin.debug:
+    msg: >-
+      [Caddy Update Notice] Upstream Caddy release {{ caddy_latest_release_response.json.tag_name }}
+      is available (currently configured: {{ caddy_version }}).
+      To upgrade, bump caddy_version in group_vars/all.yml.
+  when:
+    - caddy_check_upstream_release | default(true) | bool
+    - caddy_latest_release_response.status | default(0) == 200
+    - caddy_latest_release_response.json is defined
+    - caddy_latest_release_response.json.tag_name is defined
+    - caddy_latest_release_response.json.tag_name != caddy_version
+  tags:
+    - caddy
+    - caddy_version

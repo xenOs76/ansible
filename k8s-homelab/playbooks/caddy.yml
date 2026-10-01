@@ -1,0 +1,9 @@
+---
+- name: Deploy Caddy ingress reverse proxy on control plane
+  hosts: control_plane
+  become: true
+  roles:
+    - role: caddy
+  tags:
+    - caddy
+    - ingress

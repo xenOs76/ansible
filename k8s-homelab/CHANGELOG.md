@@ -10,6 +10,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Implemented Caddy ingress reverse proxy role (`roles/caddy`) with automated compilation via `xcaddy` (`v0.4.4`) to include the PowerDNS DNS-01 provider plugin (`github.com/caddy-dns/powerdns`).
+- Added Garage S3 binary caching for Caddy (`s3://os76-assets/caddy/...` via `amazon.aws.s3_object`), checking for existing binaries before compiling to eliminate CPU-intensive builds on subsequent installations, uploading newly compiled binaries automatically, with encrypted S3 credentials managed via SOPS in `secrets.sops.yaml`.
+- Configured Caddy to terminate TLS on port 443 with Let's Encrypt certificates managed via PowerDNS DNS-01 challenges and reverse proxy requests for `*.k8s-pre.os76.xyz` (preprod) and `*.k8s.os76.xyz` (prod) to cluster nodes on NodePort `30443`.
+- Added upstream Caddy release notifier (`tasks/check_version.yml`) querying the GitHub API during playbook execution to detect and announce when a newer Caddy release is available upstream.
+- Integrated Caddy ingress deployment into the main deployment pipeline (`playbooks/site.yml` step 6) and added standalone playbook `playbooks/caddy.yml` and Makefile target `make preprod-caddy` for isolated execution and CKA lab practice.
+- Configured SOPS secrets encryption with multi-recipient Age keys (`xeno@zero`, `xeno@nemo`, `server_zero`, `server_nemo` via `.sops.yaml`) for transparent in-memory secret decryption in Ansible via `community.sops.sops`.
+- Added `README.sops.md` documenting manual workflows for inspecting, editing, creating, and re-keying SOPS-encrypted files.
 - Automated, idempotent installation of `etcdctl` and `etcdutl` (defaulting to
   `v3.5.16`) on the control plane node during `make preprod-up` provisioning.
 - Added `etcd_tools.yml` tasks to the `control_plane_tools` Ansible role with

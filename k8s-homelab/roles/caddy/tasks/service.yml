@@ -1,0 +1,44 @@
+---
+- name: Deploy Caddy systemd service unit
+  ansible.builtin.template:
+    src: caddy.service.j2
+    dest: /etc/systemd/system/caddy.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart Caddy
+  tags:
+    - caddy
+    - caddy_service
+
+- name: Flush handlers to process systemd reload or restart if needed
+  ansible.builtin.meta: flush_handlers
+  tags:
+    - caddy
+    - caddy_service
+
+- name: Enable and start Caddy systemd service
+  ansible.builtin.systemd:
+    name: caddy
+    enabled: true
+    state: started
+    daemon_reload: true
+  tags:
+    - caddy
+    - caddy_service
+
+- name: Populate service facts to verify Caddy state
+  ansible.builtin.service_facts:
+  tags:
+    - caddy
+    - caddy_service
+
+- name: Assert Caddy service is running
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.services['caddy.service'] is defined
+      - ansible_facts.services['caddy.service'].state == 'running'
+    fail_msg: "Caddy service is not running!"
+  tags:
+    - caddy
+    - caddy_service

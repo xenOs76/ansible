@@ -8,6 +8,8 @@ exclude_paths:
   - "vagrant/scripts/"
   - "back/"
   - "archived/"
+  - "*.sops.yaml"
+  - "*.sops.yml"
 
 skip_list:
   - yaml[line-length]

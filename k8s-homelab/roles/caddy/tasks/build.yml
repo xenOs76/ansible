@@ -1,0 +1,322 @@
+---
+- name: Determine system architecture for Caddy and xcaddy
+  ansible.builtin.set_fact:
+    caddy_arch: "{{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}"
+  tags:
+    - caddy
+    - caddy_install
+
+- name: Find stale build and cache files in /tmp to free space
+  become: true
+  ansible.builtin.find:
+    paths: /tmp
+    patterns:
+      - "buildenv_*"
+      - "*caddy*"
+      - "go-build*"
+    file_type: any
+  register: caddy_stale_tmp_files
+  tags:
+    - caddy
+    - caddy_install
+
+- name: Remove stale build and cache files from /tmp
+  become: true
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ caddy_stale_tmp_files.files | default([]) }}"
+  tags:
+    - caddy
+    - caddy_install
+
+- name: Remove legacy /tmp/go directory if present
+  become: true
+  ansible.builtin.file:
+    path: /tmp/go
+    state: absent
+  tags:
+    - caddy
+    - caddy_install
+
+- name: Ensure dedicated Caddy build directory exists
+  become: true
+  ansible.builtin.file:
+    path: "{{ caddy_build_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  tags:
+    - caddy
+    - caddy_install
+
+- name: Check if caddy binary exists
+  ansible.builtin.stat:
+    path: "{{ caddy_bin_path }}"
+  register: caddy_bin_stat
+  tags:
+    - caddy
+    - caddy_install
+
+- name: Check installed caddy version
+  ansible.builtin.command: "{{ caddy_bin_path }} version"
+  register: caddy_installed_version
+  when: caddy_bin_stat.stat.exists
+  failed_when: false
+  changed_when: false
+  tags:
+    - caddy
+    - caddy_install
+
+- name: Check installed caddy modules for powerdns
+  ansible.builtin.command: "{{ caddy_bin_path }} list-modules"
+  register: caddy_installed_modules
+  when: caddy_bin_stat.stat.exists
+  failed_when: false
+  changed_when: false
+  tags:
+    - caddy
+    - caddy_install
+
+- name: Determine if Caddy needs to be built
+  ansible.builtin.set_fact:
+    caddy_needs_build: >-
+      {{
+        (not caddy_bin_stat.stat.exists) or
+        (caddy_installed_version.rc | default(1) != 0) or
+        (caddy_version | regex_replace('^v', '') not in (caddy_installed_version.stdout | default(''))) or
+        ('dns.providers.powerdns' not in (caddy_installed_modules.stdout | default('')))
+      }}
+  tags:
+    - caddy
+    - caddy_install
+
+- name: Attempt to fetch prebuilt Caddy binary from Garage S3 cache
+  when:
+    - caddy_needs_build | bool
+    - caddy_s3_cache_enabled | bool
+    - (caddy_garage_access_key | default('')) | length > 0
+    - (caddy_garage_secret_key | default('')) | length > 0
+  tags:
+    - caddy
+    - caddy_install
+  block:
+    - name: Ensure temporary S3 download staging file is absent
+      become: true
+      ansible.builtin.file:
+        path: "{{ caddy_build_dir }}/caddy_s3_cached"
+        state: absent
+
+    - name: Download Caddy binary from Garage S3 to staging location
+      become: true
+      amazon.aws.s3_object:
+        aws_access_key: "{{ caddy_garage_access_key }}"
+        aws_secret_key: "{{ caddy_garage_secret_key }}"
+        endpoint_url: "{{ caddy_garage_endpoint }}"
+        region: "{{ caddy_garage_region }}"
+        bucket: "{{ caddy_garage_bucket }}"
+        object: "{{ caddy_s3_object_key }}"
+        dest: "{{ caddy_build_dir }}/caddy_s3_cached"
+        mode: get
+        overwrite: always
+      register: caddy_s3_download
+      failed_when: false
+      no_log: true
+
+    - name: Check if Caddy binary was downloaded from S3
+      ansible.builtin.stat:
+        path: "{{ caddy_build_dir }}/caddy_s3_cached"
+      register: caddy_s3_download_stat
+
+    - name: Validate and install downloaded Caddy binary from S3 cache
+      when: caddy_s3_download_stat.stat.exists
+      block:
+        - name: Ensure executable permissions on staged Caddy binary
+          become: true
+          ansible.builtin.file:
+            path: "{{ caddy_build_dir }}/caddy_s3_cached"
+            owner: root
+            group: root
+            mode: "0755"
+
+        - name: Verify staged Caddy binary version
+          ansible.builtin.command: "{{ caddy_build_dir }}/caddy_s3_cached version"
+          register: caddy_s3_cached_version
+          failed_when: false
+          changed_when: false
+
+        - name: Verify staged Caddy binary modules
+          ansible.builtin.command: "{{ caddy_build_dir }}/caddy_s3_cached list-modules"
+          register: caddy_s3_cached_modules
+          failed_when: false
+          changed_when: false
+
+        - name: Determine if staged Caddy binary is valid
+          ansible.builtin.set_fact:
+            caddy_s3_binary_valid: >-
+              {{
+                (caddy_s3_cached_version.rc | default(1) == 0) and
+                (caddy_version | regex_replace('^v', '') in (caddy_s3_cached_version.stdout | default(''))) and
+                ('dns.providers.powerdns' in (caddy_s3_cached_modules.stdout | default('')))
+              }}
+
+        - name: Install validated Caddy binary from S3 cache
+          become: true
+          ansible.builtin.copy:
+            src: "{{ caddy_build_dir }}/caddy_s3_cached"
+            dest: "{{ caddy_bin_path }}"
+            remote_src: true
+            owner: root
+            group: root
+            mode: "0755"
+          notify: Restart Caddy
+          when: caddy_s3_binary_valid | bool
+
+        - name: Update build flag if S3 binary was installed
+          ansible.builtin.set_fact:
+            caddy_needs_build: false
+          when: caddy_s3_binary_valid | bool
+
+        - name: Notify S3 cache hit
+          ansible.builtin.debug:
+            msg: >-
+              Successfully restored Caddy {{ caddy_version }} with PowerDNS from Garage S3
+              (s3://{{ caddy_garage_bucket }}/{{ caddy_s3_object_key }}). Skipping xcaddy compilation.
+          when: caddy_s3_binary_valid | bool
+
+    - name: Clean up temporary S3 staging file
+      become: true
+      ansible.builtin.file:
+        path: "{{ caddy_build_dir }}/caddy_s3_cached"
+        state: absent
+
+    - name: Notify S3 cache miss
+      ansible.builtin.debug:
+        msg: >-
+          Caddy binary not retrieved from Garage S3 cache (s3://{{ caddy_garage_bucket }}/{{ caddy_s3_object_key }}).
+          Reason: {{ caddy_s3_download.msg | default('object not found') }}.
+          Proceeding with local compilation via xcaddy.
+      when: caddy_needs_build | bool
+
+- name: Build Caddy binary with PowerDNS plugin via xcaddy
+  when: caddy_needs_build | bool
+  tags:
+    - caddy
+    - caddy_install
+  block:
+    - name: Check if xcaddy binary exists
+      ansible.builtin.stat:
+        path: "{{ caddy_xcaddy_bin_path }}"
+      register: caddy_xcaddy_stat
+
+    - name: Check installed xcaddy version
+      ansible.builtin.command: "{{ caddy_xcaddy_bin_path }} version"
+      register: caddy_installed_xcaddy_version
+      when: caddy_xcaddy_stat.stat.exists
+      failed_when: false
+      changed_when: false
+
+    - name: Install xcaddy binary from official release archive
+      ansible.builtin.unarchive:
+        src: >-
+          {{
+            'https://github.com/caddyserver/xcaddy/releases/download/' ~
+            caddy_xcaddy_version ~ '/xcaddy_' ~
+            (caddy_xcaddy_version | regex_replace('^v', '')) ~
+            '_linux_' ~ caddy_arch ~ '.tar.gz'
+          }}
+        dest: /usr/local/bin
+        remote_src: true
+        include:
+          - xcaddy
+        owner: root
+        group: root
+        mode: "0755"
+      when: >-
+        (not caddy_xcaddy_stat.stat.exists) or
+        (caddy_installed_xcaddy_version.rc | default(1) != 0) or
+        (caddy_xcaddy_version | regex_replace('^v', '') not in (caddy_installed_xcaddy_version.stdout | default('')))
+
+    - name: Create temporary build directory for Caddy
+      ansible.builtin.tempfile:
+        state: directory
+        path: "{{ caddy_build_dir }}"
+        suffix: caddy_build
+      register: caddy_temp_build_dir
+
+    - name: Compile Caddy binary with xcaddy
+      ansible.builtin.command: >-
+        {{ caddy_xcaddy_bin_path }} build {{ caddy_version }}
+        --with {{ caddy_dns_plugin }}
+        --output {{ caddy_temp_build_dir.path }}/caddy
+      environment:
+        TMPDIR: "{{ caddy_build_dir }}"
+        GOCACHE: "{{ caddy_build_dir }}/go-build"
+        GOPATH: "{{ caddy_build_dir }}/go"
+      changed_when: true
+
+    - name: Install compiled Caddy binary to destination
+      ansible.builtin.copy:
+        src: "{{ caddy_temp_build_dir.path }}/caddy"
+        dest: "{{ caddy_bin_path }}"
+        remote_src: true
+        owner: root
+        group: root
+        mode: "0755"
+      notify: Restart Caddy
+
+    - name: Upload compiled Caddy binary to Garage S3 cache
+      become: true
+      amazon.aws.s3_object:
+        aws_access_key: "{{ caddy_garage_access_key }}"
+        aws_secret_key: "{{ caddy_garage_secret_key }}"
+        endpoint_url: "{{ caddy_garage_endpoint }}"
+        region: "{{ caddy_garage_region }}"
+        bucket: "{{ caddy_garage_bucket }}"
+        object: "{{ caddy_s3_object_key }}"
+        src: "{{ caddy_bin_path }}"
+        mode: put
+      no_log: true
+      register: caddy_s3_upload
+      failed_when: false
+      when:
+        - caddy_s3_cache_enabled | bool
+        - caddy_s3_cache_upload | bool
+        - (caddy_garage_access_key | default('')) | length > 0
+        - (caddy_garage_secret_key | default('')) | length > 0
+
+    - name: Notify S3 cache upload result
+      ansible.builtin.debug:
+        msg: >-
+          {{
+            'Successfully uploaded compiled Caddy binary to Garage S3 cache (s3://' ~ caddy_garage_bucket ~ '/' ~ caddy_s3_object_key ~ ').'
+            if (not caddy_s3_upload.failed | default(false))
+            else
+            'Notice: Failed to upload Caddy binary to Garage S3 cache: ' ~ (caddy_s3_upload.msg | default('unknown error'))
+          }}
+      when:
+        - caddy_s3_upload is defined
+        - not caddy_s3_upload.skipped | default(false)
+
+    - name: Clean up temporary build directory
+      ansible.builtin.file:
+        path: "{{ caddy_temp_build_dir.path }}"
+        state: absent
+
+    - name: Clean up temporary Go build cache
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "{{ caddy_build_dir }}/go-build"
+        - "{{ caddy_build_dir }}/go"
+
+- name: Set CAP_NET_BIND_SERVICE capability on caddy binary
+  community.general.capabilities:
+    path: "{{ caddy_bin_path }}"
+    capability: cap_net_bind_service+ep
+    state: present
+  tags:
+    - caddy
+    - caddy_install

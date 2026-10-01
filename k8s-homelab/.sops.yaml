@@ -1,0 +1,19 @@
+---
+# ==============================================================================
+# SOPS configuration for k8s-homelab
+# Multi-recipient age keys (zero and nemo) matching nix-configs
+# ==============================================================================
+keys:
+  - &xeno_at_zero age1lsfvx7nwct987yezqud0tt9y05yhmcquckf0kalfqwrqfuygnvhsr09d5g
+  - &xeno_at_nemo age1dcgemfs0w6huj0r7058xxjxfe746p2yzyehj9cj00amu54rhaehs7cca07
+  - &server_zero age1qwdngwfh5adnacezn35lzgnm7jcp0e7j6ts346ufkj58wwpy7d4qr6rm2m
+  - &server_nemo age1jv4mly2k8jere0jgfxewjgvhdgfc999zxgpqttxecjmc0qr9hs2sgls5my
+
+creation_rules:
+  - path_regex: .*\.sops\.ya?ml$
+    key_groups:
+      - age:
+          - *xeno_at_zero
+          - *xeno_at_nemo
+          - *server_zero
+          - *server_nemo

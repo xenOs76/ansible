@@ -43,7 +43,16 @@
   roles:
     - role: cilium
 
-- name: 6. Display final cluster status
+- name: 6. Deploy Caddy ingress reverse proxy
+  hosts: control_plane
+  become: true
+  roles:
+    - role: caddy
+  tags:
+    - caddy
+    - ingress
+
+- name: 7. Display final cluster status
   hosts: control_plane
   become: true
   tasks:

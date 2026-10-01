@@ -7,6 +7,5 @@
 
 ## Homelab Kubernetes administration
 
-* [ ] install Caddy on control plane to serve requests to Ingresses from port 443
-* [ ] configure Caddy for DNS provisioning of Let's Encrypt certificates
+* [x] install Caddy on control plane to serve requests to Ingresses from port 443. Caddy has to be built with support for PowerDNS. It has to reverse proxy requests on port 443 for the domain *.k8s.os76.xyz to port 30443 of the cluster nodes. Manage TLS installing Let's Encrypt certificates via DNS challenge.
 * [ ] integrate cluster with AWS OIDC for IAM permissions on Pods

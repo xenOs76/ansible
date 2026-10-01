@@ -1,0 +1,31 @@
+---
+- name: 1. Check upstream Caddy release availability
+  ansible.builtin.include_tasks: check_version.yml
+  tags:
+    - caddy
+    - caddy_version
+
+- name: 2. Ensure prerequisites, user, and directory structure
+  ansible.builtin.include_tasks: prerequisites.yml
+  tags:
+    - caddy
+    - caddy_install
+    - caddy_config
+
+- name: 3. Install xcaddy and build Caddy with PowerDNS support
+  ansible.builtin.include_tasks: build.yml
+  tags:
+    - caddy
+    - caddy_install
+
+- name: 4. Configure Caddy environment and Caddyfile
+  ansible.builtin.include_tasks: config.yml
+  tags:
+    - caddy
+    - caddy_config
+
+- name: 5. Manage Caddy systemd service
+  ansible.builtin.include_tasks: service.yml
+  tags:
+    - caddy
+    - caddy_service

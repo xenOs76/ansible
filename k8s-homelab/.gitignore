@@ -5,3 +5,4 @@ devenv.lock
 admin.conf
 kubeconfig.*
 kubeadm-init.out
+.ansible/

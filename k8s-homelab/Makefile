@@ -1,4 +1,4 @@
-.PHONY: all lint syntax inventory deps check-deps preprod-up preprod-destroy preprod-recreate preprod-status preprod-provision preprod-sync-kubeconfig prod-sync-kubeconfig preprod-deploy preprod-cni preprod-upgrade preprod-reset preprod-cka-lab help
+.PHONY: all lint syntax inventory deps check-deps preprod-up preprod-destroy preprod-recreate preprod-status preprod-provision preprod-sync-kubeconfig prod-sync-kubeconfig preprod-deploy preprod-caddy preprod-cni preprod-upgrade preprod-reset preprod-cka-lab help
 
 all: help
 
@@ -18,6 +18,7 @@ help:
 	@echo "make preprod-sync-kubeconfig - Sync preprod credentials (context: k8s-homelab-preprod)"
 	@echo "make prod-sync-kubeconfig    - Sync prod credentials (context: k8s-homelab)"
 	@echo "make preprod-deploy    - Run full Ansible playbook deployment on preprod"
+	@echo "make preprod-caddy     - Deploy/configure Caddy ingress reverse proxy on preprod"
 	@echo "make preprod-cni       - Install/verify Cilium CNI on preprod"
 	@echo "make preprod-upgrade   - Run rolling upgrade on preprod"
 	@echo "make preprod-reset     - Teardown/reset cluster on preprod"
@@ -70,6 +71,9 @@ prod-sync-kubeconfig:
 
 preprod-deploy:
 	./scripts/run-playbook.sh -e preprod -p site.yml
+
+preprod-caddy:
+	./scripts/run-playbook.sh -e preprod -p caddy.yml
 
 preprod-cni:
 	./scripts/run-playbook.sh -e preprod -p cni.yml
