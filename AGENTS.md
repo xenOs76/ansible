@@ -37,7 +37,7 @@ Multi-node Kubernetes 1.34+ cluster automated using `kubeadm`, `containerd`, and
 4. **`control_plane`**: `kubeadm init` automation, dynamic IP discovery for kube-apiserver TLS SANs, `~/.kube/config` distribution, user shell preferences (`alias k=kubectl`, `export koyaml="..."`, bash completion, and `~/.kube/kuberc`), and training MOTD cleanup.
 5. **`worker`**: Node registration via secure join tokens and discovery hashes.
 6. **`cilium`**: Helm-based Cilium CNI deployment with eBPF host routing and status health checks.
-7. **`control_plane_tools`**: Control plane utilities including `etcdctl`, `etcdutl` (pinned `v3.5.16` with system-wide `ETCDCTL_API=3`), `k9s`, and diagnostics.
+7. **`control_plane_tools`**: Control plane utilities including `etcdctl`, `etcdutl` (pinned `v3.5.16` with system-wide `ETCDCTL_API=3`), `k9s` (pinned `v0.51.0` with transparent Nord skin), and diagnostics.
 8. **`cka_lab`**: Hands-on CKA exam practice scenarios deployed exclusively via `make preprod-cka-lab` (`playbooks/cka_lab.yml`), including initial steps reminder MOTD activation.
 9. **`upgrade`**: Rolling node upgrades (`kubeadm upgrade apply/node`, `kubelet`, `kubectl`).
 10. **`reset`**: Safe cluster teardown and node state reset (`kubeadm reset -f`, interface cleanups).

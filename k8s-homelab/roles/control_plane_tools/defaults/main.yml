@@ -1,5 +1,6 @@
 ---
-control_plane_tools_k9s_version: "{{ k9s_version | default('v0.40.10') }}"
+control_plane_tools_k9s_version: "{{ k9s_version | default('v0.51.0') }}"
+control_plane_tools_k9s_skin: "{{ k9s_skin | default('nord') }}"
 control_plane_tools_etcd_version: "{{ etcd_version | default('v3.5.16') }}"
 control_plane_tools_helm_apt_repo: >-
   {{ helm_apt_repo | default('deb [signed-by=/etc/apt/keyrings/helm.gpg] https://packages.buildkite.com/helm-linux/helm-debian/any/ any main') }}

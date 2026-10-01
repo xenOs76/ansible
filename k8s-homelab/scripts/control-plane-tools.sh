@@ -84,7 +84,7 @@ fi
 # ------------------------------------------------------------------------------
 # 2. Install k9s via official release .deb package
 # ------------------------------------------------------------------------------
-K9S_VERSION="${K9S_VERSION:-v0.40.10}"
+K9S_VERSION="${K9S_VERSION:-v0.51.0}"
 NORMALIZED_TARGET="${K9S_VERSION#v}"
 INSTALLED_K9S_VERSION=""
 
@@ -105,6 +105,121 @@ if [ "$INSTALLED_K9S_VERSION" != "$NORMALIZED_TARGET" ]; then
 else
   echo "k9s version ${K9S_VERSION} is already installed."
 fi
+
+# Configure transparent Nord theme for SSH readability
+K9S_CONFIG_DIR="/home/vagrant/.config/k9s"
+mkdir -p "${K9S_CONFIG_DIR}/skins"
+
+cat <<'EOF' > "${K9S_CONFIG_DIR}/skins/nord.yaml"
+# -----------------------------------------------------------------------------
+# Nord skin (Transparent background for crystal-clear SSH rendering)
+# -----------------------------------------------------------------------------
+foreground: &foreground "#DADEE8"
+current_line: &current_line "#383D4A"
+selection: &selection "#D9DEE8"
+comment: &comment "#8891A7"
+cyan: &cyan "#88C0D0"
+green: &green "#A3BE8C"
+orange: &orange "#D08770"
+blue: &blue "#81A1C1"
+magenta: &magenta "#B48EAD"
+red: &red "#BF616A"
+yellow: &yellow "#EBCB8B"
+
+k9s:
+  body:
+    fgColor: *foreground
+    bgColor: default
+    logoColor: *magenta
+  prompt:
+    fgColor: *foreground
+    bgColor: default
+    suggestColor: *orange
+  info:
+    fgColor: *blue
+    sectionColor: *foreground
+  dialog:
+    fgColor: *foreground
+    bgColor: default
+    buttonFgColor: *foreground
+    buttonBgColor: *magenta
+    buttonFocusFgColor: *yellow
+    buttonFocusBgColor: *blue
+    labelFgColor: *orange
+    fieldFgColor: *foreground
+  frame:
+    border:
+      fgColor: *selection
+      focusColor: *current_line
+    menu:
+      fgColor: *foreground
+      keyColor: *blue
+      numKeyColor: *blue
+    crumbs:
+      fgColor: *foreground
+      bgColor: default
+      activeColor: *current_line
+    status:
+      newColor: *cyan
+      modifyColor: *magenta
+      addColor: *green
+      errorColor: *red
+      highlightColor: *orange
+      killColor: *comment
+      completedColor: *comment
+    title:
+      fgColor: *foreground
+      bgColor: default
+      highlightColor: *orange
+      counterColor: *magenta
+      filterColor: *blue
+  views:
+    charts:
+      bgColor: default
+      defaultDialColors:
+        - *magenta
+        - *red
+      defaultChartColors:
+        - *magenta
+        - *red
+    table:
+      fgColor: *foreground
+      bgColor: default
+      header:
+        fgColor: *foreground
+        bgColor: default
+        sorterColor: *cyan
+    xray:
+      fgColor: *foreground
+      bgColor: default
+      cursorColor: *current_line
+      graphicColor: *magenta
+      showIcons: false
+    yaml:
+      keyColor: *blue
+      colonColor: *magenta
+      valueColor: *foreground
+    logs:
+      fgColor: *foreground
+      bgColor: default
+      indicator:
+        fgColor: *foreground
+        bgColor: *magenta
+        toggleOnColor: *magenta
+        toggleOffColor: *blue
+    help:
+      fgColor: *foreground
+      bgColor: default
+      indicator:
+        fgColor: *red
+EOF
+
+cat <<'EOF' > "${K9S_CONFIG_DIR}/config.yaml"
+k9s:
+  ui:
+    skin: nord
+EOF
+chown -R vagrant:vagrant "/home/vagrant/.config"
 
 # ------------------------------------------------------------------------------
 # 3. Install etcdctl and etcdutl via official release archive

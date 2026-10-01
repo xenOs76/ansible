@@ -35,6 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Upgraded `k9s` to `v0.51.0` (from `v0.40.10`) across Ansible group variables, `control_plane_tools` defaults, and provisioning scripts. Added pre-configured transparent `nord` and `transparent` skins in `~/.config/k9s/skins/` to eliminate opaque background rendering over SSH sessions.
 - Updated default preprod worker node count from 1 to 2 in `Vagrantfile`, added
 
   `kube-worker-2` (`192.168.56.22`) to `inventory/preprod/hosts.ini`, and updated

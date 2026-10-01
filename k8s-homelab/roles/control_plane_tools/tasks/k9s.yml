@@ -15,3 +15,42 @@
     - bootstrap
     - tools
     - k9s
+
+- name: Ensure k9s configuration and skins directories exist
+  ansible.builtin.file:
+    path: "/home/{{ control_plane_tools_user }}/.config/k9s/skins"
+    state: directory
+    owner: "{{ control_plane_tools_user }}"
+    group: "{{ control_plane_tools_user }}"
+    mode: "0755"
+  tags:
+    - bootstrap
+    - tools
+    - k9s
+
+- name: Deploy transparent and Nord skins for k9s
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "/home/{{ control_plane_tools_user }}/.config/k9s/skins/{{ item.dest }}"
+    owner: "{{ control_plane_tools_user }}"
+    group: "{{ control_plane_tools_user }}"
+    mode: "0644"
+  loop:
+    - {src: "k9s_skin_nord.yaml.j2", dest: "nord.yaml"}
+    - {src: "k9s_skin_transparent.yaml.j2", dest: "transparent.yaml"}
+  tags:
+    - bootstrap
+    - tools
+    - k9s
+
+- name: Configure k9s global configuration with transparent skin
+  ansible.builtin.template:
+    src: "k9s_config.yaml.j2"
+    dest: "/home/{{ control_plane_tools_user }}/.config/k9s/config.yaml"
+    owner: "{{ control_plane_tools_user }}"
+    group: "{{ control_plane_tools_user }}"
+    mode: "0644"
+  tags:
+    - bootstrap
+    - tools
+    - k9s
