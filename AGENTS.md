@@ -1,20 +1,16 @@
 # AGENTS.md
 
-Context, architecture, workflows, and operational standards for AI coding agents operating on the `os76-ansible` repository.
+Context, architecture, workflows, and operational standards for AI coding agents operating on the `ansible` repository.
 
 ---
 
 ## 1. Repository Identity & Scope
 
-`os76-ansible` is a private infrastructure-as-code monorepo containing Ansible automation playbooks, roles, and lab environments for the OS76 infrastructure.
+`ansible` is a public repository containing curated Ansible automation playbooks, roles, and lab environments.
 
 ### Repository Layout
 
-- **`k8s-homelab/`** — Primary active project: automated multi-node Kubernetes (`kubeadm`) cluster provisioning on Libvirt/KVM via Vagrant, CKA practice labs, rolling upgrades, and cluster maintenance.
-- **`os76_priv_lan_mgmt/`** — LAN network infrastructure automation (gateway routers, hostapd access points, dnsmasq/unbound DNS resolvers, node exporter metrics, and Let's Encrypt certificates).
-- **`os76_priv_ca/`** — Private Certificate Authority (PKI) management playbooks.
-- **`os76_k3s/` & `archived/`** — Historical and legacy K3s homelab playbooks and Helm charts.
-- **`docs/` & `Docs.md`** — Reference documentation, Ansible filter guides, and upstream bookmarks.
+- **`k8s-homelab/`** — Automated multi-node Kubernetes (`kubeadm`) cluster provisioning on Libvirt/KVM via Vagrant, CKA practice labs, rolling upgrades, and cluster maintenance.
 
 ---
 
@@ -162,17 +158,14 @@ nix shell nixpkgs#ansible-lint --command bash -c \
 
 ---
 
-## 6. Git & Mirroring Conventions
+## 6. Git Conventions
 
 1. **Commit Messages**: Follow Conventional Commits format:
    - `feat(k8s-homelab): ...`
    - `fix(scripts): ...`
    - `refactor(common): ...`
    - `docs(cka_lab): ...`
-2. **Gitea Upstream Remote**:
-   - `origin` is `git@git.priv.os76.xyz:xeno/os76-ansible.git` on branch `master`.
-3. **Public GitHub Mirror**:
-   - The `k8s-homelab/` subproject is mirrored publicly at `/home/xeno/git/github/public/ansible/` (`git@github.com:xenOs76/ansible.git` on branch `main`).
-   - When modifying `k8s-homelab`, synchronize changed files to `/home/xeno/git/github/public/ansible/k8s-homelab/`, ensure clean git status, and push to GitHub `origin/main`.
-4. **Changelog**:
+2. **Upstream Remote**:
+   - `origin` is `git@github.com:xenOs76/ansible.git` on branch `main`.
+3. **Changelog**:
    - Every user-facing feature, fix, or scenario addition must be documented under `## [Unreleased]` in `k8s-homelab/CHANGELOG.md`.
