@@ -5,6 +5,7 @@ cka_lab_scenario_user_rbac_enabled: true
 cka_lab_scenario_secrets_enabled: true
 cka_lab_scenario_configmaps_enabled: true
 cka_lab_scenario_helm_enabled: true
+cka_lab_scenario_volumes_enabled: true
 
 # Scenario: motd (CKA Initial Steps Reminder Announcement)
 cka_lab_motd_user: "{{ ansible_user | default('vagrant') }}"
@@ -173,3 +174,17 @@ cka_lab_helm_httpbingo_cpu_request: "10m"
 cka_lab_helm_httpbingo_memory_request: "16Mi"
 cka_lab_helm_httpbingo_cpu_limit: "100m"
 cka_lab_helm_httpbingo_memory_limit: "64Mi"
+
+# Scenario: volumes (NFS Server & CKA Volume Drills)
+# Reference: https://kubernetes.io/docs/concepts/storage/
+cka_lab_volumes_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/volumes"
+cka_lab_nfs_server_hostname: "nfs-server.local"
+cka_lab_nfs_server_ip: >-
+  {{
+    hostvars[groups['control_plane'][0]]['node_ip']
+    | default(hostvars[groups['control_plane'][0]]['ansible_host']
+    | default('192.168.56.10'))
+  }}
+cka_lab_nfs_export_dir: "/srv/nfsroot"
+cka_lab_nfs_export_subnet: "{{ '192.168.56.0/24' if ('preprod' in groups) else '10.0.0.0/8' }}"
+cka_lab_nfs_export_options: "rw,sync,no_subtree_check,no_root_squash,insecure"

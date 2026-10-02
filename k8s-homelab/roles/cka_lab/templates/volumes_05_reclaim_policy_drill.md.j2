@@ -1,0 +1,56 @@
+# CKA Drill: PersistentVolume Reclaim Policy & Lifecycle
+
+Understanding the PV/PVC lifecycle states is a critical core concept in the CKA exam:
+
+- **Available**: PV is created and ready to be bound by a PVC.
+- **Bound**: PV is bound to a matching PVC.
+- **Released**: The PVC was deleted, but the storage resource is not yet reclaimed.
+- **Failed**: Automated reclamation failed.
+
+---
+
+## Exercise: Observing the Retain Reclaim Policy
+
+### Step 1: Create PV and PVC
+
+```bash
+kubectl apply -f 01-local-pv-pvc.yaml
+kubectl get pv local-storage-pv
+kubectl get pvc local-storage-pvc
+```
+
+Verify that the PV status is `Bound` and `CLAIM` indicates `default/local-storage-pvc`.
+
+### Step 2: Delete the PVC
+
+```bash
+kubectl delete pod local-storage-consumer --wait=true
+kubectl delete pvc local-storage-pvc
+```
+
+### Step 3: Observe Released Status
+
+Check the PV status:
+
+```bash
+kubectl get pv local-storage-pv
+```
+
+Notice:
+
+1. Status is now `Released`.
+2. A new PVC cannot bind to this PV yet because `claimRef` is still assigned to the old PVC.
+
+### Step 4: Making the PV Available Again
+
+To reuse the PV for a new PVC:
+
+1. Manually clean any persistent data in the backing directory if needed.
+2. Edit the PV to remove the `claimRef` block:
+
+```bash
+kubectl patch pv local-storage-pv -p '{"spec":{"claimRef": null}}'
+kubectl get pv local-storage-pv
+```
+
+Notice the status returns to `Available`!

@@ -1,0 +1,149 @@
+---
+- name: Install NFS server and client packages on control plane
+  ansible.builtin.apt:
+    name:
+      - nfs-kernel-server
+      - nfs-common
+    state: present
+  tags:
+    - cka_lab
+    - volumes
+    - nfs
+
+- name: Ensure NFS export directories exist with write permissions
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0777"
+  loop:
+    - "{{ cka_lab_nfs_export_dir }}"
+    - "{{ cka_lab_nfs_export_dir }}/data"
+    - "{{ cka_lab_nfs_export_dir }}/reports"
+  tags:
+    - cka_lab
+    - volumes
+    - nfs
+
+- name: Create sample shared files on NFS export directory
+  ansible.builtin.copy:
+    dest: "{{ item.dest }}"
+    content: "{{ item.content }}"
+    owner: root
+    group: root
+    mode: "0666"
+  loop:
+    - dest: "{{ cka_lab_nfs_export_dir }}/index.html"
+      content: |
+        <!DOCTYPE html>
+        <html>
+        <head><title>NFS Shared Storage - CKA Practice</title></head>
+        <body>
+          <h1>NFS Shared Storage Active</h1>
+          <p>Served from NFS server <code>nfs-server.local:{{ cka_lab_nfs_export_dir }}</code>.</p>
+          <p>Mount verified across Kubernetes cluster nodes.</p>
+        </body>
+        </html>
+    - dest: "{{ cka_lab_nfs_export_dir }}/shared-data.txt"
+      content: |
+        # NFS Shared Dataset
+        # Server: nfs-server.local ({{ cka_lab_nfs_server_ip }})
+        # Export: {{ cka_lab_nfs_export_dir }}
+        # Subnet: {{ cka_lab_nfs_export_subnet }}
+        # Initialized: 2026-10-02
+        status=ready
+        environment=preprod-cka-lab
+        access_mode=ReadWriteMany
+    - dest: "{{ cka_lab_nfs_export_dir }}/reports/cluster-nodes.txt"
+      content: |
+        === CKA Storage Cluster Nodes ===
+        control-plane: {{ cka_lab_nfs_server_ip }}
+        nfs-endpoint: {{ cka_lab_nfs_server_hostname }}:{{ cka_lab_nfs_export_dir }}
+  loop_control:
+    label: "{{ item.dest }}"
+  tags:
+    - cka_lab
+    - volumes
+    - nfs
+
+- name: Configure NFS export for worker subnet in /etc/exports
+  ansible.builtin.lineinfile:
+    path: /etc/exports
+    regexp: '^{{ cka_lab_nfs_export_dir | regex_escape }}\s+'
+    line: "{{ cka_lab_nfs_export_dir }} {{ cka_lab_nfs_export_subnet }}({{ cka_lab_nfs_export_options }})"
+    state: present
+  notify: Reload NFS exports
+  tags:
+    - cka_lab
+    - volumes
+    - nfs
+
+- name: Ensure nfs-server.local is mapped in /etc/hosts on control plane
+  ansible.builtin.lineinfile:
+    path: /etc/hosts
+    regexp: '.*(\s+)nfs-server\.local(\s*)$'
+    line: "{{ cka_lab_nfs_server_ip }} {{ cka_lab_nfs_server_hostname }}"
+    state: present
+  tags:
+    - cka_lab
+    - volumes
+    - nfs
+
+- name: Enable and start NFS server service
+  ansible.builtin.systemd:
+    name: nfs-kernel-server
+    enabled: true
+    state: started
+  tags:
+    - cka_lab
+    - volumes
+    - nfs
+
+- name: Ensure CKA lab volumes directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ ansible_user | default('vagrant') }}"
+    group: "{{ ansible_user | default('vagrant') }}"
+    mode: "0755"
+  loop:
+    - "{{ cka_lab_volumes_dir }}"
+    - "{{ cka_lab_volumes_dir }}/01-nfs"
+    - "{{ cka_lab_volumes_dir }}/02-emptydir"
+    - "{{ cka_lab_volumes_dir }}/03-hostpath"
+    - "{{ cka_lab_volumes_dir }}/04-configmap-secret"
+    - "{{ cka_lab_volumes_dir }}/05-pv-pvc-lifecycle"
+  tags:
+    - cka_lab
+    - volumes
+
+- name: Render CKA volume drill manifests and guides
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "{{ cka_lab_volumes_dir }}/{{ item.dest }}"
+    owner: "{{ ansible_user | default('vagrant') }}"
+    group: "{{ ansible_user | default('vagrant') }}"
+    mode: "{{ item.mode | default('0644') }}"
+  loop:
+    - {src: "volumes_readme.md.j2", dest: "README.md", mode: "0644"}
+    - {src: "volumes_test_nfs_mounts.sh.j2", dest: "test-nfs-mounts.sh", mode: "0755"}
+    - {src: "volumes_01_nfs_direct_pod.yaml.j2", dest: "01-nfs/01-nfs-direct-pod.yaml"}
+    - {src: "volumes_01_nfs_deployment_shared.yaml.j2", dest: "01-nfs/02-nfs-deployment-shared.yaml"}
+    - {src: "volumes_01_nfs_pv.yaml.j2", dest: "01-nfs/03-nfs-pv.yaml"}
+    - {src: "volumes_01_nfs_pvc.yaml.j2", dest: "01-nfs/04-nfs-pvc.yaml"}
+    - {src: "volumes_01_nfs_pvc_pod.yaml.j2", dest: "01-nfs/05-nfs-pvc-pod.yaml"}
+    - {src: "volumes_02_emptydir_sidecar_pod.yaml.j2", dest: "02-emptydir/01-emptydir-sidecar-pod.yaml"}
+    - {src: "volumes_02_emptydir_memory_pod.yaml.j2", dest: "02-emptydir/02-emptydir-memory-pod.yaml"}
+    - {src: "volumes_03_hostpath_pod.yaml.j2", dest: "03-hostpath/01-hostpath-pod.yaml"}
+    - {src: "volumes_03_hostpath_log_viewer.yaml.j2", dest: "03-hostpath/02-hostpath-log-viewer.yaml"}
+    - {src: "volumes_04_configmap_volume_pod.yaml.j2", dest: "04-configmap-secret/01-configmap-volume-pod.yaml"}
+    - {src: "volumes_04_secret_volume_pod.yaml.j2", dest: "04-configmap-secret/02-secret-volume-pod.yaml"}
+    - {src: "volumes_05_local_pv_pvc.yaml.j2", dest: "05-pv-pvc-lifecycle/01-local-pv-pvc.yaml"}
+    - {src: "volumes_05_pvc_expansion.yaml.j2", dest: "05-pv-pvc-lifecycle/02-pvc-expansion.yaml"}
+    - {src: "volumes_05_reclaim_policy_drill.md.j2", dest: "05-pv-pvc-lifecycle/03-reclaim-policy-drill.md"}
+  loop_control:
+    label: "volumes/{{ item.dest }}"
+  tags:
+    - cka_lab
+    - volumes

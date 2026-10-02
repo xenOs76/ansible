@@ -93,6 +93,32 @@ Dedicated Ansible role for provisioning isolated hands-on Certified Kubernetes A
   - Installer scripts: `install-kube-metrics.sh`, `install-kube-prometheus.sh`, `install-nginx-gateway-fabric.sh`, and `install-httpbin-go.sh`
   - Practice guide: `/home/vagrant/cka/helm/README.md`
 
+### Scenario 5: NFS Server & Storage Volumes Practice (`volumes`)
+
+- **Domain**: Storage & Volume Management.
+- **Objective**: Provision an NFS server on `kube-control-plane` exporting `/srv/nfsroot` to the worker node subnet, register `nfs-server.local` in `/etc/hosts` across all cluster nodes, and scaffold comprehensive CKA volume drills under `/home/vagrant/cka/volumes/`:
+  1. **NFS Shared Storage (`01-nfs/`)**:
+     - Direct inline NFS Pod volume mount (`01-nfs-direct-pod.yaml`) referencing `server: nfs-server.local`.
+     - Multi-replica Deployment demonstrating shared read/write (`ReadWriteMany`) across worker nodes (`02-nfs-deployment-shared.yaml`).
+     - PersistentVolume (`03-nfs-pv.yaml`) and PersistentVolumeClaim (`04-nfs-pvc.yaml`) binding with consumer Pod (`05-nfs-pvc-pod.yaml`).
+  2. **Ephemeral Volumes (`02-emptydir/`)**:
+     - Multi-container sidecar data sharing via `emptyDir: {}` (`01-emptydir-sidecar-pod.yaml`).
+     - In-memory tmpfs volume with `medium: Memory` and `sizeLimit: 64Mi` (`02-emptydir-memory-pod.yaml`).
+  3. **Node Filesystem Volumes (`03-hostpath/`)**:
+     - `hostPath` mount with `type: DirectoryOrCreate` (`01-hostpath-pod.yaml`).
+     - Read-only inspection of node `/var/log` (`02-hostpath-log-viewer.yaml`).
+  4. **ConfigMap & Secret Volumes (`04-configmap-secret/`)**:
+     - ConfigMap mounted as volume files with specific items and `0644` permissions (`01-configmap-volume-pod.yaml`).
+     - Secret mounted as files with restricted permissions (`defaultMode: 0400`) (`02-secret-volume-pod.yaml`).
+  5. **PV/PVC Lifecycle & Expansion (`05-pv-pvc-lifecycle/`)**:
+     - Local manual PV binding with `Retain` reclaim policy (`01-local-pv-pvc.yaml`).
+     - PVC online volume expansion drill (`02-pvc-expansion.yaml`).
+     - Reclaim policy step-by-step drill guide (`03-reclaim-policy-drill.md`).
+- **Artifacts**:
+  - Volume practice directory: `/home/vagrant/cka/volumes/`
+  - Automated verification test script: `/home/vagrant/cka/volumes/test-nfs-mounts.sh`
+  - Practice guide: `/home/vagrant/cka/volumes/README.md`
+
 ## Verification inside Control Plane
 
 ### Verify RBAC Scenario
@@ -224,4 +250,30 @@ curl -I http://192.168.56.20:30080/
 ./install-httpbin-go.sh
 kubectl get pods,svc -l app.kubernetes.io/instance=httpbingo
 kubectl run test-curl --rm -i --restart=Never --image=curlimages/curl:latest -- http://httpbingo.default.svc.cluster.local/get
+```
+
+### Verify Volumes Scenario
+
+```bash
+# Verify DNS / host mapping across cluster
+ping -c 1 nfs-server.local
+
+# Check NFS server status on control plane
+sudo exportfs -v
+showmount -e nfs-server.local
+
+# Run automated validation script
+cd /home/vagrant/cka/volumes
+./test-nfs-mounts.sh
+
+# Test inline NFS Pod
+kubectl apply -f 01-nfs/01-nfs-direct-pod.yaml
+kubectl get pod nfs-direct-pod
+kubectl exec nfs-direct-pod -- cat /mnt/nfs/shared-data.txt
+
+# Test static PV / PVC binding
+kubectl apply -f 01-nfs/03-nfs-pv.yaml
+kubectl apply -f 01-nfs/04-nfs-pvc.yaml
+kubectl get pv nfs-storage-pv
+kubectl get pvc nfs-storage-pvc
 ```

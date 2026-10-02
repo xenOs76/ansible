@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: nfs-storage-pv
+  labels:
+    app.kubernetes.io/part-of: cka-lab
+    cka.practice/scenario: volumes-nfs
+    type: nfs
+spec:
+  capacity:
+    storage: 1Gi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: nfs-manual
+  mountOptions:
+    - hard
+    - nfsvers=4.2
+  nfs:
+    server: {{ cka_lab_nfs_server_hostname }}
+    path: {{ cka_lab_nfs_export_dir }}

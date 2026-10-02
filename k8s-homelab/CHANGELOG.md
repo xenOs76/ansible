@@ -10,6 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Implemented CKA training scenario `volumes` (`roles/cka_lab/tasks/scenario_volumes.yml`): provisions an NFS server (`nfs-kernel-server`) on `kube-control-plane` exporting `/srv/nfsroot` with sample data (`index.html`, `shared-data.txt`, `reports/cluster-nodes.txt`) to the Kubernetes worker subnet (`192.168.56.0/24`).
+- Configured automated `nfs-server.local` DNS host mapping in `/etc/hosts` and `nfs-common` client package across all cluster nodes (`playbooks/cka_lab.yml` and `roles/common/tasks/main.yml`).
+- Scaffolded comprehensive CKA storage and volume exam practice manifests under `/home/vagrant/cka/volumes/`: direct inline NFS Pod mounts, multi-replica Nginx shared storage (`ReadWriteMany`), static PersistentVolume/PersistentVolumeClaim binding, multi-container `emptyDir` sidecars, in-memory `emptyDir` tmpfs, `hostPath` (`DirectoryOrCreate` and `/var/log` inspection), projected ConfigMap and Secret volumes with custom permissions, and PVC volume expansion.
+- Added `/home/vagrant/cka/volumes/README.md` guide and automated end-to-end verification script (`test-nfs-mounts.sh`).
+
 - Implemented Caddy ingress reverse proxy role (`roles/caddy`) with automated compilation via `xcaddy` (`v0.4.4`) to include the PowerDNS DNS-01 provider plugin (`github.com/caddy-dns/powerdns`).
 - Added Caddy status test script (`check-caddy-status.sh` with convenience symlink `test-caddy-status.sh`) in the home directory of the control plane user (`/home/vagrant`), executing `https-wrench certinfo --tls-endpoint 127.0.0.1:443 --tls-info --tls-servername <domain>` to verify certificate negotiation and SNI endpoint health.
 - Added `https-wrench` package to custom OS76 APT repository dependencies in `group_vars/all.yml` and `roles/caddy/tasks/prerequisites.yml`.

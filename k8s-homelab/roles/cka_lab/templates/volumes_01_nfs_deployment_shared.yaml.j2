@@ -1,0 +1,34 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nfs-shared-web
+  namespace: default
+  labels:
+    app: nfs-shared-web
+    app.kubernetes.io/part-of: cka-lab
+    cka.practice/scenario: volumes-nfs
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: nfs-shared-web
+  template:
+    metadata:
+      labels:
+        app: nfs-shared-web
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.27-alpine
+          ports:
+            - containerPort: 80
+              name: http
+          volumeMounts:
+            - name: nfs-shared-data
+              mountPath: /usr/share/nginx/html
+              readOnly: true
+      volumes:
+        - name: nfs-shared-data
+          nfs:
+            server: {{ cka_lab_nfs_server_hostname }}
+            path: {{ cka_lab_nfs_export_dir }}

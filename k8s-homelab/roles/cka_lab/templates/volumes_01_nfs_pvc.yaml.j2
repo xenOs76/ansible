@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nfs-storage-pvc
+  namespace: default
+  labels:
+    app.kubernetes.io/part-of: cka-lab
+    cka.practice/scenario: volumes-nfs
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: nfs-manual
+  resources:
+    requests:
+      storage: 1Gi

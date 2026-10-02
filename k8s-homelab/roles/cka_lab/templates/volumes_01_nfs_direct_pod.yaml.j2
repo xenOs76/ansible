@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nfs-direct-pod
+  namespace: default
+  labels:
+    app.kubernetes.io/part-of: cka-lab
+    cka.practice/scenario: volumes-nfs
+spec:
+  restartPolicy: Always
+  containers:
+    - name: web-reader
+      image: busybox:1.36
+      command: ["sh", "-c", "while true; do cat /mnt/nfs/shared-data.txt; sleep 10; done"]
+      volumeMounts:
+        - name: nfs-volume
+          mountPath: /mnt/nfs
+          readOnly: false
+  volumes:
+    - name: nfs-volume
+      nfs:
+        server: {{ cka_lab_nfs_server_hostname }}
+        path: {{ cka_lab_nfs_export_dir }}

@@ -1,0 +1,100 @@
+# CKA Storage & Volumes Practice Lab
+
+Hands-on training scenarios for the **Storage** domain of the Certified Kubernetes Administrator (CKA) exam.
+
+All NFS examples connect to the control plane NFS export at:
+
+- **Server**: `{{ cka_lab_nfs_server_hostname }}` (`{{ cka_lab_nfs_server_ip }}`)
+- **Export Path**: `{{ cka_lab_nfs_export_dir }}`
+- **Subnet Access**: `{{ cka_lab_nfs_export_subnet }}`
+
+---
+
+## Directory Structure
+
+```text
+{{ cka_lab_volumes_dir }}/
+├── README.md                         # This practice guide
+├── test-nfs-mounts.sh                # Automated validation script
+├── 01-nfs/
+│   ├── 01-nfs-direct-pod.yaml        # Inline NFS volume mount (direct without PV/PVC)
+│   ├── 02-nfs-deployment-shared.yaml # Deployment with ReadWriteMany shared volume
+│   ├── 03-nfs-pv.yaml                # PersistentVolume (nfs-server.local, RWX, 1Gi)
+│   ├── 04-nfs-pvc.yaml               # PersistentVolumeClaim matching the NFS PV
+│   └── 05-nfs-pvc-pod.yaml           # Pod consuming the NFS PVC
+├── 02-emptydir/
+│   ├── 01-emptydir-sidecar-pod.yaml  # Shared emptyDir between app writer & reader sidecar
+│   └── 02-emptydir-memory-pod.yaml   # In-memory tmpfs volume (medium: Memory)
+├── 03-hostpath/
+│   ├── 01-hostpath-pod.yaml          # hostPath with DirectoryOrCreate
+│   └── 02-hostpath-log-viewer.yaml   # Read-only hostPath mount of node's /var/log
+├── 04-configmap-secret/
+│   ├── 01-configmap-volume-pod.yaml  # ConfigMap mounted as volume files with specific items
+│   └── 02-secret-volume-pod.yaml     # Secret mounted as volume files with defaultMode 0400
+└── 05-pv-pvc-lifecycle/
+    ├── 01-local-pv-pvc.yaml          # Local PV with storageClassName: manual & Retain policy
+    ├── 02-pvc-expansion.yaml         # StorageClass & PVC demonstrating volume expansion
+    └── 03-reclaim-policy-drill.md    # Reclaim policy lifecycle drill (Retain vs Delete)
+```
+
+---
+
+## CKA Exam Drills
+
+### Drill 1: Inline NFS Volume Mount
+
+Directly mount an NFS share in a Pod without pre-creating a PersistentVolume:
+
+```bash
+kubectl apply -f 01-nfs/01-nfs-direct-pod.yaml
+kubectl get pod nfs-direct-pod
+kubectl exec nfs-direct-pod -- cat /mnt/nfs/index.html
+kubectl exec nfs-direct-pod -- cat /mnt/nfs/shared-data.txt
+```
+
+### Drill 2: Multi-Replica Shared Storage (ReadWriteMany)
+
+Deploy multiple replicas of an Nginx web server mounting the same NFS directory. Both replicas serve the identical `index.html` from the NFS server:
+
+```bash
+kubectl apply -f 01-nfs/02-nfs-deployment-shared.yaml
+kubectl rollout status deployment/nfs-shared-web
+kubectl get pods -l app=nfs-shared-web -o wide
+# Check logs or curl pod IPs
+```
+
+### Drill 3: Static PersistentVolume & PersistentVolumeClaim Lifecycle
+
+Practice binding a PersistentVolume to a PersistentVolumeClaim and attaching it to a Pod:
+
+```bash
+# 1. Create the PersistentVolume
+kubectl apply -f 01-nfs/03-nfs-pv.yaml
+kubectl get pv nfs-storage-pv
+
+# 2. Create the PersistentVolumeClaim and verify Bound status
+kubectl apply -f 01-nfs/04-nfs-pvc.yaml
+kubectl get pvc nfs-storage-pvc
+
+# 3. Mount PVC into Pod
+kubectl apply -f 01-nfs/05-nfs-pvc-pod.yaml
+kubectl get pod nfs-pvc-consumer
+kubectl exec nfs-pvc-consumer -- cat /data/shared/shared-data.txt
+```
+
+### Drill 4: Multi-Container emptyDir Sharing
+
+Demonstrate the sidecar pattern where an init/app container writes data and a companion container reads from the shared `emptyDir`:
+
+```bash
+kubectl apply -f 02-emptydir/01-emptydir-sidecar-pod.yaml
+kubectl logs emptydir-sidecar-pod -c reader-sidecar
+```
+
+### Drill 5: Automated Verification
+
+Run the test script to automatically validate all NFS mounts, DNS resolution, and read/write operations:
+
+```bash
+./test-nfs-mounts.sh
+```

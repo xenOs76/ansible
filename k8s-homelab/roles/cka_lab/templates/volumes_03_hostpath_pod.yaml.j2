@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: hostpath-pod
+  namespace: default
+  labels:
+    app.kubernetes.io/part-of: cka-lab
+    cka.practice/scenario: volumes-hostpath
+spec:
+  containers:
+    - name: host-writer
+      image: busybox:1.36
+      command: ["sh", "-c", "echo \"Host write verified from $(hostname) at $(date -u)\" >> /mnt/node-cache/node-info.txt && sleep 3600"]
+      volumeMounts:
+        - name: host-cache
+          mountPath: /mnt/node-cache
+  volumes:
+    - name: host-cache
+      hostPath:
+        path: /data/app-cache
+        type: DirectoryOrCreate

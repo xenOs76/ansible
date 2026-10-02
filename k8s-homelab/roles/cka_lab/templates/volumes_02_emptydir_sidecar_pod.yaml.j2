@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: emptydir-sidecar-pod
+  namespace: default
+  labels:
+    app.kubernetes.io/part-of: cka-lab
+    cka.practice/scenario: volumes-emptydir
+spec:
+  containers:
+    - name: app-writer
+      image: busybox:1.36
+      command: ["sh", "-c", "while true; do echo \"[$(date -u)] Transaction event processed\" >> /var/log/shared/app.log; sleep 5; done"]
+      volumeMounts:
+        - name: shared-logs
+          mountPath: /var/log/shared
+
+    - name: log-reader-sidecar
+      image: busybox:1.36
+      command: ["sh", "-c", "tail -F /var/log/shared/app.log"]
+      volumeMounts:
+        - name: shared-logs
+          mountPath: /var/log/shared
+          readOnly: true
+  volumes:
+    - name: shared-logs
+      emptyDir: {}

@@ -33,3 +33,11 @@
   tags:
     - cka_lab
     - helm
+
+- name: Execute CKA Lab Scenario - NFS & Storage Volumes (volumes)
+  ansible.builtin.include_tasks: scenario_volumes.yml
+  when: cka_lab_scenario_volumes_enabled | bool
+  tags:
+    - cka_lab
+    - volumes
+    - nfs

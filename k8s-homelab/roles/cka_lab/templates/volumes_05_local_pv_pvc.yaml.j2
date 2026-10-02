@@ -1,0 +1,56 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: local-storage-pv
+  labels:
+    app.kubernetes.io/part-of: cka-lab
+    cka.practice/scenario: volumes-lifecycle
+    tier: fast
+spec:
+  capacity:
+    storage: 500Mi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: manual
+  hostPath:
+    path: /data/local-pv-storage
+    type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: local-storage-pvc
+  namespace: default
+  labels:
+    app.kubernetes.io/part-of: cka-lab
+    cka.practice/scenario: volumes-lifecycle
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: manual
+  resources:
+    requests:
+      storage: 500Mi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: local-storage-consumer
+  namespace: default
+  labels:
+    app.kubernetes.io/part-of: cka-lab
+    cka.practice/scenario: volumes-lifecycle
+spec:
+  containers:
+    - name: storage-tester
+      image: busybox:1.36
+      command: ["sh", "-c", "echo 'Local PV persistence test' > /mnt/data/test.txt && sleep 3600"]
+      volumeMounts:
+        - name: local-vol
+          mountPath: /mnt/data
+  volumes:
+    - name: local-vol
+      persistentVolumeClaim:
+        claimName: local-storage-pvc

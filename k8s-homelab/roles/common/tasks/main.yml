@@ -94,6 +94,7 @@
       - jq
       - tar
       - bash-completion
+      - nfs-common
     state: present
     update_cache: true
   tags:
