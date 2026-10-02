@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# Caddy Ingress Reverse Proxy - TLS & Endpoint Status Checker
+# Managed by Ansible: roles/caddy
+# ==============================================================================
+set -euo pipefail
+
+if ! command -v https-wrench >/dev/null 2>&1; then
+  echo "Error: https-wrench is not installed or not in PATH." >&2
+  exit 1
+fi
+
+TLS_ENDPOINT="${TLS_ENDPOINT:-127.0.0.1:443}"
+TLS_SERVERNAME="${TLS_SERVERNAME:-{{ caddy_domain_suffix }}}"
+
+echo "==> Testing Caddy TLS status for ${TLS_SERVERNAME} on ${TLS_ENDPOINT}..."
+exec https-wrench certinfo \
+  --tls-endpoint "${TLS_ENDPOINT}" \
+  --tls-info \
+  --tls-servername "${TLS_SERVERNAME}" \
+  "$@"

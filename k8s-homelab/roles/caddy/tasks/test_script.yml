@@ -1,0 +1,49 @@
+---
+- name: Check target user passwd entry for test script
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ caddy_test_script_user }}"
+  failed_when: false
+  register: caddy_test_user_passwd
+  tags:
+    - caddy
+    - caddy_service
+    - caddy_test
+
+- name: Determine test script home directory
+  ansible.builtin.set_fact:
+    caddy_resolved_test_script_dir: >-
+      {{
+        caddy_test_user_passwd.ansible_facts.getent_passwd[caddy_test_script_user][4]
+        if (caddy_test_user_passwd.ansible_facts.getent_passwd is defined and caddy_test_script_user in caddy_test_user_passwd.ansible_facts.getent_passwd)
+        else caddy_test_script_dir
+      }}
+  tags:
+    - caddy
+    - caddy_service
+    - caddy_test
+
+- name: Deploy Caddy status test script
+  ansible.builtin.template:
+    src: check-caddy-status.sh.j2
+    dest: "{{ caddy_resolved_test_script_dir }}/{{ caddy_test_script_name }}"
+    owner: "{{ caddy_test_script_user }}"
+    group: "{{ caddy_test_script_user }}"
+    mode: "0755"
+  tags:
+    - caddy
+    - caddy_service
+    - caddy_test
+
+- name: Create convenience symlink for test-caddy-status.sh
+  ansible.builtin.file:
+    src: "{{ caddy_test_script_name }}"
+    dest: "{{ caddy_resolved_test_script_dir }}/test-caddy-status.sh"
+    owner: "{{ caddy_test_script_user }}"
+    group: "{{ caddy_test_script_user }}"
+    state: link
+  when: caddy_test_script_name != 'test-caddy-status.sh'
+  tags:
+    - caddy
+    - caddy_service
+    - caddy_test

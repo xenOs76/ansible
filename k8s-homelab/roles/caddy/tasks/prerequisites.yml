@@ -36,6 +36,25 @@
     - caddy
     - caddy_install
 
+- name: Ensure OS76 custom APT repository is present for custom tooling
+  ansible.builtin.apt_repository:
+    repo: "{{ caddy_os76_apt_repo }}"
+    state: present
+    filename: os76
+  when: caddy_os76_apt_repo_enabled | bool
+  tags:
+    - caddy
+    - caddy_install
+
+- name: Install https-wrench for TLS inspection and status testing
+  ansible.builtin.apt:
+    name: https-wrench
+    state: present
+  when: caddy_os76_apt_repo_enabled | bool
+  tags:
+    - caddy
+    - caddy_install
+
 - name: Ensure Caddy directories exist
   ansible.builtin.file:
     path: "{{ item.path }}"

@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Implemented Caddy ingress reverse proxy role (`roles/caddy`) with automated compilation via `xcaddy` (`v0.4.4`) to include the PowerDNS DNS-01 provider plugin (`github.com/caddy-dns/powerdns`).
+- Added Caddy status test script (`check-caddy-status.sh` with convenience symlink `test-caddy-status.sh`) in the home directory of the control plane user (`/home/vagrant`), executing `https-wrench certinfo --tls-endpoint 127.0.0.1:443 --tls-info --tls-servername <domain>` to verify certificate negotiation and SNI endpoint health.
+- Added `https-wrench` package to custom OS76 APT repository dependencies in `group_vars/all.yml` and `roles/caddy/tasks/prerequisites.yml`.
 - Added Garage S3 binary caching for Caddy (`s3://os76-assets/caddy/...` via `amazon.aws.s3_object`), checking for existing binaries before compiling to eliminate CPU-intensive builds on subsequent installations, uploading newly compiled binaries automatically, with encrypted S3 credentials managed via SOPS in `secrets.sops.yaml`.
 - Configured Caddy to terminate TLS on port 443 with Let's Encrypt certificates managed via PowerDNS DNS-01 challenges and reverse proxy requests for `*.k8s-pre.os76.xyz` (preprod) and `*.k8s.os76.xyz` (prod) to cluster nodes on NodePort `30443`.
 - Added upstream Caddy release notifier (`tasks/check_version.yml`) querying the GitHub API during playbook execution to detect and announce when a newer Caddy release is available upstream.

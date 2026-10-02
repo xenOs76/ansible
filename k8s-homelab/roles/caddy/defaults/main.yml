@@ -68,3 +68,12 @@ caddy_config_dir: "/etc/caddy"
 caddy_data_dir: "/var/lib/caddy"
 caddy_log_dir: "/var/log/caddy"
 caddy_build_dir: "/var/cache/caddy-build"
+
+# OS76 custom tooling repository
+caddy_os76_apt_repo_enabled: "{{ os76_apt_repo_enabled | default(true) }}"
+caddy_os76_apt_repo: "{{ os76_apt_repo | default('deb [trusted=yes] https://repo.os76.xyz/apt stable main') }}"
+
+# Caddy status test script settings
+caddy_test_script_user: "{{ ansible_user | default('vagrant') }}"
+caddy_test_script_dir: "/home/{{ caddy_test_script_user }}"
+caddy_test_script_name: "check-caddy-status.sh"

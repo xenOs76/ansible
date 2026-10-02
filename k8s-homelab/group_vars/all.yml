@@ -29,11 +29,12 @@ cluster_admin_users:
   - root
   - "{{ ansible_user | default('vagrant') }}"
 
-# OS76 Custom APT Repository (kubectl-netdrill, etc.)
+# OS76 Custom APT Repository (kubectl-netdrill, https-wrench, etc.)
 os76_apt_repo_enabled: true
 os76_apt_repo: "deb [trusted=yes] https://repo.os76.xyz/apt stable main"
 os76_apt_packages:
   - kubectl-netdrill
+  - https-wrench
 
 # Control plane bootstrap tooling (Helm, k9s, etcdctl, etcdutl)
 k9s_version: "v0.51.0"

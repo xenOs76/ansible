@@ -29,3 +29,10 @@
   tags:
     - caddy
     - caddy_service
+
+- name: 6. Deploy Caddy status test script
+  ansible.builtin.include_tasks: test_script.yml
+  tags:
+    - caddy
+    - caddy_service
+    - caddy_test
