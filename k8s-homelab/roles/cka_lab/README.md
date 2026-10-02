@@ -148,7 +148,7 @@ Dedicated Ansible role for provisioning isolated hands-on Certified Kubernetes A
 ### Scenario 7: Pods, Lifecycle & Namespaces Practice (`pods`)
 
 - **Domain**: Workloads & Scheduling.
-- **Reference**: [Kubernetes Pods Documentation](https://kubernetes.io/docs/concepts/workloads/pods/) & CKA Study Guide 2e Chapter 9.
+- **Reference**: [Kubernetes Pods Documentation](https://kubernetes.io/docs/concepts/workloads/pods/).
 - **Objective**: Practice imperative and declarative Pod management, command and argument overrides, lifecycle phase and container state diagnostics, observability (logs and exec), ephemeral network probing, spec immutability workflows, and namespace context preferences:
   1. **Imperative & Declarative Pods (`01-imperative-declarative/`)**:
      - `run-imperative.sh`: Command reference for generating and executing Pods using `kubectl run` with flags (`--image`, `--port`, `--env`, `--labels`, `--restart`, `--dry-run=client -o yaml`).
@@ -174,6 +174,38 @@ Dedicated Ansible role for provisioning isolated hands-on Certified Kubernetes A
   - Pods drill directory: `/home/vagrant/cka/pods/`
   - Automated test suite: `/home/vagrant/cka/pods/test-pods-drills.sh`
   - Master practice guide: `/home/vagrant/cka/pods/README.md`
+
+### Scenario 8: Services, Ingress, Gateway API & Network Policies (`networking`)
+
+- **Domain**: Services & Networking.
+- **Reference**: [Kubernetes Services & Networking Documentation](https://kubernetes.io/docs/concepts/services-networking/).
+- **Objective**: Comprehensive training across core Kubernetes networking abstractions, edge routing, and pod-to-pod microsegmentation:
+  1. **Services & CoreDNS (`01-services/`)**:
+     - `cka-lab-backend-app.yaml`: Multi-port microservice deployment exposing HTTP (port 80) and metrics (port 8080).
+     - `cka-lab-clusterip-service.yaml`: ClusterIP service providing stable virtual IP and CoreDNS name discovery (`cka-lab-clusterip-svc.default.svc.cluster.local`).
+     - `cka-lab-nodeport-service.yaml`: Multi-port NodePort service exposing port 80 on NodePort 31080 and port 8080 on NodePort 31090.
+     - `test-services.sh`: Non-interactive script verifying endpoint registration, DNS resolution, and NodePort access.
+  2. **Ingresses (`02-ingresses/`)**:
+     - `cka-lab-ingress-backends.yaml`: Independent web and API backend deployments and ClusterIP services.
+     - `cka-lab-ingress.yaml`: Ingress resource routing host `cka-lab.example.local` with path prefixes `/web` and `/api` using `ingressClassName: nginx`.
+     - `test-ingress.sh`: Non-interactive curl verification script testing Host header path routing.
+  3. **Gateway API & Caddy Integration (`03-gateway-api/`)**:
+     - `cka-lab-gateway.yaml`: Gateway resource implementing Gateway API standard CRDs with listeners on port 80 and port 443.
+     - `cka-lab-httproute.yaml`: HTTPRoute resource attaching to `cka-lab-gateway`, routing `/api` and `/httpbin` (with URLRewrite prefix stripping) to backend services.
+     - `cka-lab-caddy-integration.md`: Architecture guide documenting edge TLS termination on Caddy (port 443) and upstream reverse proxying to NGINX Gateway Fabric NodePort 30443.
+     - `test-gateway.sh`: Non-interactive script testing Gateway status and HTTPRoute path evaluation.
+  4. **Network Policies (`04-network-policies/`)**:
+     - `cka-lab-namespaces.yaml`: Isolated namespaces `cka-lab-net-client` and `cka-lab-net-backend`.
+     - `cka-lab-backend-workload.yaml`: Target backend microservice (`httpbin-go`).
+     - `cka-lab-client-workloads.yaml`: Authorized (`access: authorized`) and unauthorized (`access: unauthorized`) client pods.
+     - `cka-lab-default-deny-ingress.yaml`: Default-deny ingress isolation policy.
+     - `cka-lab-allow-client-to-backend.yaml`: Ingress policy permitting traffic only from authorized client pods.
+     - `cka-lab-egress-dns-policy.yaml`: Egress policy allowing CoreDNS (UDP/TCP 53) and backend access.
+     - `test-network-policies.sh`: Non-interactive script verifying permitted traffic vs connection timeouts when dropped.
+- **Artifacts**:
+  - Networking drill directory: `/home/vagrant/cka/networking/`
+  - Automated test suite: `/home/vagrant/cka/networking/test-networking-drills.sh`
+  - Master practice guide: `/home/vagrant/cka/networking/README.md`
 
 ## Verification inside Control Plane
 
@@ -363,4 +395,20 @@ cd ../03-observability-exec && ./debug-drill.sh
 cd ../04-ephemeral-networking && ./test-connectivity.sh
 cd ../05-spec-immutability && ./replace-drill.sh
 cd ../06-namespaces-context && ./namespace-context-drill.sh
+```
+
+### Verify Networking Scenarios
+
+```bash
+# Change to the networking drill directory
+cd /home/vagrant/cka/networking
+
+# Run automated validation test suite
+./test-networking-drills.sh
+
+# Run individual drill tests
+./01-services/test-services.sh
+./02-ingresses/test-ingress.sh
+./03-gateway-api/test-gateway.sh
+./04-network-policies/test-network-policies.sh
 ```

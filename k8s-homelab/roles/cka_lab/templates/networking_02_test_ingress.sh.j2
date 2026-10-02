@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# test-ingress.sh: Non-Interactive Verification of Ingresses
+# ==============================================================================
+set -euo pipefail
+
+NAMESPACE="{{ cka_lab_networking_namespace | default('default') }}"
+DOMAIN="{{ cka_lab_networking_domain | default('cka-lab.example.local') }}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+echo "==> [Ingress Drill] Deploying Ingress backends and routing rules..."
+kubectl apply -f "${SCRIPT_DIR}/cka-lab-ingress-backends.yaml" -n "${NAMESPACE}"
+kubectl apply -f "${SCRIPT_DIR}/cka-lab-ingress.yaml" -n "${NAMESPACE}"
+
+echo "Waiting for backend deployments to become ready..."
+kubectl rollout status deployment/cka-lab-ingress-web -n "${NAMESPACE}" --timeout=60s
+kubectl rollout status deployment/cka-lab-ingress-api -n "${NAMESPACE}" --timeout=60s
+
+echo "==> Ingress resource details:"
+kubectl get ingress cka-lab-ingress -n "${NAMESPACE}"
+
+NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
+
+echo "==> Testing Ingress path routing via NodePort 30080 with Host header ${DOMAIN}..."
+WEB_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -H "Host: ${DOMAIN}" "http://${NODE_IP}:30080/web" || echo "000")
+echo "HTTP response code for /web: ${WEB_STATUS}"
+
+API_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -H "Host: ${DOMAIN}" "http://${NODE_IP}:30080/api" || echo "000")
+echo "HTTP response code for /api: ${API_STATUS}"
+
+echo "==> Ingress drill verification complete."

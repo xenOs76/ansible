@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# test-services.sh: Non-Interactive Verification of Services & CoreDNS
+# ==============================================================================
+set -euo pipefail
+
+NAMESPACE="{{ cka_lab_networking_namespace | default('default') }}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+echo "==> [Services Drill] Deploying workloads and service definitions..."
+kubectl apply -f "${SCRIPT_DIR}/cka-lab-backend-app.yaml" -n "${NAMESPACE}"
+kubectl apply -f "${SCRIPT_DIR}/cka-lab-clusterip-service.yaml" -n "${NAMESPACE}"
+kubectl apply -f "${SCRIPT_DIR}/cka-lab-nodeport-service.yaml" -n "${NAMESPACE}"
+
+echo "Waiting for cka-lab-backend-app deployment rollout..."
+kubectl rollout status deployment/cka-lab-backend-app -n "${NAMESPACE}" --timeout=60s
+
+echo "==> 1. Verifying registered EndpointSlices for cka-lab-clusterip-svc:"
+kubectl get endpointslices -l "kubernetes.io/service-name=cka-lab-clusterip-svc" -n "${NAMESPACE}"
+
+CLUSTER_IP=$(kubectl get svc cka-lab-clusterip-svc -n "${NAMESPACE}" -o jsonpath='{.spec.clusterIP}')
+echo "ClusterIP is: ${CLUSTER_IP}"
+
+echo "==> 2. Verifying CoreDNS discovery and ClusterIP connectivity via ephemeral Pod..."
+DNS_TEST=$(kubectl run cka-lab-dns-probe \
+  --image=busybox:1.36.1 \
+  --rm -i --restart=Never \
+  -n "${NAMESPACE}" \
+  -- nslookup "cka-lab-clusterip-svc.${NAMESPACE}.svc.cluster.local")
+echo "${DNS_TEST}"
+
+echo "==> 3. Verifying HTTP communication to ClusterIP on port 80..."
+HTTP_TEST=$(kubectl run cka-lab-http-probe \
+  --image=busybox:1.36.1 \
+  --rm -i --restart=Never \
+  -n "${NAMESPACE}" \
+  -- wget -qO- "http://${CLUSTER_IP}:80" || true)
+
+if echo "${HTTP_TEST}" | grep -q -i "nginx"; then
+  echo "    OK: Successfully connected to cka-lab-clusterip-svc via ClusterIP."
+else
+  echo "    Warning: HTTP response: ${HTTP_TEST:0:60}"
+fi
+
+echo "==> 4. Verifying NodePort accessibility..."
+NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
+echo "Probing NodePort at http://${NODE_IP}:31080..."
+if curl -s -m 5 "http://${NODE_IP}:31080" | grep -q -i "nginx"; then
+  echo "    OK: NodePort 31080 reachable externally."
+fi
+
+echo "==> Services and CoreDNS drill completed successfully."

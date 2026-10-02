@@ -1,0 +1,53 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cka-lab-target-backend
+  namespace: {{ cka_lab_networking_backend_namespace | default('cka-lab-net-backend') }}
+  labels:
+    app.kubernetes.io/name: cka-lab-target-backend
+    app.kubernetes.io/part-of: cka-lab
+    cka.practice/scenario: networking
+    app: cka-lab-backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cka-lab-backend
+  template:
+    metadata:
+      labels:
+        app: cka-lab-backend
+        cka.practice/scenario: networking
+    spec:
+      containers:
+        - name: backend-service
+          image: nginx:alpine
+          ports:
+            - containerPort: 80
+              name: http
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 50m
+              memory: 32Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cka-lab-target-backend-svc
+  namespace: {{ cka_lab_networking_backend_namespace | default('cka-lab-net-backend') }}
+  labels:
+    app.kubernetes.io/name: cka-lab-target-backend-svc
+    app.kubernetes.io/part-of: cka-lab
+    cka.practice/scenario: networking
+spec:
+  type: ClusterIP
+  selector:
+    app: cka-lab-backend
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80

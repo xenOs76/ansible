@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# test-gateway.sh: Non-Interactive Verification of Gateway API
+# ==============================================================================
+set -euo pipefail
+
+NAMESPACE="{{ cka_lab_networking_namespace | default('default') }}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+echo "==> [Gateway API Drill] Verifying Gateway API prerequisites..."
+if ! kubectl get crd gateways.gateway.networking.k8s.io >/dev/null 2>&1; then
+  echo "Installing Gateway API standard CRDs..."
+  kubectl apply -k "https://github.com/nginx/nginx-gateway-fabric/config/crd/gateway-api/standard"
+fi
+
+echo "==> Applying Gateway and HTTPRoute manifests..."
+kubectl apply -f "${SCRIPT_DIR}/cka-lab-gateway.yaml" -n "${NAMESPACE}"
+kubectl apply -f "${SCRIPT_DIR}/cka-lab-httproute.yaml" -n "${NAMESPACE}"
+
+echo "Waiting up to 30s for Gateway to be accepted..."
+for _ in {1..30}; do
+  if kubectl get gateway cka-lab-gateway -n "${NAMESPACE}" >/dev/null 2>&1; then
+    echo "Gateway cka-lab-gateway exists."
+    break
+  fi
+  sleep 1
+done
+
+echo "==> Gateway and HTTPRoute resources:"
+kubectl get gateways,httproutes -n "${NAMESPACE}"
+
+NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
+
+echo "==> Testing HTTPRoute reachability on NodePort 30080..."
+HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -m 5 "http://${NODE_IP}:30080/api" || echo "000")
+echo "HTTP response status for /api: ${HTTP_STATUS}"
+
+if kubectl get svc httpbingo -n "${NAMESPACE}" >/dev/null 2>&1; then
+  echo "==> Testing httpbin-go route on /httpbin/get..."
+  HTTPBIN_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -m 5 "http://${NODE_IP}:30080/httpbin/get" || echo "000")
+  echo "HTTP response status for /httpbin/get: ${HTTPBIN_STATUS}"
+fi
+
+echo "==> Gateway API drill verification complete."

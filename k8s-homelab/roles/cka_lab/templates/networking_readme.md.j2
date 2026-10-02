@@ -1,0 +1,161 @@
+# CKA Lab Exercise: Kubernetes Networking (Services, Ingress, Gateway API & Network Policies)
+
+Hands-on training scenario for the Certified Kubernetes Administrator (CKA) certification, covering Services, Ingress controllers, the Gateway API (with NGINX Gateway Fabric & Caddy reverse proxy), and Network Policies (tested with httpbin-go).
+
+---
+
+## 1. Overview & Curriculum Objectives
+
+Networking constitutes a major domain of the CKA exam curriculum. This lab brings together the core networking primitives and modern architectural patterns:
+
+- **Module 1 (Services & CoreDNS)**: Stable ClusterIP networking, DNS resolution (`<service>.<namespace>.svc.cluster.local`), multi-port NodePort services, and modern endpoint / EndpointSlice mapping.
+- **Module 2 (Ingresses)**: L7 HTTP/HTTPS traffic routing via standard Ingress resources, host-based routing, and path-prefix matching.
+- **Module 3 (Gateway API)**: Next-generation role-oriented routing using standard Gateway API CRDs (`GatewayClass`, `Gateway`, `HTTPRoute`), NGINX Gateway Fabric, and Caddy TLS edge forwarding.
+- **Module 4 (Network Policies)**: Microsegmentation, default-deny ingress/egress, pod and namespace label selectors, DNS port 53 allow rules, and verification via `httpbin-go`.
+
+### Scenario Directory Structure
+
+```text
+{{ cka_lab_networking_dir }}/
+├── README.md                                  # This master guide
+├── test-networking-drills.sh                  # Non-interactive automated test suite
+├── 01-services/                               # Module 1: Services & CoreDNS
+│   ├── cka-lab-backend-app.yaml               # Multi-port microservice deployment
+│   ├── cka-lab-clusterip-service.yaml         # ClusterIP service
+│   ├── cka-lab-nodeport-service.yaml          # Multi-port NodePort service (HTTP & metrics)
+│   └── test-services.sh                       # Non-interactive service verification
+├── 02-ingresses/                              # Module 2: Ingresses & Path Routing
+│   ├── cka-lab-ingress-backends.yaml          # Web and API backend deployments & services
+│   ├── cka-lab-ingress.yaml                   # Ingress resource with path-prefix rules
+│   └── test-ingress.sh                        # Non-interactive Ingress testing
+├── 03-gateway-api/                            # Module 3: Gateway API & Caddy Integration
+│   ├── cka-lab-gateway.yaml                   # Gateway resource (port 80 & 443 listeners)
+│   ├── cka-lab-httproute.yaml                 # HTTPRoute matching /httpbin and /api
+│   ├── cka-lab-caddy-integration.md           # Edge forwarding architecture (Caddy -> NGF)
+│   └── test-gateway.sh                        # Non-interactive Gateway API test script
+└── 04-network-policies/                       # Module 4: Network Policies with httpbin-go
+    ├── cka-lab-namespaces.yaml                # Isolated client & backend namespaces
+    ├── cka-lab-backend-workload.yaml          # httpbin-go target application & service
+    ├── cka-lab-client-workloads.yaml          # Authorized & unauthorized client pods
+    ├── cka-lab-default-deny-ingress.yaml      # Default deny all ingress policy
+    ├── cka-lab-allow-client-to-backend.yaml   # Selective ingress policy from authorized clients
+    ├── cka-lab-egress-dns-policy.yaml         # Egress policy allowing CoreDNS & backend calls
+    └── test-network-policies.sh               # Non-interactive policy enforcement test
+```
+
+---
+
+## 2. Walkthrough & Exam Drills
+
+### Drill 1: Services & CoreDNS Discovery (`01-services/`)
+
+1. **Deploy Multi-Port Application**:
+
+   ```bash
+   kubectl apply -f {{ cka_lab_networking_dir }}/01-services/cka-lab-backend-app.yaml
+   kubectl rollout status deployment/cka-lab-backend-app
+   ```
+
+1. **Deploy ClusterIP & NodePort Services**:
+
+   ```bash
+   kubectl apply -f {{ cka_lab_networking_dir }}/01-services/cka-lab-clusterip-service.yaml
+   kubectl apply -f {{ cka_lab_networking_dir }}/01-services/cka-lab-nodeport-service.yaml
+   kubectl get svc -l cka.practice/scenario=networking
+   # Modern EndpointSlice discovery (v1.33+ standard):
+   kubectl get endpointslices -l kubernetes.io/service-name=cka-lab-clusterip-svc
+   ```
+
+1. **Test CoreDNS and NodePort Connectivity (Non-Interactive)**:
+
+   ```bash
+   {{ cka_lab_networking_dir }}/01-services/test-services.sh
+   ```
+
+### Drill 2: Ingress Path Routing (`02-ingresses/`)
+
+1. **Deploy Web & API Backends**:
+
+   ```bash
+   kubectl apply -f {{ cka_lab_networking_dir }}/02-ingresses/cka-lab-ingress-backends.yaml
+   ```
+
+1. **Apply Ingress Resource**:
+
+   ```bash
+   kubectl apply -f {{ cka_lab_networking_dir }}/02-ingresses/cka-lab-ingress.yaml
+   kubectl get ingress cka-lab-ingress
+   ```
+
+1. **Verify Ingress Path Routing**:
+
+   ```bash
+   {{ cka_lab_networking_dir }}/02-ingresses/test-ingress.sh
+   ```
+
+### Drill 3: Gateway API with NGINX Gateway Fabric & Caddy (`03-gateway-api/`)
+
+1. **Ensure NGINX Gateway Fabric and httpbin-go are Deployed**:
+
+   ```bash
+   # From ~/cka/helm if not already deployed:
+   ~/cka/helm/install-nginx-gateway-fabric.sh
+   ~/cka/helm/install-httpbin-go.sh
+   ```
+
+1. **Deploy Gateway and HTTPRoute**:
+
+   ```bash
+   kubectl apply -f {{ cka_lab_networking_dir }}/03-gateway-api/cka-lab-gateway.yaml
+   kubectl apply -f {{ cka_lab_networking_dir }}/03-gateway-api/cka-lab-httproute.yaml
+   kubectl get gateways,httproutes
+   ```
+
+1. **Edge TLS & Caddy Forwarding**:
+
+   Read the architecture guide at `{{ cka_lab_networking_dir }}/03-gateway-api/cka-lab-caddy-integration.md` explaining how external port 443 requests arriving at Caddy are forwarded to NodePort 30443 on worker nodes and routed via HTTPRoute.
+
+1. **Execute Non-Interactive Gateway API Test**:
+
+   ```bash
+   {{ cka_lab_networking_dir }}/03-gateway-api/test-gateway.sh
+   ```
+
+### Drill 4: Network Policies with httpbin-go (`04-network-policies/`)
+
+1. **Deploy Isolated Namespaces & Workloads**:
+
+   ```bash
+   kubectl apply -f {{ cka_lab_networking_dir }}/04-network-policies/cka-lab-namespaces.yaml
+   kubectl apply -f {{ cka_lab_networking_dir }}/04-network-policies/cka-lab-backend-workload.yaml
+   kubectl apply -f {{ cka_lab_networking_dir }}/04-network-policies/cka-lab-client-workloads.yaml
+   ```
+
+1. **Apply Default-Deny Ingress Policy**:
+
+   ```bash
+   kubectl apply -f {{ cka_lab_networking_dir }}/04-network-policies/cka-lab-default-deny-ingress.yaml
+   ```
+
+1. **Apply Selective Ingress & Egress Rules**:
+
+   ```bash
+   kubectl apply -f {{ cka_lab_networking_dir }}/04-network-policies/cka-lab-allow-client-to-backend.yaml
+   kubectl apply -f {{ cka_lab_networking_dir }}/04-network-policies/cka-lab-egress-dns-policy.yaml
+   ```
+
+1. **Verify Packet Filtering & Isolation**:
+
+   ```bash
+   {{ cka_lab_networking_dir }}/04-network-policies/test-network-policies.sh
+   ```
+
+---
+
+## 3. Automated Validation
+
+Execute the automated end-to-end verification script:
+
+```bash
+{{ cka_lab_networking_dir }}/test-networking-drills.sh
+```

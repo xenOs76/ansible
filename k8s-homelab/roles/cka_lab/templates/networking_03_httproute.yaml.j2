@@ -1,0 +1,33 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: cka-lab-httproute
+  namespace: {{ cka_lab_networking_namespace | default('default') }}
+  labels:
+    app.kubernetes.io/name: cka-lab-httproute
+    app.kubernetes.io/part-of: cka-lab
+    cka.practice/scenario: networking
+spec:
+  parentRefs:
+    - name: cka-lab-gateway
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /api
+      backendRefs:
+        - name: cka-lab-ingress-api-svc
+          port: 80
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /httpbin
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplacePrefixMatch
+              replacePrefixMatch: /
+      backendRefs:
+        - name: httpbingo
+          port: 80

@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: cka-lab-nodeport-svc
+  namespace: {{ cka_lab_networking_namespace | default('default') }}
+  labels:
+    app.kubernetes.io/name: cka-lab-nodeport-svc
+    app.kubernetes.io/part-of: cka-lab
+    cka.practice/scenario: networking
+spec:
+  type: NodePort
+  selector:
+    app: cka-lab-backend-app
+  ports:
+    - name: http-web
+      port: 80
+      targetPort: 80
+      nodePort: 31080
+      protocol: TCP
+    - name: http-metrics
+      port: 8080
+      targetPort: 8080
+      nodePort: 31090
+      protocol: TCP

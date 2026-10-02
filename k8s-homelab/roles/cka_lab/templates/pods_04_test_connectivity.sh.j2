@@ -17,7 +17,7 @@ echo "==> cka-lab-echo-server cluster IP is: ${POD_IP}"
 echo "==> Launching ephemeral busybox Pod to probe http://${POD_IP}:80 via wget..."
 kubectl run cka-lab-ephemeral-probe \
   --image=busybox:1.36.1 \
-  --rm --restart=Never \
+  --rm -i --restart=Never \
   -n "${NAMESPACE}" \
   -- wget -qO- "http://${POD_IP}:80"
 

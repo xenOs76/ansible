@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# test-network-policies.sh: Non-Interactive Verification of Network Policies
+# ==============================================================================
+set -euo pipefail
+
+CLIENT_NS="{{ cka_lab_networking_client_namespace | default('cka-lab-net-client') }}"
+BACKEND_NS="{{ cka_lab_networking_backend_namespace | default('cka-lab-net-backend') }}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+echo "==> [NetworkPolicy Drill] Setting up namespaces and test workloads..."
+kubectl apply -f "${SCRIPT_DIR}/cka-lab-namespaces.yaml"
+kubectl apply -f "${SCRIPT_DIR}/cka-lab-backend-workload.yaml"
+kubectl apply -f "${SCRIPT_DIR}/cka-lab-client-workloads.yaml"
+
+echo "Waiting for backend and client pods to be Ready..."
+kubectl rollout status deployment/cka-lab-target-backend -n "${BACKEND_NS}" --timeout=60s
+kubectl wait --for=condition=Ready pod/cka-lab-client-authorized -n "${CLIENT_NS}" --timeout=60s
+kubectl wait --for=condition=Ready pod/cka-lab-client-unauthorized -n "${CLIENT_NS}" --timeout=60s
+
+BACKEND_URL="http://cka-lab-target-backend-svc.${BACKEND_NS}.svc.cluster.local:80"
+
+echo "==> 1. Testing baseline connectivity before applying NetworkPolicies (expect SUCCESS)..."
+if kubectl exec -n "${CLIENT_NS}" cka-lab-client-authorized -- wget -qO- -T 3 "${BACKEND_URL}" >/dev/null 2>&1; then
+  echo "    OK: Initial baseline connection succeeded as expected."
+fi
+
+echo "==> 2. Applying Default Deny Ingress policy in ${BACKEND_NS}..."
+kubectl apply -f "${SCRIPT_DIR}/cka-lab-default-deny-ingress.yaml"
+
+echo "Verifying traffic is blocked (expect TIMEOUT / FAILURE)..."
+if ! kubectl exec -n "${CLIENT_NS}" cka-lab-client-authorized -- wget -qO- -T 2 "${BACKEND_URL}" >/dev/null 2>&1; then
+  echo "    OK: Default deny ingress successfully dropped packet."
+fi
+
+echo "==> 3. Applying Selective Ingress and Egress DNS policies..."
+kubectl apply -f "${SCRIPT_DIR}/cka-lab-allow-client-to-backend.yaml"
+kubectl apply -f "${SCRIPT_DIR}/cka-lab-egress-dns-policy.yaml"
+
+echo "==> 4. Verifying Authorized client can reach backend (expect SUCCESS)..."
+if kubectl exec -n "${CLIENT_NS}" cka-lab-client-authorized -- wget -qO- -T 3 "${BACKEND_URL}" >/dev/null 2>&1; then
+  echo "    OK: Authorized client successfully reached backend."
+fi
+
+echo "==> 5. Verifying Unauthorized client is blocked (expect FAILURE)..."
+if ! kubectl exec -n "${CLIENT_NS}" cka-lab-client-unauthorized -- wget -qO- -T 2 "${BACKEND_URL}" >/dev/null 2>&1; then
+  echo "    OK: Unauthorized client was rejected by NetworkPolicy."
+fi
+
+echo "==> NetworkPolicy drill verification completed successfully."

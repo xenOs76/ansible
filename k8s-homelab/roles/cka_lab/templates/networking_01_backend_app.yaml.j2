@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cka-lab-backend-app
+  namespace: {{ cka_lab_networking_namespace | default('default') }}
+  labels:
+    app.kubernetes.io/name: cka-lab-backend-app
+    app.kubernetes.io/part-of: cka-lab
+    cka.practice/scenario: networking
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: cka-lab-backend-app
+  template:
+    metadata:
+      labels:
+        app: cka-lab-backend-app
+        cka.practice/scenario: networking
+    spec:
+      containers:
+        - name: app
+          image: nginx:alpine
+          ports:
+            - name: http-web
+              containerPort: 80
+            - name: http-metrics
+              containerPort: 8080
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 50m
+              memory: 32Mi

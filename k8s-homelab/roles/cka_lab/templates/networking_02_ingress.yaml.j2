@@ -1,0 +1,31 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: cka-lab-ingress
+  namespace: {{ cka_lab_networking_namespace | default('default') }}
+  labels:
+    app.kubernetes.io/name: cka-lab-ingress
+    app.kubernetes.io/part-of: cka-lab
+    cka.practice/scenario: networking
+  annotations:
+    nginx.org/rewrites: "serviceName=cka-lab-ingress-web-svc rewrite=/;serviceName=cka-lab-ingress-api-svc rewrite=/"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: {{ cka_lab_networking_domain | default('cka-lab.example.local') }}
+      http:
+        paths:
+          - path: /web
+            pathType: Prefix
+            backend:
+              service:
+                name: cka-lab-ingress-web-svc
+                port:
+                  number: 80
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: cka-lab-ingress-api-svc
+                port:
+                  number: 80

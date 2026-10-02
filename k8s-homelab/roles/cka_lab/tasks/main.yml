@@ -57,3 +57,14 @@
     - cka_lab
     - pods
     - workloads
+
+- name: Execute CKA Lab Scenario - Services, Ingress, Gateway API & Network Policies (networking)
+  ansible.builtin.include_tasks: scenario_networking.yml
+  when: cka_lab_scenario_networking_enabled | bool
+  tags:
+    - cka_lab
+    - networking
+    - services
+    - ingress
+    - gateway
+    - networkpolicy

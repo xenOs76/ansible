@@ -8,6 +8,7 @@ cka_lab_scenario_helm_enabled: true
 cka_lab_scenario_volumes_enabled: true
 cka_lab_scenario_deployments_enabled: true
 cka_lab_scenario_pods_enabled: true
+cka_lab_scenario_networking_enabled: true
 
 # Scenario: motd (CKA Initial Steps Reminder Announcement)
 cka_lab_motd_user: "{{ ansible_user | default('vagrant') }}"
@@ -196,7 +197,16 @@ cka_lab_deployments_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/depl
 cka_lab_deployments_namespace: "default"
 
 # Scenario: pods (Pods, Namespaces, Lifecycle, and Immutability Drills)
-# Reference: CKA Study Guide 2e Chapter 9 (Pods and Namespaces)
+# Reference: Kubernetes Pods and Namespaces CKA curriculum
 cka_lab_pods_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/pods"
 cka_lab_pods_namespace: "default"
 cka_lab_pods_staging_namespace: "cka-lab-staging"
+
+# Scenario: networking (Services, Ingress, Gateway API, and Network Policies)
+# Reference: Kubernetes Services & Networking CKA curriculum
+cka_lab_networking_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/networking"
+cka_lab_networking_namespace: "default"
+cka_lab_networking_gateway_namespace: "nginx-gateway"
+cka_lab_networking_client_namespace: "cka-lab-net-client"
+cka_lab_networking_backend_namespace: "cka-lab-net-backend"
+cka_lab_networking_domain: "cka-lab.example.local"

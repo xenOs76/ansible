@@ -1,0 +1,13 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: cka-lab-default-deny-ingress
+  namespace: {{ cka_lab_networking_backend_namespace | default('cka-lab-net-backend') }}
+  labels:
+    app.kubernetes.io/name: cka-lab-default-deny-ingress
+    app.kubernetes.io/part-of: cka-lab
+    cka.practice/scenario: networking
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress

@@ -1,0 +1,59 @@
+---
+- name: Ensure CKA lab networking directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ ansible_user | default('vagrant') }}"
+    group: "{{ ansible_user | default('vagrant') }}"
+    mode: "0755"
+  loop:
+    - "{{ cka_lab_networking_dir }}"
+    - "{{ cka_lab_networking_dir }}/01-services"
+    - "{{ cka_lab_networking_dir }}/02-ingresses"
+    - "{{ cka_lab_networking_dir }}/03-gateway-api"
+    - "{{ cka_lab_networking_dir }}/04-network-policies"
+  tags:
+    - cka_lab
+    - networking
+    - services
+    - ingress
+    - gateway
+    - networkpolicy
+
+- name: Render CKA networking drill manifests and guides
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "{{ cka_lab_networking_dir }}/{{ item.dest }}"
+    owner: "{{ ansible_user | default('vagrant') }}"
+    group: "{{ ansible_user | default('vagrant') }}"
+    mode: "{{ item.mode | default('0644') }}"
+  loop:
+    - {src: "networking_readme.md.j2", dest: "README.md", mode: "0644"}
+    - {src: "networking_test_drills.sh.j2", dest: "test-networking-drills.sh", mode: "0755"}
+    - {src: "networking_01_backend_app.yaml.j2", dest: "01-services/cka-lab-backend-app.yaml"}
+    - {src: "networking_01_clusterip_svc.yaml.j2", dest: "01-services/cka-lab-clusterip-service.yaml"}
+    - {src: "networking_01_nodeport_svc.yaml.j2", dest: "01-services/cka-lab-nodeport-service.yaml"}
+    - {src: "networking_01_test_services.sh.j2", dest: "01-services/test-services.sh", mode: "0755"}
+    - {src: "networking_02_ingress_backends.yaml.j2", dest: "02-ingresses/cka-lab-ingress-backends.yaml"}
+    - {src: "networking_02_ingress.yaml.j2", dest: "02-ingresses/cka-lab-ingress.yaml"}
+    - {src: "networking_02_test_ingress.sh.j2", dest: "02-ingresses/test-ingress.sh", mode: "0755"}
+    - {src: "networking_03_gateway.yaml.j2", dest: "03-gateway-api/cka-lab-gateway.yaml"}
+    - {src: "networking_03_httproute.yaml.j2", dest: "03-gateway-api/cka-lab-httproute.yaml"}
+    - {src: "networking_03_caddy_integration.md.j2", dest: "03-gateway-api/cka-lab-caddy-integration.md", mode: "0644"}
+    - {src: "networking_03_test_gateway.sh.j2", dest: "03-gateway-api/test-gateway.sh", mode: "0755"}
+    - {src: "networking_04_namespaces.yaml.j2", dest: "04-network-policies/cka-lab-namespaces.yaml"}
+    - {src: "networking_04_backend_workload.yaml.j2", dest: "04-network-policies/cka-lab-backend-workload.yaml"}
+    - {src: "networking_04_client_workloads.yaml.j2", dest: "04-network-policies/cka-lab-client-workloads.yaml"}
+    - {src: "networking_04_default_deny_ingress.yaml.j2", dest: "04-network-policies/cka-lab-default-deny-ingress.yaml"}
+    - {src: "networking_04_allow_client_to_backend.yaml.j2", dest: "04-network-policies/cka-lab-allow-client-to-backend.yaml"}
+    - {src: "networking_04_egress_dns_policy.yaml.j2", dest: "04-network-policies/cka-lab-egress-dns-policy.yaml"}
+    - {src: "networking_04_test_network_policies.sh.j2", dest: "04-network-policies/test-network-policies.sh", mode: "0755"}
+  loop_control:
+    label: "networking/{{ item.dest }}"
+  tags:
+    - cka_lab
+    - networking
+    - services
+    - ingress
+    - gateway
+    - networkpolicy

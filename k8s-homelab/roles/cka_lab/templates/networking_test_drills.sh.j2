@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# test-networking-drills.sh: Automated Verification Suite for CKA Networking Drills
+# Modules: Services, Ingress, Gateway API, and Network Policies
+# ==============================================================================
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+NAMESPACE="{{ cka_lab_networking_namespace | default('default') }}"
+CLIENT_NS="{{ cka_lab_networking_client_namespace | default('cka-lab-net-client') }}"
+BACKEND_NS="{{ cka_lab_networking_backend_namespace | default('cka-lab-net-backend') }}"
+
+echo "===================================================================="
+echo "  [CKA LAB] Running End-to-End Networking Verification              "
+echo "===================================================================="
+
+# Helper cleanup function (strictly non-interactive)
+cleanup() {
+  echo "==> Cleaning up networking test resources..."
+  # Clean up services & deployments in default namespace
+  kubectl delete deployment cka-lab-backend-app cka-lab-ingress-web cka-lab-ingress-api \
+    -n "${NAMESPACE}" --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
+  kubectl delete service cka-lab-clusterip-svc cka-lab-nodeport-svc cka-lab-ingress-web-svc \
+    cka-lab-ingress-api-svc -n "${NAMESPACE}" --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
+  kubectl delete ingress cka-lab-ingress -n "${NAMESPACE}" --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
+  kubectl delete httproute cka-lab-httproute -n "${NAMESPACE}" --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
+  kubectl delete gateway cka-lab-gateway -n "${NAMESPACE}" --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
+  # Clean up isolated namespaces
+  kubectl delete namespace "${CLIENT_NS}" "${BACKEND_NS}" --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
+}
+
+trap cleanup EXIT
+
+# ------------------------------------------------------------------------------
+# Drill 1: Services & CoreDNS
+# ------------------------------------------------------------------------------
+echo "--------------------------------------------------------------------"
+echo "  [1/4] Testing Services & CoreDNS                                  "
+echo "--------------------------------------------------------------------"
+"${SCRIPT_DIR}/01-services/test-services.sh"
+
+# ------------------------------------------------------------------------------
+# Drill 2: Ingress Path Routing
+# ------------------------------------------------------------------------------
+echo "--------------------------------------------------------------------"
+echo "  [2/4] Testing Ingress Path Routing                                "
+echo "--------------------------------------------------------------------"
+"${SCRIPT_DIR}/02-ingresses/test-ingress.sh"
+
+# ------------------------------------------------------------------------------
+# Drill 3: Gateway API & NGINX Gateway Fabric
+# ------------------------------------------------------------------------------
+echo "--------------------------------------------------------------------"
+echo "  [3/4] Testing Gateway API & HTTPRoute                             "
+echo "--------------------------------------------------------------------"
+"${SCRIPT_DIR}/03-gateway-api/test-gateway.sh"
+
+# ------------------------------------------------------------------------------
+# Drill 4: Network Policies with httpbin-go
+# ------------------------------------------------------------------------------
+echo "--------------------------------------------------------------------"
+echo "  [4/4] Testing Network Policies & Packet Filtering                 "
+echo "--------------------------------------------------------------------"
+"${SCRIPT_DIR}/04-network-policies/test-network-policies.sh"
+
+echo "===================================================================="
+echo "  [SUCCESS] All CKA Networking drills verified successfully!        "
+echo "===================================================================="
