@@ -7,6 +7,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NAMESPACE="{{ cka_lab_chaos_namespace }}"
+EXPERIMENTS_URL="https://raw.githubusercontent.com/litmuschaos/chaos-charts/master/faults/kubernetes/experiments.yaml"
 DRILL="${1:-}"
 
 if [ -z "${DRILL}" ]; then
@@ -26,12 +27,40 @@ if ! kubectl get crd chaosengines.litmuschaos.io >/dev/null 2>&1; then
   exit 1
 fi
 
+# Ensure litmus-admin ServiceAccount and RBAC exist in the target namespace
+if ! kubectl get sa litmus-admin -n "${NAMESPACE}" >/dev/null 2>&1; then
+  echo "==> Setting up litmus-admin RBAC in '${NAMESPACE}'..."
+  kubectl create sa litmus-admin -n "${NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f -
+  kubectl create clusterrolebinding "litmus-admin-clusterrole-${NAMESPACE}" \
+    --clusterrole=cluster-admin \
+    --serviceaccount="${NAMESPACE}:litmus-admin" \
+    --dry-run=client -o yaml | kubectl apply -f -
+fi
+
+# Map drill to corresponding ChaosExperiment name
+case "${DRILL}" in
+  oom)      EXP_NAME="pod-memory-hog" ;;
+  network)  EXP_NAME="pod-network-loss" ;;
+  dns)      EXP_NAME="pod-dns-error" ;;
+  eviction) EXP_NAME="node-memory-hog" ;;
+  *)
+    echo "Unknown drill '${DRILL}'. Valid options: oom, network, dns, eviction" >&2
+    exit 1
+    ;;
+esac
+
+# Ensure required ChaosExperiment definition is present in the target namespace
+if ! kubectl get chaosexperiment "${EXP_NAME}" -n "${NAMESPACE}" >/dev/null 2>&1; then
+  echo "==> ChaosExperiment '${EXP_NAME}' not found in '${NAMESPACE}'. Applying experiment definitions..."
+  kubectl apply -f "${EXPERIMENTS_URL}" -n "${NAMESPACE}"
+fi
+
 echo "==> 1. Deploying steady-state target workloads into '${NAMESPACE}'..."
 kubectl apply -f "${SCRIPT_DIR}/00-target-app/target-app.yaml"
 kubectl rollout status deployment/cka-lab-payment-svc -n "${NAMESPACE}" --timeout=60s
 kubectl rollout status deployment/cka-lab-web-portal -n "${NAMESPACE}" --timeout=60s
 
-echo "==> 2. Initiating Chaos Fault Injection: '${DRILL}'..."
+echo "==> 2. Initiating Chaos Fault Injection: '${DRILL}' (${EXP_NAME})..."
 
 case "${DRILL}" in
   oom)
@@ -87,10 +116,6 @@ case "${DRILL}" in
     echo "     kubectl get pods -A -o custom-columns=NAME:.metadata.name,QOS:.status.qosClass"
     echo "  3. Verify stability with: ./verify-chaos-exercise.sh eviction"
     echo "===================================================================="
-    ;;
-  *)
-    echo "Unknown drill '${DRILL}'. Valid options: oom, network, dns, eviction" >&2
-    exit 1
     ;;
 esac
 

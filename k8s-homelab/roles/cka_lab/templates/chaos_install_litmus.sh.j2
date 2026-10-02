@@ -45,6 +45,6 @@ subjects:
 EOF
 
 echo "==> Pre-loading Generic ChaosExperiment definitions into '${NAMESPACE}'..."
-kubectl apply -f "https://hub.litmuschaos.io/api/chaos/master?file=charts/generic/experiments.yaml" -n "${NAMESPACE}"
+kubectl apply -f "https://raw.githubusercontent.com/litmuschaos/chaos-charts/master/faults/kubernetes/experiments.yaml" -n "${NAMESPACE}"
 
 echo "==> [SUCCESS] Headless LitmusChaos Operator installed and ready in '${NAMESPACE}'!"

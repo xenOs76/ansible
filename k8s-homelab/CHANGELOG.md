@@ -122,6 +122,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fixed LitmusChaos `ChaosExperiment not found` error during chaos drill executions by updating the generic experiments manifest URL to raw GitHub (`faults/kubernetes/experiments.yaml`), replacing the deprecated ChaosHub endpoint. Added defensive auto-provisioning of missing experiment CRDs and RBAC bindings inside `start-chaos-exercise.sh`.
 - Fixed `scripts/sync-kubeconfig.sh` incorrectly synchronizing stale credentials
   from previous cluster deployments when running `make preprod-up`. The script
   now validates that the control plane VM is running and confirms that
