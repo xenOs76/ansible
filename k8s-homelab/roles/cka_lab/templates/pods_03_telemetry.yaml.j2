@@ -1,0 +1,40 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: cka-lab-telemetry-app
+  namespace: {{ cka_lab_pods_namespace | default('default') }}
+  labels:
+    app.kubernetes.io/name: cka-lab-telemetry-app
+    app.kubernetes.io/part-of: cka-lab
+    cka.practice/scenario: pods
+spec:
+  restartPolicy: Always
+  containers:
+    - name: telemetry-agent
+      image: busybox:1.36.1
+      command:
+        - /bin/sh
+        - -c
+      args:
+        - |
+          seq=0
+          echo "[cka-lab-telemetry-app] Agent started on node ${POD_NODE_NAME:-unknown}."
+          while true; do
+            seq=$((seq + 1))
+            echo "$(date -u +'%Y-%m-%dT%H:%M:%SZ') [INFO] [cka-lab-telemetry-app] sequence=${seq} status=HEALTHY load=0.12"
+            sleep 3
+          done
+      env:
+        - name: APP_ROLE
+          value: "telemetry"
+        - name: POD_NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+      resources:
+        requests:
+          cpu: 10m
+          memory: 16Mi
+        limits:
+          cpu: 50m
+          memory: 32Mi

@@ -6,6 +6,8 @@ cka_lab_scenario_secrets_enabled: true
 cka_lab_scenario_configmaps_enabled: true
 cka_lab_scenario_helm_enabled: true
 cka_lab_scenario_volumes_enabled: true
+cka_lab_scenario_deployments_enabled: true
+cka_lab_scenario_pods_enabled: true
 
 # Scenario: motd (CKA Initial Steps Reminder Announcement)
 cka_lab_motd_user: "{{ ansible_user | default('vagrant') }}"
@@ -188,3 +190,13 @@ cka_lab_nfs_server_ip: >-
 cka_lab_nfs_export_dir: "/srv/nfsroot"
 cka_lab_nfs_export_subnet: "{{ '192.168.56.0/24' if ('preprod' in groups) else '10.0.0.0/8' }}"
 cka_lab_nfs_export_options: "rw,sync,no_subtree_check,no_root_squash,insecure"
+
+# Scenario: deployments (Deployments, ReplicaSets, Rollouts, and Strategy Drills)
+cka_lab_deployments_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/deployments"
+cka_lab_deployments_namespace: "default"
+
+# Scenario: pods (Pods, Namespaces, Lifecycle, and Immutability Drills)
+# Reference: CKA Study Guide 2e Chapter 9 (Pods and Namespaces)
+cka_lab_pods_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/pods"
+cka_lab_pods_namespace: "default"
+cka_lab_pods_staging_namespace: "cka-lab-staging"

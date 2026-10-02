@@ -1,0 +1,40 @@
+# ==============================================================================
+# CKA Pause/Resume Drill: Final Target State
+# ==============================================================================
+# Represents the combined multi-attribute target state: updated image,
+# custom environment variables, and tuned resource requests.
+# ==============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cka-lab-batch-pipeline
+  namespace: {{ cka_lab_deployments_namespace | default('default') }}
+  labels:
+    app: cka-lab-batch-pipeline
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: cka-lab-batch-pipeline
+  template:
+    metadata:
+      labels:
+        app: cka-lab-batch-pipeline
+    spec:
+      containers:
+        - name: pipeline
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - "echo 'pipeline running' && sleep 3600"
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+          env:
+            - name: PIPELINE_STAGE
+              value: "production"

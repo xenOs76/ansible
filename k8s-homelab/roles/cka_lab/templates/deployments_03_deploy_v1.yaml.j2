@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cka-lab-catalog-service
+  namespace: {{ cka_lab_deployments_namespace | default('default') }}
+  labels:
+    app: cka-lab-catalog
+  annotations:
+    kubernetes.io/change-cause: "Initial rollout: catalog service v1.0"
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: cka-lab-catalog
+  template:
+    metadata:
+      labels:
+        app: cka-lab-catalog
+    spec:
+      containers:
+        - name: catalog-app
+          image: nginx:1.24-alpine
+          ports:
+            - containerPort: 80

@@ -119,6 +119,62 @@ Dedicated Ansible role for provisioning isolated hands-on Certified Kubernetes A
   - Automated verification test script: `/home/vagrant/cka/volumes/test-nfs-mounts.sh`
   - Practice guide: `/home/vagrant/cka/volumes/README.md`
 
+### Scenario 6: Deployments, ReplicaSets & Rollouts Practice (`deployments`)
+
+- **Domain**: Workloads & Scheduling.
+- **Reference**: [Kubernetes Deployments Documentation](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/)
+- **Objective**: Practice declarative and imperative deployment lifecycle management, rolling updates, rollbacks, history tracking, label selector troubleshooting, and deployment strategies:
+  1. **Deployment Basics (`01-basic-deployment/`)**:
+     - `web-frontend-deployment.yaml`: Production reverse-proxy deployment with 3 replicas, resource requests, and environment variables.
+     - `api-service-deployment.yaml`: Background microservice deployment with custom command loop.
+  2. **Label Selector Troubleshooting (`02-troubleshooting-labels/`)**:
+     - `broken-deployment.yaml`: Broken manifest with mismatched `spec.selector.matchLabels` (`env: staging`) vs `spec.template.metadata.labels` (`env: production`) for diagnostic practice.
+     - `fixed-deployment.yaml`: Corrected matching manifest.
+     - `README.md`: Error inspection, ReplicaSet selector mechanics, and immutability rules.
+  3. **Rolling Updates & Rollbacks (`03-rolling-updates-rollbacks/`)**:
+     - `01-catalog-v1.yaml` (`nginx:1.24-alpine`) & `02-catalog-v2.yaml` (`nginx:1.25-alpine`).
+     - `rollout-drill.sh`: Interactive walkthrough demonstrating `rollout status`, revision history inspection, change-cause annotations, and rollbacks via `rollout undo --to-revision`.
+  4. **Deployment Strategies (`04-strategies/`)**:
+     - `rolling-update-custom.yaml`: Zero-downtime RollingUpdate with discrete integers (`maxSurge: 1`, `maxUnavailable: 0`).
+     - `rolling-update-percent.yaml`: Percentage-based RollingUpdate (`maxSurge: 50%`, `maxUnavailable: 25%`).
+     - `recreate-strategy.yaml`: Recreate strategy for singleton workers requiring complete container teardown prior to launch.
+  5. **Pausing and Resuming Rollouts (`05-pause-resume/`)**:
+     - `batch-change-deployment.yaml` & `pause-resume-drill.sh`: Demonstrating batch updates (image, environment variables, resource limits) while paused, followed by single-revision resume.
+- **Artifacts**:
+  - Deployments drill directory: `/home/vagrant/cka/deployments/`
+  - Automated test suite: `/home/vagrant/cka/deployments/test-deployments-drills.sh`
+  - Master practice guide: `/home/vagrant/cka/deployments/README.md`
+
+### Scenario 7: Pods, Lifecycle & Namespaces Practice (`pods`)
+
+- **Domain**: Workloads & Scheduling.
+- **Reference**: [Kubernetes Pods Documentation](https://kubernetes.io/docs/concepts/workloads/pods/) & CKA Study Guide 2e Chapter 9.
+- **Objective**: Practice imperative and declarative Pod management, command and argument overrides, lifecycle phase and container state diagnostics, observability (logs and exec), ephemeral network probing, spec immutability workflows, and namespace context preferences:
+  1. **Imperative & Declarative Pods (`01-imperative-declarative/`)**:
+     - `run-imperative.sh`: Command reference for generating and executing Pods using `kubectl run` with flags (`--image`, `--port`, `--env`, `--labels`, `--restart`, `--dry-run=client -o yaml`).
+     - `cka-lab-web-service-pod.yaml`: Declarative Nginx web server manifest with container ports and environment variables.
+     - `cka-lab-batch-task-pod.yaml`: Declarative batch processing task overriding container `command` and `args`.
+  2. **Lifecycle Phases & Restart Policies (`02-lifecycle-and-restarts/`)**:
+     - `cka-lab-finite-worker-pod.yaml`: Finite task with `restartPolicy: Never` demonstrating successful transition to `Succeeded` (Completed).
+     - `cka-lab-failing-worker-pod.yaml`: Non-zero exit task with `restartPolicy: OnFailure` demonstrating `CrashLoopBackOff`.
+     - `README.md`: In-depth breakdown of Pod phases (`Pending`, `Running`, `Succeeded`, `Failed`) versus container states (`Waiting`, `Running`, `Terminated`).
+  3. **Observability & Diagnostics (`03-observability-exec/`)**:
+     - `cka-lab-telemetry-pod.yaml`: Structured log emitter utilizing downward API for node name injection.
+     - `debug-drill.sh`: Interactive drill demonstrating log retrieval, log tailing, container environment inspection, and process table auditing via `kubectl exec`.
+  4. **Ephemeral Networking Diagnostics (`04-ephemeral-networking/`)**:
+     - `cka-lab-echo-server-pod.yaml`: Internal HTTP service target.
+     - `test-connectivity.sh`: Launches temporary ephemeral Pod (`--rm -it --restart=Never`) to probe cluster IP reachability via `wget`.
+  5. **Pod Spec Immutability (`05-spec-immutability/`)**:
+     - `cka-lab-immutable-app-v1.yaml` & `cka-lab-immutable-app-v2.yaml`: Versioned manifests for demonstrating mutation restrictions.
+     - `replace-drill.sh`: Walkthrough demonstrating admission rejection on live spec modifications and force replacement via `kubectl replace --force`.
+  6. **Namespaces & Context Preferences (`06-namespaces-context/`)**:
+     - `cka-lab-namespace.yaml`: Declarative staging namespace (`cka-lab-staging`).
+     - `namespace-context-drill.sh`: Interactive drill for binding active kubeconfig context namespace preference and demonstrating cascading resource deletion.
+- **Artifacts**:
+  - Pods drill directory: `/home/vagrant/cka/pods/`
+  - Automated test suite: `/home/vagrant/cka/pods/test-pods-drills.sh`
+  - Master practice guide: `/home/vagrant/cka/pods/README.md`
+
 ## Verification inside Control Plane
 
 ### Verify RBAC Scenario
@@ -276,4 +332,35 @@ kubectl apply -f 01-nfs/03-nfs-pv.yaml
 kubectl apply -f 01-nfs/04-nfs-pvc.yaml
 kubectl get pv nfs-storage-pv
 kubectl get pvc nfs-storage-pvc
+```
+
+### Verify Deployments Scenario
+
+```bash
+# Change to the deployments drill directory
+cd /home/vagrant/cka/deployments
+
+# Run automated validation test suite
+./test-deployments-drills.sh
+
+# Run interactive rolling update drill
+cd 03-rolling-updates-rollbacks
+./rollout-drill.sh
+```
+
+### Verify Pods Scenario
+
+```bash
+# Change to the pods drill directory
+cd /home/vagrant/cka/pods
+
+# Run automated validation test suite
+./test-pods-drills.sh
+
+# Run individual drill scripts
+cd 01-imperative-declarative && ./run-imperative.sh
+cd ../03-observability-exec && ./debug-drill.sh
+cd ../04-ephemeral-networking && ./test-connectivity.sh
+cd ../05-spec-immutability && ./replace-drill.sh
+cd ../06-namespaces-context && ./namespace-context-drill.sh
 ```

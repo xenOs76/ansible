@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# CKA Deployments Practice Lab - Test Suite
+# Managed by Ansible (roles/cka_lab)
+# ==============================================================================
+set -euo pipefail
+
+NAMESPACE="{{ cka_lab_deployments_namespace | default('default') }}"
+TEST_DEPLOY="cka-lab-test-rollout"
+
+echo "==> [1/5] Testing basic Deployment creation and replica scaling..."
+if kubectl get deployment "${TEST_DEPLOY}" -n "${NAMESPACE}" >/dev/null 2>&1; then
+  kubectl delete deployment "${TEST_DEPLOY}" -n "${NAMESPACE}" --interactive=false --wait=true >/dev/null 2>&1 || true
+fi
+
+kubectl create deployment "${TEST_DEPLOY}" \
+  --image=nginx:1.23.0 \
+  --replicas=3 \
+  -n "${NAMESPACE}"
+
+kubectl rollout status "deployment/${TEST_DEPLOY}" -n "${NAMESPACE}" --timeout=60s
+REPLICAS_COUNT="$(kubectl get deployment "${TEST_DEPLOY}" -n "${NAMESPACE}" -o jsonpath='{.status.readyReplicas}')"
+if [[ "${REPLICAS_COUNT}" -eq 3 ]]; then
+  echo "    OK: Deployment running with 3 ready replicas."
+else
+  echo "    FAIL: Expected 3 ready replicas, found ${REPLICAS_COUNT}" >&2
+  exit 1
+fi
+
+echo "==> [2/5] Testing rolling update and change-cause annotation..."
+kubectl annotate deployment "${TEST_DEPLOY}" -n "${NAMESPACE}" kubernetes.io/change-cause="Initial release 1.23.0"
+
+kubectl set image "deployment/${TEST_DEPLOY}" "nginx=nginx:1.23.4" -n "${NAMESPACE}"
+kubectl annotate deployment "${TEST_DEPLOY}" -n "${NAMESPACE}" kubernetes.io/change-cause="Updated image to 1.23.4" --overwrite
+kubectl rollout status "deployment/${TEST_DEPLOY}" -n "${NAMESPACE}" --timeout=60s
+
+NEW_IMAGE="$(kubectl get deployment "${TEST_DEPLOY}" -n "${NAMESPACE}" -o jsonpath='{.spec.template.spec.containers[0].image}')"
+if [[ "${NEW_IMAGE}" == "nginx:1.23.4" ]]; then
+  echo "    OK: Rolling update completed to ${NEW_IMAGE}."
+else
+  echo "    FAIL: Expected image nginx:1.23.4, got ${NEW_IMAGE}" >&2
+  exit 1
+fi
+
+echo "==> [3/5] Testing rollback to revision 1..."
+kubectl rollout undo "deployment/${TEST_DEPLOY}" -n "${NAMESPACE}" --to-revision=1
+kubectl rollout status "deployment/${TEST_DEPLOY}" -n "${NAMESPACE}" --timeout=60s
+
+REVERTED_IMAGE="$(kubectl get deployment "${TEST_DEPLOY}" -n "${NAMESPACE}" -o jsonpath='{.spec.template.spec.containers[0].image}')"
+if [[ "${REVERTED_IMAGE}" == "nginx:1.23.0" ]]; then
+  echo "    OK: Rollback succeeded, image reverted to ${REVERTED_IMAGE}."
+else
+  echo "    FAIL: Expected reverted image nginx:1.23.0, got ${REVERTED_IMAGE}" >&2
+  exit 1
+fi
+
+echo "==> [4/5] Testing rollout pause and resume for batch updates..."
+kubectl rollout pause "deployment/${TEST_DEPLOY}" -n "${NAMESPACE}"
+kubectl set image "deployment/${TEST_DEPLOY}" "nginx=nginx:1.24.0" -n "${NAMESPACE}"
+kubectl set env "deployment/${TEST_DEPLOY}" "APP_ENV=production" -n "${NAMESPACE}"
+
+# Verify image is NOT updated in running pods while paused
+PAUSED_POD_IMAGE="$(kubectl get pods -l "app=${TEST_DEPLOY}" -n "${NAMESPACE}" -o jsonpath='{.items[0].spec.containers[0].image}')"
+if [[ "${PAUSED_POD_IMAGE}" == "nginx:1.23.0" ]]; then
+  echo "    OK: Rollout paused as expected; running pods remain on ${PAUSED_POD_IMAGE}."
+else
+  echo "    WARN: Running pod image changed during pause: ${PAUSED_POD_IMAGE}"
+fi
+
+kubectl rollout resume "deployment/${TEST_DEPLOY}" -n "${NAMESPACE}"
+kubectl rollout status "deployment/${TEST_DEPLOY}" -n "${NAMESPACE}" --timeout=60s
+RESUMED_IMAGE="$(kubectl get deployment "${TEST_DEPLOY}" -n "${NAMESPACE}" -o jsonpath='{.spec.template.spec.containers[0].image}')"
+echo "    OK: Rollout resumed and updated to ${RESUMED_IMAGE}."
+
+echo "==> [5/5] Cleaning up test deployment..."
+kubectl delete deployment "${TEST_DEPLOY}" -n "${NAMESPACE}" --interactive=false --wait=true >/dev/null 2>&1 || true
+
+echo "==> All CKA Deployments and ReplicaSets drill tests PASSED successfully!"

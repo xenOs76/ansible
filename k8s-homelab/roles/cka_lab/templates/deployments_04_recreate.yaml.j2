@@ -1,0 +1,35 @@
+# ==============================================================================
+# CKA Strategy Drill: Recreate Strategy
+# ==============================================================================
+# Used for legacy singleton applications, exclusive database writers, or workloads
+# that cannot tolerate concurrent running versions accessing the same state.
+#
+# All existing Pods are terminated BEFORE any new Pods are created.
+# This causes temporary service downtime during rollouts.
+# ==============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cka-lab-singleton-db-worker
+  namespace: {{ cka_lab_deployments_namespace | default('default') }}
+  labels:
+    app: cka-lab-db-worker
+spec:
+  replicas: 2
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: cka-lab-db-worker
+  template:
+    metadata:
+      labels:
+        app: cka-lab-db-worker
+    spec:
+      containers:
+        - name: worker
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - "echo 'singleton db worker active' && sleep 3600"

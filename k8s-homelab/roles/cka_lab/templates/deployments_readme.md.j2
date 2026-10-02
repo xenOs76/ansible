@@ -1,0 +1,183 @@
+# Certified Kubernetes Administrator (CKA): Deployments & Workloads Lab
+
+Hands-on training scenarios for mastering Kubernetes Deployment primitives, ReplicaSet controllers, rollout lifecycle management, update strategies, and configuration troubleshooting.
+
+---
+
+## Directory Structure
+
+```text
+/home/vagrant/cka/deployments/
+├── README.md                          # Master exercise handbook (this file)
+├── test-deployments-drills.sh         # End-to-end verification test suite
+├── 01-basic-deployment/              # Declarative & imperative creation
+│   ├── web-frontend-deployment.yaml  # HA frontend proxy manifest (3 replicas)
+│   └── api-service-deployment.yaml   # Background microservice manifest
+├── 02-troubleshooting-labels/        # Selector mismatch & immutability
+│   ├── broken-deployment.yaml        # Intentional label selector mismatch
+│   ├── fixed-deployment.yaml         # Corrected matching labels manifest
+│   └── README.md                     # Troubleshooting & architecture walkthrough
+├── 03-rolling-updates-rollbacks/     # Progressive rollout & rollback lifecycle
+│   ├── 01-catalog-v1.yaml            # Baseline release (v1 with nginx:1.24-alpine)
+│   ├── 02-catalog-v2.yaml            # Updated release (v2 with nginx:1.25-alpine)
+│   └── rollout-drill.sh              # Interactive progressive rollout & undo drill
+├── 04-strategies/                    # Upgrade strategy comparisons
+│   ├── rolling-update-custom.yaml    # Zero-downtime bounds (maxSurge 1, maxUnavailable 0)
+│   ├── rolling-update-percent.yaml   # Percentage bounds (maxSurge 50%, maxUnavailable 25%)
+│   └── recreate-strategy.yaml        # Downtime-tolerant singleton worker (type: Recreate)
+└── 05-pause-resume/                  # Batch atomic configuration updates
+    ├── batch-change-deployment.yaml  # Multi-attribute target deployment
+    └── pause-resume-drill.sh         # Interactive pause/resume walkthrough
+```
+
+---
+
+## Hands-on Drills
+
+### Drill 1: Manifest Creation and Scaling
+
+1. **Declarative Manifest Deployment**:
+
+   ```bash
+   cd 01-basic-deployment
+   kubectl apply -f web-frontend-deployment.yaml
+   kubectl get deployment cka-lab-web-frontend -o wide
+   kubectl get pods -l app.kubernetes.io/name=cka-lab-web-frontend
+   ```
+
+2. **Imperative Generation with Dry-Run**:
+
+   Rapidly generate a production-ready manifest without creating the resource:
+
+   ```bash
+   kubectl create deployment cka-lab-cache-service \
+     --image=redis:7-alpine \
+     --replicas=2 \
+     --port=6379 \
+     --dry-run=client -o yaml > cache-service.yaml
+   ```
+
+3. **Imperative Scaling**:
+
+   ```bash
+   kubectl scale deployment cka-lab-web-frontend --replicas=5
+   kubectl rollout status deployment/cka-lab-web-frontend
+   ```
+
+---
+
+### Drill 2: Selector Troubleshooting and Immutability
+
+1. **Diagnose Validation Failures**:
+
+   ```bash
+   cd ../02-troubleshooting-labels
+   kubectl apply -f broken-deployment.yaml
+   ```
+
+   Observe the API server error explaining that `spec.selector` does not match `spec.template.metadata.labels`.
+
+2. **Apply the Resolution**:
+
+   ```bash
+   kubectl apply -f fixed-deployment.yaml
+   kubectl get deployment cka-lab-order-processor
+   ```
+
+3. Review the troubleshooting principles in [`02-troubleshooting-labels/README.md`](02-troubleshooting-labels/README.md).
+
+---
+
+### Drill 3: Progressive Rollout, History, and Rollback
+
+Execute the interactive walkthrough script:
+
+```bash
+cd ../03-rolling-updates-rollbacks
+./rollout-drill.sh
+```
+
+Or execute the steps manually:
+
+1. Deploy baseline version 1:
+
+   ```bash
+   kubectl apply -f 01-catalog-v1.yaml
+   kubectl rollout status deployment/cka-lab-catalog-service
+   ```
+
+2. Apply version 2:
+
+   ```bash
+   kubectl apply -f 02-catalog-v2.yaml
+   kubectl rollout status deployment/cka-lab-catalog-service
+   ```
+
+3. Inspect rollout history and recorded change causes:
+
+   ```bash
+   kubectl rollout history deployment/cka-lab-catalog-service
+   ```
+
+4. Roll back to revision 1:
+
+   ```bash
+   kubectl rollout undo deployment/cka-lab-catalog-service --to-revision=1
+   kubectl rollout status deployment/cka-lab-catalog-service
+   ```
+
+5. Confirm container image is reverted:
+
+   ```bash
+   kubectl get deployment cka-lab-catalog-service -o jsonpath='{.spec.template.spec.containers[0].image}'
+   ```
+
+---
+
+### Drill 4: Deployment Strategies Comparison
+
+1. **Zero-Downtime Rolling Update**:
+
+   ```bash
+   cd ../04-strategies
+   kubectl apply -f rolling-update-custom.yaml
+   ```
+
+   Setting `maxUnavailable: 0` ensures available pods never fall below the replica target during rolling upgrades.
+
+2. **Percentage-Based Bounds**:
+
+   ```bash
+   kubectl apply -f rolling-update-percent.yaml
+   ```
+
+3. **Recreate Strategy**:
+
+   ```bash
+   kubectl apply -f recreate-strategy.yaml
+   ```
+
+   All existing pods are terminated before new pods start.
+
+---
+
+### Drill 5: Pausing and Resuming Rollouts
+
+Run the interactive walkthrough:
+
+```bash
+cd ../05-pause-resume
+./pause-resume-drill.sh
+```
+
+Key concept: When staging multiple configuration edits (image, environment variables, resource limits), use `kubectl rollout pause` first, make all updates, then run `kubectl rollout resume` to bundle the modifications into a single replica rollout revision.
+
+---
+
+## Automated Verification
+
+Run the end-to-end verification script:
+
+```bash
+./test-deployments-drills.sh
+```

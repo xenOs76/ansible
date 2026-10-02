@@ -1,0 +1,38 @@
+# ==============================================================================
+# CKA Deployment Troubleshooting Drill: Corrected Matching Labels
+# ==============================================================================
+# RESOLUTION:
+# 'spec.selector.matchLabels' now matches 'spec.template.metadata.labels' exactly:
+#   app: cka-lab-order-processor
+#   env: production
+#
+# Remember for the CKA Exam:
+# 1. Pod template labels MUST satisfy the selector criteria at creation time.
+# 2. 'spec.selector' is immutable once the Deployment is created.
+# ==============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cka-lab-order-processor
+  namespace: {{ cka_lab_deployments_namespace | default('default') }}
+  labels:
+    app: cka-lab-order-processor
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: cka-lab-order-processor
+      env: production
+  template:
+    metadata:
+      labels:
+        app: cka-lab-order-processor
+        env: production
+    spec:
+      containers:
+        - name: processor
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - "echo 'processing orders...' && sleep 3600"

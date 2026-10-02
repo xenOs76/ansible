@@ -1,0 +1,37 @@
+# ==============================================================================
+# CKA Deployment Troubleshooting Drill: Label Selector Mismatch
+# ==============================================================================
+# INTENTIONAL ISSUE:
+# 'spec.selector.matchLabels' expects pods with 'tier: backend, env: staging',
+# but 'spec.template.metadata.labels' provides 'tier: backend, env: production'.
+#
+# Applying this file directly fails at the Kubernetes API validation level:
+# "The Deployment ... is invalid: spec.template.metadata.labels: Invalid value:
+#  ... `selector` does not match template `labels`"
+# ==============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cka-lab-order-processor
+  namespace: {{ cka_lab_deployments_namespace | default('default') }}
+  labels:
+    app: cka-lab-order-processor
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: cka-lab-order-processor
+      env: staging
+  template:
+    metadata:
+      labels:
+        app: cka-lab-order-processor
+        env: production
+    spec:
+      containers:
+        - name: processor
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - "echo 'processing orders...' && sleep 3600"

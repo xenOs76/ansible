@@ -1,0 +1,84 @@
+# CKA Troubleshooting: Deployment Label Selectors & Immutability
+
+This practice drill focuses on one of the most frequent manifest validation errors encountered during Kubernetes deployments and CKA troubleshooting questions: **selector-to-template label mismatches**.
+
+---
+
+## 1. Background & Architecture Mechanics
+
+A Kubernetes Deployment does not manage Pods directly; it delegates pod lifecycle management to underlying **ReplicaSets**.
+
+The ReplicaSet controller identifies which Pods belong to its control loop exclusively by querying the API server using label selectors:
+
+1. **`spec.selector.matchLabels`**:
+   Specifies the exact key-value pairs required for a Pod to be claimed and managed by this Deployment's ReplicaSet.
+2. **`spec.template.metadata.labels`**:
+   Defines the labels stamped onto each new Pod created by this Deployment.
+
+### The Validation Rule
+
+> The set of labels specified in `spec.selector.matchLabels` **must be a subset** of the labels defined in `spec.template.metadata.labels`.
+
+If a label key-value specified in `spec.selector.matchLabels` is missing or has a different value in `spec.template.metadata.labels`, the API server rejects the manifest immediately upon creation.
+
+---
+
+## 2. Hands-on Practice Drill
+
+### Step 1: Attempt to Apply the Broken Manifest
+
+```bash
+kubectl apply -f broken-deployment.yaml
+```
+
+**Expected Error Output**:
+
+```text
+The Deployment "cka-lab-order-processor" is invalid: spec.template.metadata.labels: Invalid value:
+map[string]string{"app":"cka-lab-order-processor", "env":"production"}: `selector` does not match template `labels`
+```
+
+### Step 2: Compare Selector vs Template
+
+Inspect `broken-deployment.yaml`:
+
+```yaml
+spec:
+  selector:
+    matchLabels:
+      app: cka-lab-order-processor
+      env: staging      # <-- MISMATCH: claims 'env: staging'
+  template:
+    metadata:
+      labels:
+        app: cka-lab-order-processor
+        env: production   # <-- CONFLICT: stamps 'env: production'
+```
+
+### Step 3: Apply the Corrected Manifest
+
+```bash
+kubectl apply -f fixed-deployment.yaml
+```
+
+Verify that the Deployment is created and pods are scheduled:
+
+```bash
+kubectl get deployment cka-lab-order-processor
+kubectl get pods -l app=cka-lab-order-processor,env=production
+```
+
+---
+
+## 3. Critical Exam Rule: Selector Immutability
+
+Once a Deployment object is successfully created in the cluster, its `spec.selector` field is **immutable**:
+
+- You **cannot** change `spec.selector` via `kubectl edit`, `kubectl apply`, or `kubectl patch`.
+- Attempting to update `spec.selector` yields:
+
+  ```text
+  The Deployment "cka-lab-order-processor" is invalid: spec.selector: Invalid value: ...: field is immutable
+  ```
+
+- If an exam task requires altering the selector of an existing Deployment, you must delete the existing resource and recreate it (`kubectl delete deployment ... --cascade=orphan` if preserving running pods, or recreate entirely).

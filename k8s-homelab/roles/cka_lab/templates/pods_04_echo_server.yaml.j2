@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: cka-lab-echo-server
+  namespace: {{ cka_lab_pods_namespace | default('default') }}
+  labels:
+    app.kubernetes.io/name: cka-lab-echo-server
+    app.kubernetes.io/part-of: cka-lab
+    cka.practice/scenario: pods
+spec:
+  restartPolicy: Always
+  containers:
+    - name: http-server
+      image: nginx:alpine
+      ports:
+        - containerPort: 80
+          name: http
+      resources:
+        requests:
+          cpu: 10m
+          memory: 16Mi
+        limits:
+          cpu: 50m
+          memory: 32Mi

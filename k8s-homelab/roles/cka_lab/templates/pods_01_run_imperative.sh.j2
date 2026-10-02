@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# run-imperative.sh: Fast Imperative Pod Generation Cheat Sheet
+# ==============================================================================
+set -euo pipefail
+
+NAMESPACE="{{ cka_lab_pods_namespace | default('default') }}"
+
+echo "==> [Imperative Drill] Demonstrating kubectl run variations..."
+
+# Example 1: Create a web server with exposed port, environment variables, and labels
+echo "1. Creating cka-lab-imperative-web with port 80, env vars, and custom labels..."
+kubectl run cka-lab-imperative-web \
+  --image=nginx:alpine \
+  --port=80 \
+  --env="APP_TIER=frontend" \
+  --env="LOG_LEVEL=info" \
+  --labels="tier=frontend,app=cka-lab-imperative-web,cka.practice/scenario=pods" \
+  --restart=Always \
+  -n "${NAMESPACE}"
+
+# Example 2: Generate dry-run YAML boilerplate to standard output
+echo "2. Generating dry-run YAML manifest without creating the object..."
+kubectl run cka-lab-starter-task \
+  --image=busybox:1.36.1 \
+  --restart=Never \
+  --dry-run=client -o yaml \
+  -- /bin/sh -c 'echo "Starter task finished"'
+
+echo "==> Clean up created imperative pod..."
+kubectl delete pod cka-lab-imperative-web -n "${NAMESPACE}" --interactive=false --now
+echo "==> Imperative run drill complete."

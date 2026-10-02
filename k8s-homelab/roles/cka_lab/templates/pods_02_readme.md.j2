@@ -1,0 +1,68 @@
+# Drill Guide: Pod Lifecycle Phases and Container States
+
+Understanding the distinction between Pod lifecycle phases and individual container states is essential for CKA troubleshooting.
+
+---
+
+## 1. Pod Phases vs Container States
+
+### Pod Lifecycle Phases (`status.phase`)
+
+The `phase` is a high-level summary of where the Pod is in its lifecycle:
+
+- **`Pending`**: Pod accepted by the cluster, but one or more containers are not yet running (e.g. downloading images, awaiting node scheduling).
+- **`Running`**: Pod bound to a node, all containers created, and at least one container is currently running or starting/restarting.
+- **`Succeeded`**: All containers in the Pod have terminated successfully (exit code 0) and will not be restarted.
+- **`Failed`**: All containers have terminated, and at least one container failed (non-zero exit code).
+- **`Unknown`**: State cannot be obtained, typically due to communication failure between kubelet and API server.
+
+### Container States (`status.containerStatuses[].state`)
+
+Each container within a Pod has its own state:
+
+- **`Waiting`**: Container waiting to run (e.g., pulling images, or in `CrashLoopBackOff`).
+- **`Running`**: Container executing without issue.
+- **`Terminated`**: Container completed execution or terminated due to failure.
+
+---
+
+## 2. Container Restart Policies (`spec.restartPolicy`)
+
+The `restartPolicy` applies to all containers in the Pod:
+
+- **`Always`** (Default): Kubelet automatically restarts any container that terminates, regardless of exit status.
+- **`OnFailure`**: Kubelet restarts the container only if it exits with a non-zero exit code.
+- **`Never`**: Kubelet never restarts the container.
+
+---
+
+## 3. Practice Exercises
+
+1. **Observe Normal Completion**:
+
+   ```bash
+   kubectl apply -f cka-lab-finite-worker-pod.yaml
+   kubectl get pod cka-lab-finite-worker -w
+   # Status transitions: Pending -> Running -> Completed (Succeeded)
+   ```
+
+1. **Diagnose CrashLoopBackOff**:
+
+   ```bash
+   kubectl apply -f cka-lab-failing-worker-pod.yaml
+   kubectl get pod cka-lab-failing-worker -w
+   # Notice restart count increments and back-off delays (10s, 20s, 40s...)
+   ```
+
+1. **Inspect Failure Details**:
+
+   ```bash
+   kubectl describe pod cka-lab-failing-worker | grep -A 8 "Last State:"
+   kubectl logs cka-lab-failing-worker -p
+   ```
+
+1. **Cleanup**:
+
+   ```bash
+   kubectl delete pod cka-lab-finite-worker cka-lab-failing-worker --now
+   ```

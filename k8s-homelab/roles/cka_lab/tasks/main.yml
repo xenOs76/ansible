@@ -41,3 +41,19 @@
     - cka_lab
     - volumes
     - nfs
+
+- name: Execute CKA Lab Scenario - Deployments & ReplicaSets (deployments)
+  ansible.builtin.include_tasks: scenario_deployments.yml
+  when: cka_lab_scenario_deployments_enabled | bool
+  tags:
+    - cka_lab
+    - deployments
+    - workloads
+
+- name: Execute CKA Lab Scenario - Pods & Namespaces (pods)
+  ansible.builtin.include_tasks: scenario_pods.yml
+  when: cka_lab_scenario_pods_enabled | bool
+  tags:
+    - cka_lab
+    - pods
+    - workloads

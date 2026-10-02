@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# CKA Deployments: Rollout Pause and Resume Walkthrough
+# Managed by Ansible (roles/cka_lab)
+# ==============================================================================
+set -euo pipefail
+
+DEPLOY_NAME="cka-lab-batch-pipeline"
+NAMESPACE="{{ cka_lab_deployments_namespace | default('default') }}"
+
+echo "=== [Step 1] Deploying Initial Baseline Deployment ==="
+kubectl apply -f batch-change-deployment.yaml -n "${NAMESPACE}"
+kubectl rollout status "deployment/${DEPLOY_NAME}" -n "${NAMESPACE}" --timeout=60s
+
+echo ""
+echo "=== [Step 2] Pausing the Deployment Rollout ==="
+kubectl rollout pause "deployment/${DEPLOY_NAME}" -n "${NAMESPACE}"
+echo "    Rollout paused. Subsequent spec changes will NOT trigger pod restarts."
+
+echo ""
+echo "=== [Step 3] Staging Multiple Modifications While Paused ==="
+echo "    1. Updating container environment variable..."
+kubectl set env "deployment/${DEPLOY_NAME}" "PIPELINE_STAGE=canary" -n "${NAMESPACE}"
+
+echo "    2. Tuning container resource requests..."
+kubectl set resources "deployment/${DEPLOY_NAME}" -c=pipeline --requests=cpu=100m,memory=64Mi -n "${NAMESPACE}"
+
+echo ""
+echo "=== [Step 4] Confirming Pods Remain on Current Spec During Pause ==="
+POD_NAME="$(kubectl get pods -l "app=${DEPLOY_NAME}" -n "${NAMESPACE}" -o jsonpath='{.items[0].metadata.name}')"
+CURRENT_STAGE="$(kubectl get pod "${POD_NAME}" -n "${NAMESPACE}" -o jsonpath='{.spec.containers[0].env[?(@.name=="PIPELINE_STAGE")].value}')"
+echo "    Active Pod (${POD_NAME}) PIPELINE_STAGE: ${CURRENT_STAGE:-default}"
+echo "    Notice: Active pods have NOT restarted because rollout is paused."
+
+echo ""
+echo "=== [Step 5] Resuming Rollout to Execute Single Consolidated Update ==="
+kubectl rollout resume "deployment/${DEPLOY_NAME}" -n "${NAMESPACE}"
+kubectl rollout status "deployment/${DEPLOY_NAME}" -n "${NAMESPACE}" --timeout=60s
+
+echo ""
+echo "=== [Step 6] Verifying Final Consolidated Rollout State ==="
+NEW_POD="$(kubectl get pods -l "app=${DEPLOY_NAME}" -n "${NAMESPACE}" -o jsonpath='{.items[0].metadata.name}')"
+NEW_STAGE="$(kubectl get pod "${NEW_POD}" -n "${NAMESPACE}" -o jsonpath='{.spec.containers[0].env[?(@.name=="PIPELINE_STAGE")].value}')"
+echo "    Updated Pod (${NEW_POD}) PIPELINE_STAGE: ${NEW_STAGE}"
+kubectl rollout history "deployment/${DEPLOY_NAME}" -n "${NAMESPACE}"
+
+echo ""
+echo "==> Pause and resume drill completed successfully!"

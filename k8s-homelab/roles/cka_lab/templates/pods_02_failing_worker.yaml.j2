@@ -1,0 +1,30 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: cka-lab-failing-worker
+  namespace: {{ cka_lab_pods_namespace | default('default') }}
+  labels:
+    app.kubernetes.io/name: cka-lab-failing-worker
+    app.kubernetes.io/part-of: cka-lab
+    cka.practice/scenario: pods
+spec:
+  restartPolicy: OnFailure
+  containers:
+    - name: failing-worker
+      image: busybox:1.36.1
+      command:
+        - /bin/sh
+        - -c
+      args:
+        - |
+          echo "[cka-lab-failing-worker] Attempting connection to upstream database..."
+          sleep 2
+          echo "[cka-lab-failing-worker] FATAL: Connection refused to database.cluster.local:5432"
+          exit 1
+      resources:
+        requests:
+          cpu: 10m
+          memory: 16Mi
+        limits:
+          cpu: 50m
+          memory: 32Mi

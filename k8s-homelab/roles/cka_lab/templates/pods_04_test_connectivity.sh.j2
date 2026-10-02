@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# test-connectivity.sh: Ephemeral Troubleshooting Pod Verification
+# ==============================================================================
+set -euo pipefail
+
+NAMESPACE="{{ cka_lab_pods_namespace | default('default') }}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+echo "==> Ensuring target cka-lab-echo-server is running..."
+kubectl apply -f "${SCRIPT_DIR}/cka-lab-echo-server-pod.yaml" -n "${NAMESPACE}"
+kubectl wait --for=condition=Ready pod/cka-lab-echo-server -n "${NAMESPACE}" --timeout=60s
+
+POD_IP=$(kubectl get pod cka-lab-echo-server -n "${NAMESPACE}" -o jsonpath='{.status.podIP}')
+echo "==> cka-lab-echo-server cluster IP is: ${POD_IP}"
+
+echo "==> Launching ephemeral busybox Pod to probe http://${POD_IP}:80 via wget..."
+kubectl run cka-lab-ephemeral-probe \
+  --image=busybox:1.36.1 \
+  --rm --restart=Never \
+  -n "${NAMESPACE}" \
+  -- wget -qO- "http://${POD_IP}:80"
+
+echo "==> Ephemeral connectivity probe succeeded."

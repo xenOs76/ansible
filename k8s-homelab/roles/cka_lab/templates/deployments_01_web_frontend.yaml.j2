@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cka-lab-web-frontend
+  namespace: {{ cka_lab_deployments_namespace | default('default') }}
+  labels:
+    app.kubernetes.io/name: cka-lab-web-frontend
+    app.kubernetes.io/component: ui-proxy
+    app.kubernetes.io/part-of: homelab-core
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: cka-lab-web-frontend
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: cka-lab-web-frontend
+        app.kubernetes.io/component: ui-proxy
+    spec:
+      containers:
+        - name: frontend
+          image: nginx:1.25-alpine
+          ports:
+            - containerPort: 80
+              name: http
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+          env:
+            - name: APP_ENV
+              value: "production"

@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# replace-drill.sh: Demonstrating Pod Spec Immutability and Force Replacement
+# ==============================================================================
+set -euo pipefail
+
+NAMESPACE="{{ cka_lab_pods_namespace | default('default') }}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+echo "==> 1. Deploying v1 of cka-lab-immutable-app..."
+kubectl apply -f "${SCRIPT_DIR}/cka-lab-immutable-app-v1.yaml" -n "${NAMESPACE}"
+kubectl wait --for=condition=Ready pod/cka-lab-immutable-app -n "${NAMESPACE}" --timeout=60s
+
+echo "==> 2. Attempting in-place update with v2 (will demonstrate API rejection)..."
+set +e
+kubectl apply -f "${SCRIPT_DIR}/cka-lab-immutable-app-v2.yaml" -n "${NAMESPACE}"
+APPLY_EXIT=$?
+set -e
+
+if [ ${APPLY_EXIT} -ne 0 ]; then
+  echo "--> Notice the error above: Pod specifications are mostly immutable!"
+  echo "    Fields like spec.containers[*].ports, env, command cannot be changed on live Pods."
+fi
+
+echo "==> 3. Resolving with the CKA technique: kubectl replace --force"
+kubectl replace --force -f "${SCRIPT_DIR}/cka-lab-immutable-app-v2.yaml" -n "${NAMESPACE}"
+kubectl wait --for=condition=Ready pod/cka-lab-immutable-app -n "${NAMESPACE}" --timeout=60s
+
+UPDATED_VER=$(kubectl get pod cka-lab-immutable-app -n "${NAMESPACE}" -o jsonpath='{.spec.containers[0].env[?(@.name=="APP_VERSION")].value}')
+echo "==> Replacement verified! Active container APP_VERSION is now: ${UPDATED_VER}"

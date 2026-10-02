@@ -1,0 +1,52 @@
+---
+- name: Ensure CKA lab pods directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ ansible_user | default('vagrant') }}"
+    group: "{{ ansible_user | default('vagrant') }}"
+    mode: "0755"
+  loop:
+    - "{{ cka_lab_pods_dir }}"
+    - "{{ cka_lab_pods_dir }}/01-imperative-declarative"
+    - "{{ cka_lab_pods_dir }}/02-lifecycle-and-restarts"
+    - "{{ cka_lab_pods_dir }}/03-observability-exec"
+    - "{{ cka_lab_pods_dir }}/04-ephemeral-networking"
+    - "{{ cka_lab_pods_dir }}/05-spec-immutability"
+    - "{{ cka_lab_pods_dir }}/06-namespaces-context"
+  tags:
+    - cka_lab
+    - pods
+    - workloads
+
+- name: Render CKA pods drill manifests and guides
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "{{ cka_lab_pods_dir }}/{{ item.dest }}"
+    owner: "{{ ansible_user | default('vagrant') }}"
+    group: "{{ ansible_user | default('vagrant') }}"
+    mode: "{{ item.mode | default('0644') }}"
+  loop:
+    - {src: "pods_readme.md.j2", dest: "README.md", mode: "0644"}
+    - {src: "pods_test_drills.sh.j2", dest: "test-pods-drills.sh", mode: "0755"}
+    - {src: "pods_01_run_imperative.sh.j2", dest: "01-imperative-declarative/run-imperative.sh", mode: "0755"}
+    - {src: "pods_01_web_service.yaml.j2", dest: "01-imperative-declarative/cka-lab-web-service-pod.yaml"}
+    - {src: "pods_01_batch_task.yaml.j2", dest: "01-imperative-declarative/cka-lab-batch-task-pod.yaml"}
+    - {src: "pods_02_finite_worker.yaml.j2", dest: "02-lifecycle-and-restarts/cka-lab-finite-worker-pod.yaml"}
+    - {src: "pods_02_failing_worker.yaml.j2", dest: "02-lifecycle-and-restarts/cka-lab-failing-worker-pod.yaml"}
+    - {src: "pods_02_readme.md.j2", dest: "02-lifecycle-and-restarts/README.md"}
+    - {src: "pods_03_telemetry.yaml.j2", dest: "03-observability-exec/cka-lab-telemetry-pod.yaml"}
+    - {src: "pods_03_debug_drill.sh.j2", dest: "03-observability-exec/debug-drill.sh", mode: "0755"}
+    - {src: "pods_04_echo_server.yaml.j2", dest: "04-ephemeral-networking/cka-lab-echo-server-pod.yaml"}
+    - {src: "pods_04_test_connectivity.sh.j2", dest: "04-ephemeral-networking/test-connectivity.sh", mode: "0755"}
+    - {src: "pods_05_immutable_v1.yaml.j2", dest: "05-spec-immutability/cka-lab-immutable-app-v1.yaml"}
+    - {src: "pods_05_immutable_v2.yaml.j2", dest: "05-spec-immutability/cka-lab-immutable-app-v2.yaml"}
+    - {src: "pods_05_replace_drill.sh.j2", dest: "05-spec-immutability/replace-drill.sh", mode: "0755"}
+    - {src: "pods_06_namespace.yaml.j2", dest: "06-namespaces-context/cka-lab-namespace.yaml"}
+    - {src: "pods_06_namespace_context_drill.sh.j2", dest: "06-namespaces-context/namespace-context-drill.sh", mode: "0755"}
+  loop_control:
+    label: "pods/{{ item.dest }}"
+  tags:
+    - cka_lab
+    - pods
+    - workloads

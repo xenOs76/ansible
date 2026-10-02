@@ -38,6 +38,8 @@
 #   6. Homelab Tooling:
 #      - OS76 custom APT repo configured for kubectl-netdrill.
 #      - Base diagnostic packages (socat, kubectl-netdrill, bash-completion) installed.
+#   7. Package Upgrades:
+#      - Operating system packages upgraded via apt-get upgrade -y (with k8s packages held).
 #
 # Manual Verification:
 #   systemctl status containerd
@@ -160,10 +162,17 @@ sudo sed -i '/\sswap\s/ s/^\(.*\)$/#\1/g' /etc/fstab
 # ------------------------------------------------------------------------------
 # 6. Diagnostic Tooling
 # ------------------------------------------------------------------------------
-echo "==> [6/6] Installing diagnostic tools..."
+echo "==> [6/7] Installing diagnostic tools..."
 echo "deb [trusted=yes] https://repo.os76.xyz/apt stable main" | sudo tee /etc/apt/sources.list.d/os76.list >/dev/null
 sudo apt-get update -y
 sudo apt-get -y install socat kubectl-netdrill bash-completion
+
+# ------------------------------------------------------------------------------
+# 7. System Package Upgrade
+# ------------------------------------------------------------------------------
+echo "==> [7/7] Upgrading system packages..."
+export DEBIAN_FRONTEND=noninteractive
+sudo apt-get upgrade -y
 
 echo "==> [common.sh] Node prerequisites installed successfully."
 

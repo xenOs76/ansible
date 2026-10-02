@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# CKA Deployments: Progressive Rollouts and Rollback Walkthrough
+# Managed by Ansible (roles/cka_lab)
+# ==============================================================================
+set -euo pipefail
+
+DEPLOY_NAME="cka-lab-catalog-service"
+NAMESPACE="{{ cka_lab_deployments_namespace | default('default') }}"
+
+echo "=== [Step 1] Deploying Initial Release (Revision 1 with nginx:1.24-alpine) ==="
+kubectl apply -f 01-catalog-v1.yaml -n "${NAMESPACE}"
+kubectl rollout status "deployment/${DEPLOY_NAME}" -n "${NAMESPACE}" --timeout=60s
+
+echo ""
+echo "=== [Step 2] Inspecting Active Pods & Initial ReplicaSet ==="
+kubectl get deployment "${DEPLOY_NAME}" -n "${NAMESPACE}" -o wide
+kubectl get replicaset -l app=cka-lab-catalog -n "${NAMESPACE}"
+
+echo ""
+echo "=== [Step 3] Applying Revision 2 (nginx:1.25-alpine) ==="
+kubectl apply -f 02-catalog-v2.yaml -n "${NAMESPACE}"
+kubectl rollout status "deployment/${DEPLOY_NAME}" -n "${NAMESPACE}" --timeout=60s
+
+echo ""
+echo "=== [Step 4] Checking Rollout History and Change Causes ==="
+kubectl rollout history "deployment/${DEPLOY_NAME}" -n "${NAMESPACE}"
+
+echo ""
+echo "=== [Step 5] Detailed Inspection of Revision 2 ==="
+kubectl rollout history "deployment/${DEPLOY_NAME}" -n "${NAMESPACE}" --revision=2
+
+echo ""
+echo "=== [Step 6] Rolling Back to Revision 1 ==="
+kubectl rollout undo "deployment/${DEPLOY_NAME}" -n "${NAMESPACE}" --to-revision=1
+kubectl rollout status "deployment/${DEPLOY_NAME}" -n "${NAMESPACE}" --timeout=60s
+
+echo ""
+echo "=== [Step 7] Verifying Reverted State ==="
+CURRENT_IMAGE="$(kubectl get deployment "${DEPLOY_NAME}" -n "${NAMESPACE}" -o jsonpath='{.spec.template.spec.containers[0].image}')"
+echo "Current container image: ${CURRENT_IMAGE}"
+kubectl rollout history "deployment/${DEPLOY_NAME}" -n "${NAMESPACE}"
+
+echo ""
+echo "==> Progressive rollout and rollback drill completed successfully!"

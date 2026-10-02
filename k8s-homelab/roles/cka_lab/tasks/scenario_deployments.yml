@@ -1,0 +1,49 @@
+---
+- name: Ensure CKA lab deployments directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ ansible_user | default('vagrant') }}"
+    group: "{{ ansible_user | default('vagrant') }}"
+    mode: "0755"
+  loop:
+    - "{{ cka_lab_deployments_dir }}"
+    - "{{ cka_lab_deployments_dir }}/01-basic-deployment"
+    - "{{ cka_lab_deployments_dir }}/02-troubleshooting-labels"
+    - "{{ cka_lab_deployments_dir }}/03-rolling-updates-rollbacks"
+    - "{{ cka_lab_deployments_dir }}/04-strategies"
+    - "{{ cka_lab_deployments_dir }}/05-pause-resume"
+  tags:
+    - cka_lab
+    - deployments
+    - workloads
+
+- name: Render CKA deployment drill manifests and guides
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "{{ cka_lab_deployments_dir }}/{{ item.dest }}"
+    owner: "{{ ansible_user | default('vagrant') }}"
+    group: "{{ ansible_user | default('vagrant') }}"
+    mode: "{{ item.mode | default('0644') }}"
+  loop:
+    - {src: "deployments_readme.md.j2", dest: "README.md", mode: "0644"}
+    - {src: "deployments_test_drills.sh.j2", dest: "test-deployments-drills.sh", mode: "0755"}
+    - {src: "deployments_01_web_frontend.yaml.j2", dest: "01-basic-deployment/web-frontend-deployment.yaml"}
+    - {src: "deployments_01_api_service.yaml.j2", dest: "01-basic-deployment/api-service-deployment.yaml"}
+    - {src: "deployments_02_broken.yaml.j2", dest: "02-troubleshooting-labels/broken-deployment.yaml"}
+    - {src: "deployments_02_fixed.yaml.j2", dest: "02-troubleshooting-labels/fixed-deployment.yaml"}
+    - {src: "deployments_02_readme.md.j2", dest: "02-troubleshooting-labels/README.md"}
+    - {src: "deployments_03_deploy_v1.yaml.j2", dest: "03-rolling-updates-rollbacks/01-catalog-v1.yaml"}
+    - {src: "deployments_03_update_v2.yaml.j2", dest: "03-rolling-updates-rollbacks/02-catalog-v2.yaml"}
+    - {src: "deployments_03_rollout_drill.sh.j2", dest: "03-rolling-updates-rollbacks/rollout-drill.sh", mode: "0755"}
+    - {src: "deployments_04_rolling_update_custom.yaml.j2", dest: "04-strategies/rolling-update-custom.yaml"}
+    - {src: "deployments_04_rolling_update_percent.yaml.j2", dest: "04-strategies/rolling-update-percent.yaml"}
+    - {src: "deployments_04_recreate.yaml.j2", dest: "04-strategies/recreate-strategy.yaml"}
+    - {src: "deployments_05_batch_change.yaml.j2", dest: "05-pause-resume/batch-change-deployment.yaml"}
+    - {src: "deployments_05_pause_resume_drill.sh.j2", dest: "05-pause-resume/pause-resume-drill.sh", mode: "0755"}
+  loop_control:
+    label: "deployments/{{ item.dest }}"
+  tags:
+    - cka_lab
+    - deployments
+    - workloads

@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# namespace-context-drill.sh: Setting Namespace Preferences & Cascading Deletion
+# ==============================================================================
+set -euo pipefail
+
+DEFAULT_NS="{{ cka_lab_pods_namespace | default('default') }}"
+STAGING_NS="{{ cka_lab_pods_staging_namespace | default('cka-lab-staging') }}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+echo "==> 1. Creating staging namespace: ${STAGING_NS}..."
+kubectl apply -f "${SCRIPT_DIR}/cka-lab-namespace.yaml"
+
+echo "==> 2. Running workload inside ${STAGING_NS}..."
+kubectl run cka-lab-staging-worker \
+  --image=busybox:1.36.1 \
+  --namespace="${STAGING_NS}" \
+  -- /bin/sh -c 'while true; do sleep 5; done'
+
+kubectl wait --for=condition=Ready "pod/cka-lab-staging-worker" -n "${STAGING_NS}" --timeout=60s
+
+echo "==> 3. Setting active kubeconfig context namespace preference to ${STAGING_NS}..."
+kubectl config set-context --current --namespace="${STAGING_NS}"
+
+echo "Active context namespace is now:"
+kubectl config view --minify | grep "namespace:"
+
+echo "==> 4. Querying pods without -n flag (defaults to ${STAGING_NS}):"
+kubectl get pods
+
+echo "==> 5. Resetting context preference back to ${DEFAULT_NS}..."
+kubectl config set-context --current --namespace="${DEFAULT_NS}"
+
+echo "==> 6. Testing cascading namespace deletion..."
+kubectl delete namespace "${STAGING_NS}" --interactive=false
+echo "==> Namespace ${STAGING_NS} deleted. All contained resources were automatically removed."

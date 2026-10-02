@@ -30,8 +30,10 @@ else
 fi
 
 echo "==> [3/4] Creating temporary Kubernetes Pod to test NFS inline mount..."
-# Clean up any leftover test pod
-kubectl delete pod "${TEST_POD}" -n "${TEST_NAMESPACE}" --ignore-not-found=true --wait=true >/dev/null 2>&1 || true
+# Clean up any leftover test pod if it exists
+if kubectl get pod "${TEST_POD}" -n "${TEST_NAMESPACE}" >/dev/null 2>&1; then
+  kubectl delete pod "${TEST_POD}" -n "${TEST_NAMESPACE}" --interactive=false --wait=true >/dev/null 2>&1 || true
+fi
 
 cat <<EOF | kubectl apply -f -
 apiVersion: v1
@@ -64,11 +66,11 @@ if kubectl wait --for=condition=Ready "pod/${TEST_POD}" -n "${TEST_NAMESPACE}" -
 else
   echo "    FAIL: Test Pod failed to reach Ready status." >&2
   kubectl describe pod "${TEST_POD}" -n "${TEST_NAMESPACE}" >&2
-  kubectl delete pod "${TEST_POD}" -n "${TEST_NAMESPACE}" --ignore-not-found=true >/dev/null 2>&1 || true
+  kubectl delete pod "${TEST_POD}" -n "${TEST_NAMESPACE}" --interactive=false --ignore-not-found=true >/dev/null 2>&1 || true
   exit 1
 fi
 
 echo "==> [4/4] Cleaning up test pod..."
-kubectl delete pod "${TEST_POD}" -n "${TEST_NAMESPACE}" --wait=true >/dev/null 2>&1 || true
+kubectl delete pod "${TEST_POD}" -n "${TEST_NAMESPACE}" --interactive=false --wait=true >/dev/null 2>&1 || true
 
 echo "==> All CKA NFS Volume connectivity checks PASSED successfully!"

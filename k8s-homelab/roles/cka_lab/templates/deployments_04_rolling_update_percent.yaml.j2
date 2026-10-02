@@ -1,0 +1,35 @@
+# ==============================================================================
+# CKA Strategy Drill: Percentage-Based Rolling Update Bounds
+# ==============================================================================
+# In large clusters or high-replica deployments, specifying percentages allows
+# proportional surge and unavailability:
+#   maxSurge: 50%       -> up to 2 extra pods created during update (4 * 0.50 = 2)
+#   maxUnavailable: 25% -> at most 1 pod may be down (4 * 0.25 = 1)
+# ==============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cka-lab-dynamic-scale
+  namespace: {{ cka_lab_deployments_namespace | default('default') }}
+  labels:
+    app: cka-lab-dynamic-scale
+spec:
+  replicas: 4
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 50%
+      maxUnavailable: 25%
+  selector:
+    matchLabels:
+      app: cka-lab-dynamic-scale
+  template:
+    metadata:
+      labels:
+        app: cka-lab-dynamic-scale
+    spec:
+      containers:
+        - name: web
+          image: nginx:1.25-alpine
+          ports:
+            - containerPort: 80

@@ -12,11 +12,11 @@
 # Usage:
 #   sudo /vagrant/scripts/control-plane-tools.sh
 #   # Or with custom versions:
-#   sudo K9S_VERSION="v0.40.10" ETCD_VERSION="v3.5.16" /vagrant/scripts/control-plane-tools.sh
+#   sudo K9S_VERSION="v0.51.0" ETCD_VERSION="v3.5.16" /vagrant/scripts/control-plane-tools.sh
 #
 # Environment Variables:
 #   K9S_VERSION  - Target release tag of k9s to install from GitHub releases.
-#                  Default: v0.40.10
+#                  Default: v0.51.0
 #   ETCD_VERSION - Target release tag of etcd tools (etcdctl, etcdutl) from
 #                  official GitHub releases.
 #                  Default: v3.5.16

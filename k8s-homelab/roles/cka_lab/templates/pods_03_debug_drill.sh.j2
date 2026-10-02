@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# debug-drill.sh: Interactive Container Logs & Exec Exploration
+# ==============================================================================
+set -euo pipefail
+
+NAMESPACE="{{ cka_lab_pods_namespace | default('default') }}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+echo "==> [Observability Drill] Applying telemetry emitter Pod..."
+kubectl apply -f "${SCRIPT_DIR}/cka-lab-telemetry-pod.yaml" -n "${NAMESPACE}"
+
+echo "Waiting for cka-lab-telemetry-app to become Ready..."
+kubectl wait --for=condition=Ready pod/cka-lab-telemetry-app -n "${NAMESPACE}" --timeout=60s
+
+echo "==> 1. Viewing last 5 log lines:"
+kubectl logs cka-lab-telemetry-app -n "${NAMESPACE}" --tail=5
+
+echo "==> 2. Querying environment variables inside container via exec:"
+kubectl exec cka-lab-telemetry-app -n "${NAMESPACE}" -- env | grep -E "APP_ROLE|POD_NODE_NAME"
+
+echo "==> 3. Running process table check inside container via exec:"
+kubectl exec cka-lab-telemetry-app -n "${NAMESPACE}" -- ps aux
+
+echo "==> Drill complete. You can tail logs in real time with:"
+echo "    kubectl logs -f cka-lab-telemetry-app -n ${NAMESPACE}"

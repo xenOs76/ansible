@@ -112,3 +112,11 @@
   tags:
     - common
     - packages
+
+- name: Upgrade all system packages via APT
+  ansible.builtin.apt:
+    upgrade: safe
+  tags:
+    - common
+    - packages
+    - upgrade
