@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-10-02
+
 ### Added
 
 - Implemented CKA training scenario `scheduling` (`roles/cka_lab/tasks/scenario_scheduling.yml`) covering node scheduling constraints, pod spreading, autoscaling, and namespace capacity governance:
