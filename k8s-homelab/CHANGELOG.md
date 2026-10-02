@@ -124,7 +124,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Fixed LitmusChaos `ChaosExperiment not found` error during chaos drill executions by updating the generic experiments manifest URL to raw GitHub (`faults/kubernetes/experiments.yaml`), replacing the deprecated ChaosHub endpoint. Added defensive auto-provisioning of missing experiment CRDs and RBAC bindings inside `start-chaos-exercise.sh`.
+- Fixed LitmusChaos `ChaosExperiment not found` error during chaos drill executions by updating the generic experiments manifest URL to raw GitHub (`faults/kubernetes/experiments.yaml`), replacing the deprecated ChaosHub endpoint. Added defensive auto-provisioning of missing experiment CRDs inside `start-chaos-exercise.sh`.
+- Fixed `litmus-admin` ServiceAccount and RBAC errors in application namespaces by embedding the dedicated `ServiceAccount` and `ClusterRoleBinding` directly into `00-target-app/target-app.yaml`, allowing the Chaos runner pod to operate seamlessly within `cka-troubleshooting`.
+- Fixed container runtime integration in dynamic OOM chaos drills: configured `CONTAINER_RUNTIME: containerd`, `SOCKET_PATH: /run/containerd/containerd.sock`, and explicit `TARGET_CONTAINER: payment-api` within `engine-oom.yaml`. Updated `start-chaos-exercise.sh` to purge stale `ChaosEngine` instances and wait for runner pod startup, ensuring container terminations and ExitCode 137 (`OOMKilled`) are correctly registered and observable in `kubectl describe pod`.
 - Fixed `scripts/sync-kubeconfig.sh` incorrectly synchronizing stale credentials
   from previous cluster deployments when running `make preprod-up`. The script
   now validates that the control plane VM is running and confirms that
