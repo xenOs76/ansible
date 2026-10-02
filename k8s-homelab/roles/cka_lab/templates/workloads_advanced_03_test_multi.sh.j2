@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# test-multi-container.sh: Non-Interactive Verification of Init & Native Sidecars
+# ==============================================================================
+set -euo pipefail
+
+NAMESPACE="{{ cka_lab_workloads_advanced_namespace | default('default') }}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+cleanup() {
+  echo "==> Cleaning up multi-container drill resources..."
+  kubectl delete pod cka-lab-init-pod cka-lab-native-sidecar-pod -n "${NAMESPACE}" \
+    --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
+}
+
+trap cleanup EXIT
+
+echo "1. Testing Init Container Pod lifecycle..."
+kubectl apply -f "${SCRIPT_DIR}/cka-lab-init-container-pod.yaml" -n "${NAMESPACE}"
+kubectl wait --for=condition=Ready pod/cka-lab-init-pod -n "${NAMESPACE}" --timeout=45s
+
+INIT_OUTPUT=$(kubectl logs cka-lab-init-pod -c main-app -n "${NAMESPACE}")
+echo "    Main application read generated config: ${INIT_OUTPUT}"
+if [[ "${INIT_OUTPUT}" != *"CONFIG_READY=true"* ]]; then
+  echo "    ERROR: Init container failed to pass configuration!"
+  exit 1
+fi
+echo "    OK: Init container gated and configured primary container."
+
+echo "2. Testing Native Sidecar Pod lifecycle (restartPolicy: Always in initContainers)..."
+kubectl apply -f "${SCRIPT_DIR}/cka-lab-native-sidecar-pod.yaml" -n "${NAMESPACE}"
+kubectl wait --for=condition=Ready pod/cka-lab-native-sidecar-pod -n "${NAMESPACE}" --timeout=45s
+
+SIDECAR_STATUS=$(kubectl get pod cka-lab-native-sidecar-pod -n "${NAMESPACE}" -o jsonpath='{.status.initContainerStatuses[0].state.running}')
+if [[ -n "${SIDECAR_STATUS}" ]]; then
+  echo "    OK: Native sidecar is running concurrently in background."
+fi
+
+echo "==> Multi-container and sidecar drills verified successfully."

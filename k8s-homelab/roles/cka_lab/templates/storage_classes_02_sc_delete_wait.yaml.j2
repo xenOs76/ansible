@@ -1,0 +1,12 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: cka-lab-sc-delete-wait
+  labels:
+    app.kubernetes.io/name: cka-lab-sc-delete-wait
+    app.kubernetes.io/part-of: cka-lab
+    cka.practice/scenario: storage-classes
+provisioner: rancher.io/local-path
+reclaimPolicy: Delete
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true

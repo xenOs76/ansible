@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# cka-lab-load-generator.sh: Non-Interactive Verification of HorizontalPodAutoscaler (HPA)
+# ==============================================================================
+set -euo pipefail
+
+NAMESPACE="{{ cka_lab_scheduling_namespace | default('default') }}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+cleanup() {
+  echo "==> Cleaning up HPA drill resources..."
+  kubectl delete hpa cka-lab-hpa -n "${NAMESPACE}" --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
+  kubectl delete deployment cka-lab-autoscale-app -n "${NAMESPACE}" --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
+  kubectl delete service cka-lab-autoscale-svc -n "${NAMESPACE}" --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
+}
+
+trap cleanup EXIT
+
+echo "1. Deploying workload and service for HPA..."
+kubectl apply -f "${SCRIPT_DIR}/cka-lab-autoscale-app.yaml" -n "${NAMESPACE}"
+kubectl rollout status deployment/cka-lab-autoscale-app -n "${NAMESPACE}" --timeout=60s
+
+echo "2. Applying HorizontalPodAutoscaler..."
+kubectl apply -f "${SCRIPT_DIR}/cka-lab-hpa.yaml" -n "${NAMESPACE}"
+
+echo "Waiting up to 15s for HPA controller binding..."
+sleep 5
+kubectl get hpa cka-lab-hpa -n "${NAMESPACE}"
+
+MIN_REPLICAS=$(kubectl get hpa cka-lab-hpa -n "${NAMESPACE}" -o jsonpath='{.spec.minReplicas}')
+MAX_REPLICAS=$(kubectl get hpa cka-lab-hpa -n "${NAMESPACE}" -o jsonpath='{.spec.maxReplicas}')
+TARGET_UTIL=$(kubectl get hpa cka-lab-hpa -n "${NAMESPACE}" -o jsonpath='{.spec.metrics[0].resource.target.averageUtilization}')
+
+echo "    HPA target: min=${MIN_REPLICAS}, max=${MAX_REPLICAS}, targetCPU=${TARGET_UTIL}%"
+echo "==> HPA autoscaling drill verified successfully."

@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# test-daemonset.sh: Non-Interactive Verification of DaemonSet Controller
+# ==============================================================================
+set -euo pipefail
+
+NAMESPACE="{{ cka_lab_workloads_advanced_namespace | default('default') }}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+cleanup() {
+  echo "==> Cleaning up DaemonSet drill resources..."
+  kubectl delete daemonset cka-lab-log-collector-ds -n "${NAMESPACE}" --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
+}
+
+trap cleanup EXIT
+
+echo "1. Applying DaemonSet manifest..."
+kubectl apply -f "${SCRIPT_DIR}/cka-lab-log-collector-ds.yaml" -n "${NAMESPACE}"
+
+echo "Waiting for DaemonSet pods to be scheduled across nodes..."
+kubectl rollout status daemonset/cka-lab-log-collector-ds -n "${NAMESPACE}" --timeout=60s
+
+TOTAL_NODES=$(kubectl get nodes --no-headers | wc -l)
+SCHEDULED_PODS=$(kubectl get daemonset cka-lab-log-collector-ds -n "${NAMESPACE}" -o jsonpath='{.status.numberReady}')
+
+echo "    Total cluster nodes:    ${TOTAL_NODES}"
+echo "    DaemonSet running pods: ${SCHEDULED_PODS}"
+
+if [[ "${SCHEDULED_PODS}" -lt 2 ]]; then
+  echo "    ERROR: DaemonSet failed to deploy across expected nodes!"
+  exit 1
+fi
+
+echo "==> DaemonSet verification completed successfully."

@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# ====================================================================
+# [CKA LAB] Chaos Engineering: Install Headless LitmusChaos Operator
+# Installs only the minimal Operator and CRDs (~60MB footprint),
+# strictly omitting the heavy UI/MongoDB ChaosCenter.
+# ====================================================================
+set -euo pipefail
+
+NAMESPACE="{{ cka_lab_chaos_namespace }}"
+LITMUS_VER="{{ cka_lab_litmus_operator_version }}"
+
+echo "==> Ensuring namespace '${NAMESPACE}' exists..."
+kubectl create namespace "${NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f -
+
+echo "==> Installing Headless LitmusChaos Operator (${LITMUS_VER})..."
+kubectl apply -f "https://litmuschaos.github.io/litmus/litmus-operator-${LITMUS_VER}.yaml"
+
+echo "==> Awaiting Litmus Operator deployment rollout in 'litmus' namespace..."
+kubectl rollout status deployment/chaos-operator -n litmus --timeout=120s
+
+echo "==> Setting up RBAC permissions for chaos execution in '${NAMESPACE}'..."
+cat <<EOF | kubectl apply -n "${NAMESPACE}" -f -
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: litmus-admin
+  namespace: ${NAMESPACE}
+  labels:
+    app.kubernetes.io/part-of: cka-lab-chaos
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: litmus-admin-clusterrole-${NAMESPACE}
+  labels:
+    app.kubernetes.io/part-of: cka-lab-chaos
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+- kind: ServiceAccount
+  name: litmus-admin
+  namespace: ${NAMESPACE}
+EOF
+
+echo "==> Pre-loading Generic ChaosExperiment definitions into '${NAMESPACE}'..."
+kubectl apply -f "https://hub.litmuschaos.io/api/chaos/master?file=charts/generic/experiments.yaml" -n "${NAMESPACE}"
+
+echo "==> [SUCCESS] Headless LitmusChaos Operator installed and ready in '${NAMESPACE}'!"

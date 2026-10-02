@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# ====================================================================
+# [CKA LAB] Kubelet Diagnostics Drill: Break Kubelet Service
+# Injects invalid configuration into /var/lib/kubelet/config.yaml.
+# ====================================================================
+set -euo pipefail
+
+CONFIG="/var/lib/kubelet/config.yaml"
+BACKUP="/var/lib/kubelet/config.yaml.bak"
+
+if [ "$(id -u)" -ne 0 ]; then
+  echo "Error: This script modifies system service configs and must be run as root (use sudo)." >&2
+  exit 1
+fi
+
+if [ ! -f "${CONFIG}" ]; then
+  echo "Error: Config file ${CONFIG} not found." >&2
+  exit 1
+fi
+
+echo "==> Backing up ${CONFIG} to ${BACKUP}..."
+cp -f "${CONFIG}" "${BACKUP}"
+
+echo "==> Injecting invalid cgroupDriver configuration into ${CONFIG}..."
+# Injects an invalid cgroup driver value that causes kubelet initialization failure
+if grep -q "cgroupDriver:" "${CONFIG}"; then
+  sed -i 's|cgroupDriver:.*|cgroupDriver: invalidDriverName|g' "${CONFIG}"
+else
+  echo "cgroupDriver: invalidDriverName" >> "${CONFIG}"
+fi
+
+echo "==> Restarting kubelet systemd service..."
+systemctl restart kubelet || true
+
+echo "==> Checking kubelet status:"
+systemctl is-active kubelet || echo "==> [EXPECTED] Kubelet service failed to start."
+echo ""
+echo "==> Exercise Tasks:"
+echo "    1. Inspect status: sudo systemctl status kubelet"
+echo "    2. Inspect journal logs: sudo journalctl -u kubelet -e --no-pager"
+echo "    3. Identify the error in ${CONFIG}"
+echo "    4. Restore healthy state: sudo ./fix-kubelet.sh"

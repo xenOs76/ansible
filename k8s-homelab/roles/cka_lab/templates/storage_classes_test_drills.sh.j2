@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# test-storage-classes-drills.sh: Automated Verification Suite for CKA StorageClasses
+# ==============================================================================
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+NAMESPACE="{{ cka_lab_storage_classes_namespace | default('default') }}"
+
+echo "===================================================================="
+echo "  [CKA LAB] Running End-to-End Dynamic Storage Verification         "
+echo "===================================================================="
+
+cleanup() {
+  echo "==> Performing final dynamic storage cleanup..."
+  kubectl delete pod cka-lab-storage-consumer -n "${NAMESPACE}" --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
+  kubectl delete pvc cka-lab-dynamic-pvc -n "${NAMESPACE}" --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
+  kubectl delete storageclass cka-lab-sc-retain cka-lab-sc-delete-wait --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
+}
+
+trap cleanup EXIT
+
+# ------------------------------------------------------------------------------
+# Drill 1: Dynamic Storage Provisioner
+# ------------------------------------------------------------------------------
+echo "--------------------------------------------------------------------"
+echo "  [1/2] Verifying Storage Provisioner Installation                  "
+echo "--------------------------------------------------------------------"
+"${SCRIPT_DIR}/01-provisioners/install-local-path-provisioner.sh"
+
+# ------------------------------------------------------------------------------
+# Drill 2: StorageClasses & Dynamic PVCs
+# ------------------------------------------------------------------------------
+echo "--------------------------------------------------------------------"
+echo "  [2/2] Testing StorageClasses, Delayed Binding, and PVC Expansion  "
+echo "--------------------------------------------------------------------"
+"${SCRIPT_DIR}/02-storage-classes/test-storage-classes.sh"
+
+echo "===================================================================="
+echo "  [SUCCESS] All CKA Dynamic Storage drills verified successfully!   "
+echo "===================================================================="

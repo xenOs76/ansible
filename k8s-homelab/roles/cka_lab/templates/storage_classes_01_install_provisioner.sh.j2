@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# install-local-path-provisioner.sh: Automated Dynamic Storage Provisioner Deployment
+# ==============================================================================
+set -euo pipefail
+
+echo "==> [Dynamic Storage Provisioner] Verifying Local Path Provisioner..."
+
+if kubectl get deployment -n local-path-storage local-path-provisioner >/dev/null 2>&1; then
+  echo "    OK: local-path-provisioner is already deployed."
+  exit 0
+fi
+
+echo "Deploying Rancher local-path-provisioner..."
+kubectl apply -f https://raw.githubusercontent.com/rancher/local-path-provisioner/v0.0.30/deploy/local-path-storage.yaml
+
+echo "Waiting for local-path-provisioner to roll out..."
+kubectl rollout status deployment/local-path-provisioner -n local-path-storage --timeout=90s
+
+echo "==> local-path-provisioner successfully deployed."

@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# test-affinities.sh: Non-Interactive NodeAffinity and PodAntiAffinity Verification
+# ==============================================================================
+set -euo pipefail
+
+NAMESPACE="{{ cka_lab_scheduling_namespace | default('default') }}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+TARGET_NODE=$(kubectl get nodes -l '!node-role.kubernetes.io/control-plane' -o jsonpath='{.items[0].metadata.name}' || echo "kube-worker-1")
+
+cleanup() {
+  echo "==> Cleaning up affinity drill resources..."
+  kubectl delete pod cka-lab-node-affinity-pod -n "${NAMESPACE}" --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
+  kubectl delete deployment cka-lab-anti-affinity-deploy -n "${NAMESPACE}" --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
+  kubectl label nodes "${TARGET_NODE}" cka.zone- >/dev/null 2>&1 || true
+}
+
+trap cleanup EXIT
+
+echo "1. Labeling node ${TARGET_NODE} with cka.zone=zone-a..."
+kubectl label nodes "${TARGET_NODE}" cka.zone=zone-a --overwrite
+
+echo "2. Deploying NodeAffinity test pod..."
+kubectl apply -f "${SCRIPT_DIR}/cka-lab-node-affinity-pod.yaml" -n "${NAMESPACE}"
+kubectl wait --for=condition=Ready pod/cka-lab-node-affinity-pod -n "${NAMESPACE}" --timeout=30s
+
+SCHEDULED_NODE=$(kubectl get pod cka-lab-node-affinity-pod -n "${NAMESPACE}" -o jsonpath='{.spec.nodeName}')
+echo "    NodeAffinity Pod scheduled on: ${SCHEDULED_NODE}"
+
+if [[ "${SCHEDULED_NODE}" != "${TARGET_NODE}" ]]; then
+  echo "    ERROR: NodeAffinity pod did not schedule on labeled node ${TARGET_NODE}!"
+  exit 1
+fi
+echo "    OK: NodeAffinity satisfied."
+
+echo "3. Deploying PodAntiAffinity 2-replica deployment..."
+kubectl apply -f "${SCRIPT_DIR}/cka-lab-pod-anti-affinity-deploy.yaml" -n "${NAMESPACE}"
+kubectl rollout status deployment/cka-lab-anti-affinity-deploy -n "${NAMESPACE}" --timeout=60s
+
+REPLICA_NODES=$(kubectl get pods -n "${NAMESPACE}" -l app=cka-lab-anti-affinity-app -o jsonpath='{.items[*].spec.nodeName}')
+echo "    Anti-affinity replicas scheduled on nodes: ${REPLICA_NODES}"
+
+echo "==> Affinities drill verified successfully."

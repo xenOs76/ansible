@@ -1,0 +1,54 @@
+---
+- name: Ensure CKA lab scheduling directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ ansible_user | default('vagrant') }}"
+    group: "{{ ansible_user | default('vagrant') }}"
+    mode: "0755"
+  loop:
+    - "{{ cka_lab_scheduling_dir }}"
+    - "{{ cka_lab_scheduling_dir }}/01-taints-tolerations"
+    - "{{ cka_lab_scheduling_dir }}/02-affinities"
+    - "{{ cka_lab_scheduling_dir }}/03-hpa-autoscaling"
+    - "{{ cka_lab_scheduling_dir }}/04-quotas-limits"
+  tags:
+    - cka_lab
+    - scheduling
+    - taints
+    - affinity
+    - hpa
+    - quota
+
+- name: Render CKA scheduling drill manifests and guides
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "{{ cka_lab_scheduling_dir }}/{{ item.dest }}"
+    owner: "{{ ansible_user | default('vagrant') }}"
+    group: "{{ ansible_user | default('vagrant') }}"
+    mode: "{{ item.mode | default('0644') }}"
+  loop:
+    - {src: "scheduling_readme.md.j2", dest: "README.md", mode: "0644"}
+    - {src: "scheduling_test_drills.sh.j2", dest: "test-scheduling-drills.sh", mode: "0755"}
+    - {src: "scheduling_01_tolerating_pod.yaml.j2", dest: "01-taints-tolerations/cka-lab-tolerating-pod.yaml"}
+    - {src: "scheduling_01_intolerant_pod.yaml.j2", dest: "01-taints-tolerations/cka-lab-intolerant-pod.yaml"}
+    - {src: "scheduling_01_taint_drill.sh.j2", dest: "01-taints-tolerations/cka-lab-taint-drill.sh", mode: "0755"}
+    - {src: "scheduling_02_node_affinity_pod.yaml.j2", dest: "02-affinities/cka-lab-node-affinity-pod.yaml"}
+    - {src: "scheduling_02_pod_anti_affinity_deploy.yaml.j2", dest: "02-affinities/cka-lab-pod-anti-affinity-deploy.yaml"}
+    - {src: "scheduling_02_affinity_drill.sh.j2", dest: "02-affinities/test-affinities.sh", mode: "0755"}
+    - {src: "scheduling_03_autoscale_app.yaml.j2", dest: "03-hpa-autoscaling/cka-lab-autoscale-app.yaml"}
+    - {src: "scheduling_03_hpa.yaml.j2", dest: "03-hpa-autoscaling/cka-lab-hpa.yaml"}
+    - {src: "scheduling_03_load_generator.sh.j2", dest: "03-hpa-autoscaling/cka-lab-load-generator.sh", mode: "0755"}
+    - {src: "scheduling_04_quota_ns.yaml.j2", dest: "04-quotas-limits/cka-lab-quota-ns.yaml"}
+    - {src: "scheduling_04_compute_quota.yaml.j2", dest: "04-quotas-limits/cka-lab-compute-quota.yaml"}
+    - {src: "scheduling_04_limit_range.yaml.j2", dest: "04-quotas-limits/cka-lab-limit-range.yaml"}
+    - {src: "scheduling_04_test_quotas.sh.j2", dest: "04-quotas-limits/test-quotas.sh", mode: "0755"}
+  loop_control:
+    label: "scheduling/{{ item.dest }}"
+  tags:
+    - cka_lab
+    - scheduling
+    - taints
+    - affinity
+    - hpa
+    - quota

@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# ====================================================================
+# [CKA LAB] Kubelet Diagnostics Drill: Fix Kubelet Service
+# Restores valid kubelet configuration and verifies service health.
+# ====================================================================
+set -euo pipefail
+
+CONFIG="/var/lib/kubelet/config.yaml"
+BACKUP="/var/lib/kubelet/config.yaml.bak"
+
+if [ "$(id -u)" -ne 0 ]; then
+  echo "Error: This script modifies system service configs and must be run as root (use sudo)." >&2
+  exit 1
+fi
+
+if [ -f "${BACKUP}" ]; then
+  echo "==> Restoring ${CONFIG} from ${BACKUP}..."
+  cp -f "${BACKUP}" "${CONFIG}"
+  rm -f "${BACKUP}"
+else
+  echo "==> Backup not found, resetting cgroupDriver to systemd in-place..."
+  sed -i 's|cgroupDriver: invalidDriverName|cgroupDriver: systemd|g' "${CONFIG}"
+fi
+
+echo "==> Restarting kubelet..."
+systemctl daemon-reload
+systemctl restart kubelet
+
+echo "==> Verifying kubelet service state..."
+for i in $(seq 1 15); do
+  if systemctl is-active --quiet kubelet; then
+    echo "==> [SUCCESS] Kubelet service is active and running!"
+    systemctl status kubelet --no-pager -l
+    exit 0
+  fi
+  echo "    Attempt ${i}/15: Waiting for kubelet to become active..."
+  sleep 2
+done
+
+echo "==> [ERROR] Kubelet service failed to become active. Inspect logs with: sudo journalctl -u kubelet -e" >&2
+exit 1

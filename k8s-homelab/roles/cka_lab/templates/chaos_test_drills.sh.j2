@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# test-chaos-drills.sh: Automated Verification Suite for Chaos Drills
+# Validates manifest syntax, CLI commands, and dry-run safety.
+# ==============================================================================
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+NAMESPACE="{{ cka_lab_chaos_namespace }}"
+
+echo "===================================================================="
+echo "  [CKA LAB] Running Chaos Troubleshooting Verification Suite        "
+echo "===================================================================="
+
+# 1. Validate Target Application Manifests
+echo "==> 1. Validating Target Application Manifests..."
+kubectl apply -f "${SCRIPT_DIR}/00-target-app/target-app.yaml" --dry-run=client
+
+# 2. Validate ChaosEngine Manifests
+echo "==> 2. Validating ChaosEngine Manifest Definitions..."
+for engine in "${SCRIPT_DIR}"/*/*.yaml; do
+  echo "    Checking $(basename "${engine}")..."
+  kubectl apply -f "${engine}" -n "${NAMESPACE}" --dry-run=client
+done
+
+# 3. Test CLI Script Argument Parsing
+echo "==> 3. Testing CLI Script Parameter Handling..."
+if "${SCRIPT_DIR}/start-chaos-exercise.sh" >/dev/null 2>&1; then
+  echo "Error: start-chaos-exercise.sh should require arguments" >&2
+  exit 1
+fi
+
+echo "===================================================================="
+echo "  [SUCCESS] All Chaos Troubleshooting manifests and scripts sound!  "
+echo "===================================================================="

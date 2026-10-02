@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# test-crds-drills.sh: Automated Verification Suite for CKA CRDs
+# ==============================================================================
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+NAMESPACE="{{ cka_lab_crds_namespace | default('default') }}"
+
+echo "===================================================================="
+echo "  [CKA LAB] Running End-to-End CRD & Schema Verification             "
+echo "===================================================================="
+
+cleanup() {
+  echo "==> Performing final CRD cleanup..."
+  kubectl delete backupschedule cka-lab-daily-backup -n "${NAMESPACE}" --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
+  kubectl delete crd backupschedules.automation.cka.priv --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
+}
+
+trap cleanup EXIT
+
+# ------------------------------------------------------------------------------
+# Drill 1: CustomResourceDefinition & Schema Validation
+# ------------------------------------------------------------------------------
+echo "--------------------------------------------------------------------"
+echo "  [1/1] Testing CustomResourceDefinition & Object Lifecycle         "
+echo "--------------------------------------------------------------------"
+"${SCRIPT_DIR}/01-crd-schema/test-crds.sh"
+
+echo "===================================================================="
+echo "  [SUCCESS] All CKA CRD drills verified successfully!               "
+echo "===================================================================="

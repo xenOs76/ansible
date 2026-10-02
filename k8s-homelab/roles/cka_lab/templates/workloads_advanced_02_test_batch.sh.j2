@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# test-batch.sh: Non-Interactive Verification of Jobs & CronJobs
+# ==============================================================================
+set -euo pipefail
+
+NAMESPACE="{{ cka_lab_workloads_advanced_namespace | default('default') }}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+cleanup() {
+  echo "==> Cleaning up batch drill resources..."
+  kubectl delete job cka-lab-parallel-job -n "${NAMESPACE}" --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
+  kubectl delete cronjob cka-lab-cronjob -n "${NAMESPACE}" --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
+}
+
+trap cleanup EXIT
+
+echo "1. Applying parallel batch Job..."
+kubectl apply -f "${SCRIPT_DIR}/cka-lab-parallel-job.yaml" -n "${NAMESPACE}"
+
+echo "Waiting for Job completion (up to 40s)..."
+kubectl wait --for=condition=complete job/cka-lab-parallel-job -n "${NAMESPACE}" --timeout=40s
+
+SUCCEEDED=$(kubectl get job cka-lab-parallel-job -n "${NAMESPACE}" -o jsonpath='{.status.succeeded}')
+echo "    Job completed successfully. Succeeded pods: ${SUCCEEDED}/4"
+
+echo "2. Applying CronJob..."
+kubectl apply -f "${SCRIPT_DIR}/cka-lab-cronjob.yaml" -n "${NAMESPACE}"
+
+SCHEDULE=$(kubectl get cronjob cka-lab-cronjob -n "${NAMESPACE}" -o jsonpath='{.spec.schedule}')
+POLICY=$(kubectl get cronjob cka-lab-cronjob -n "${NAMESPACE}" -o jsonpath='{.spec.concurrencyPolicy}')
+echo "    CronJob active: schedule='${SCHEDULE}', concurrencyPolicy='${POLICY}'"
+
+echo "==> Batch Jobs and CronJobs verified successfully."

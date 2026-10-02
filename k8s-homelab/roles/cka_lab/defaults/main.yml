@@ -9,6 +9,12 @@ cka_lab_scenario_volumes_enabled: true
 cka_lab_scenario_deployments_enabled: true
 cka_lab_scenario_pods_enabled: true
 cka_lab_scenario_networking_enabled: true
+cka_lab_scenario_scheduling_enabled: true
+cka_lab_scenario_workloads_advanced_enabled: true
+cka_lab_scenario_storage_classes_enabled: true
+cka_lab_scenario_cluster_troubleshooting_enabled: true
+cka_lab_scenario_crds_enabled: true
+cka_lab_scenario_chaos_troubleshooting_enabled: false
 
 # Scenario: motd (CKA Initial Steps Reminder Announcement)
 cka_lab_motd_user: "{{ ansible_user | default('vagrant') }}"
@@ -210,3 +216,28 @@ cka_lab_networking_gateway_namespace: "nginx-gateway"
 cka_lab_networking_client_namespace: "cka-lab-net-client"
 cka_lab_networking_backend_namespace: "cka-lab-net-backend"
 cka_lab_networking_domain: "cka-lab.example.local"
+
+# Scenario: scheduling (Taints, Tolerations, Affinities, HPA, and Resource Quotas)
+cka_lab_scheduling_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/scheduling"
+cka_lab_scheduling_namespace: "default"
+cka_lab_scheduling_capacity_namespace: "cka-lab-capacity-ns"
+
+# Scenario: workloads_advanced (DaemonSets, Batch Jobs, CronJobs, and Sidecars)
+cka_lab_workloads_advanced_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/workloads-advanced"
+cka_lab_workloads_advanced_namespace: "default"
+
+# Scenario: storage_classes (Dynamic StorageClasses, Binding Modes, and PVC Expansion)
+cka_lab_storage_classes_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/storage-classes"
+cka_lab_storage_classes_namespace: "default"
+
+# Scenario: cluster_troubleshooting (Cordon/Drain, Static Pod Recovery, Kubelet Diagnostics)
+cka_lab_cluster_troubleshooting_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/cluster-troubleshooting"
+
+# Scenario: crds (CustomResourceDefinitions and OpenAPI Schema Validation)
+cka_lab_crds_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/crds-operators"
+cka_lab_crds_namespace: "default"
+
+# Scenario: chaos_troubleshooting (LitmusChaos Dynamic Resilience & Runtime Diagnostics)
+cka_lab_chaos_troubleshooting_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/chaos-troubleshooting"
+cka_lab_chaos_namespace: "cka-troubleshooting"
+cka_lab_litmus_operator_version: "v3.0.0"

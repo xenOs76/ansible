@@ -1,0 +1,119 @@
+# CKA Lab Exercise: Advanced Scheduling & Capacity Management
+
+Hands-on training scenario for the Certified Kubernetes Administrator (CKA) certification, covering Taints & Tolerations, NodeAffinity, PodAntiAffinity, Horizontal Pod Autoscaling (HPA), ResourceQuotas, and LimitRanges.
+
+---
+
+## 1. Overview & Objectives
+
+Kubernetes scheduling governs how the control plane places workloads across cluster nodes based on resource capacity, hardware topology, and operational isolation policies:
+
+- **Section 1: Taints & Tolerations**: Node repellent mechanics, applying `NoSchedule` / `NoExecute` taints, and specifying matching pod tolerations.
+- **Section 2: NodeAffinity & PodAntiAffinity**: Hard (`requiredDuringSchedulingIgnoredDuringExecution`) and soft (`preferredDuringSchedulingIgnoredDuringExecution`) node matching expressions, and multi-replica spreading across nodes via `podAntiAffinity`.
+- **Section 3: Horizontal Pod Autoscaler (HPA)**: Declarative v2 autoscaling based on observed CPU resource utilization.
+- **Section 4: Capacity Governance**: Namespace-scoped `ResourceQuota` limits and `LimitRange` default resource request/limit injection and boundary enforcement.
+
+### Scenario Directory Structure
+
+```text
+{{ cka_lab_scheduling_dir }}/
+├── README.md                                  # This master guide
+├── test-scheduling-drills.sh                  # Non-interactive automated test suite
+├── 01-taints-tolerations/                     # Section 1: Taints & Tolerations
+│   ├── cka-lab-tolerating-pod.yaml            # Pod with matching toleration
+│   ├── cka-lab-intolerant-pod.yaml            # Pod without tolerations
+│   └── cka-lab-taint-drill.sh                 # Non-interactive taint testing script
+├── 02-affinities/                             # Section 2: Affinities & Anti-Affinities
+│   ├── cka-lab-node-affinity-pod.yaml         # Hard & soft nodeAffinity pod
+│   ├── cka-lab-pod-anti-affinity-deploy.yaml  # Multi-replica podAntiAffinity deployment
+│   └── test-affinities.sh                     # Non-interactive affinity verification
+├── 03-hpa-autoscaling/                        # Section 3: Horizontal Pod Autoscaling
+│   ├── cka-lab-autoscale-app.yaml             # Workload deployment with resource requests
+│   ├── cka-lab-hpa.yaml                       # Autoscaling v2 resource
+│   └── cka-lab-load-generator.sh              # Verification script
+└── 04-quotas-limits/                          # Section 4: ResourceQuota & LimitRange
+    ├── cka-lab-quota-ns.yaml                  # Dedicated capacity namespace
+    ├── cka-lab-compute-quota.yaml             # CPU/Memory/Pod hard limits
+    ├── cka-lab-limit-range.yaml               # Default injection and min/max boundaries
+    └── test-quotas.sh                         # Admission rejection verification
+```
+
+---
+
+## 2. Walkthrough & Exam Drills
+
+### Drill 1: Taints & Tolerations (`01-taints-tolerations/`)
+
+1. **Inspect Worker Nodes**:
+
+   ```bash
+   kubectl get nodes -l '!node-role.kubernetes.io/control-plane'
+   ```
+
+1. **Apply Dedicated Taint to Worker Node**:
+
+   ```bash
+   kubectl taint nodes kube-worker-1 dedicated=analytics:NoSchedule --overwrite
+   ```
+
+1. **Deploy Tolerating and Intolerant Pods**:
+
+   ```bash
+   kubectl apply -f {{ cka_lab_scheduling_dir }}/01-taints-tolerations/cka-lab-tolerating-pod.yaml
+   kubectl apply -f {{ cka_lab_scheduling_dir }}/01-taints-tolerations/cka-lab-intolerant-pod.yaml
+   kubectl get pods -o wide
+   ```
+
+1. **Remove Taint**:
+
+   ```bash
+   kubectl taint nodes kube-worker-1 dedicated:NoSchedule-
+   ```
+
+### Drill 2: NodeAffinity and PodAntiAffinity (`02-affinities/`)
+
+1. **Label Worker Node**:
+
+   ```bash
+   kubectl label nodes kube-worker-1 cka.zone=zone-a --overwrite
+   ```
+
+1. **Deploy NodeAffinity Pod & Anti-Affinity Deployment**:
+
+   ```bash
+   kubectl apply -f {{ cka_lab_scheduling_dir }}/02-affinities/cka-lab-node-affinity-pod.yaml
+   kubectl apply -f {{ cka_lab_scheduling_dir }}/02-affinities/cka-lab-pod-anti-affinity-deploy.yaml
+   kubectl get pods -o wide
+   ```
+
+### Drill 3: Horizontal Pod Autoscaling (`03-hpa-autoscaling/`)
+
+1. **Deploy Target Application and HPA Resource**:
+
+   ```bash
+   kubectl apply -f {{ cka_lab_scheduling_dir }}/03-hpa-autoscaling/cka-lab-autoscale-app.yaml
+   kubectl apply -f {{ cka_lab_scheduling_dir }}/03-hpa-autoscaling/cka-lab-hpa.yaml
+   kubectl get hpa cka-lab-hpa
+   ```
+
+### Drill 4: Capacity Governance & Quotas (`04-quotas-limits/`)
+
+1. **Deploy Quota and LimitRange**:
+
+   ```bash
+   kubectl apply -f {{ cka_lab_scheduling_dir }}/04-quotas-limits/cka-lab-quota-ns.yaml
+   kubectl apply -f {{ cka_lab_scheduling_dir }}/04-quotas-limits/cka-lab-compute-quota.yaml
+   kubectl apply -f {{ cka_lab_scheduling_dir }}/04-quotas-limits/cka-lab-limit-range.yaml
+   kubectl describe resourcequota cka-lab-compute-quota -n {{ cka_lab_scheduling_capacity_namespace | default('cka-lab-capacity-ns') }}
+   kubectl describe limitrange cka-lab-limit-range -n {{ cka_lab_scheduling_capacity_namespace | default('cka-lab-capacity-ns') }}
+   ```
+
+---
+
+## 3. Automated Validation
+
+Execute the automated non-interactive verification script:
+
+```bash
+{{ cka_lab_scheduling_dir }}/test-scheduling-drills.sh
+```

@@ -1,0 +1,56 @@
+# CKA Lab Exercise: Custom Resource Definitions (CRDs) & Operator Concepts
+
+Hands-on training scenario for the Certified Kubernetes Administrator (CKA) certification, covering CustomResourceDefinition (CRD) schema specification, OpenAPI v3 structural validation, additional printer columns, and custom resource lifecycle.
+
+---
+
+## 1. Overview & Objectives
+
+Operators and custom controllers rely on CRDs to extend the core Kubernetes API:
+
+- **Section 1: CustomResourceDefinition (CRD)**: Authoring `apiextensions.k8s.io/v1` definitions with custom group, version, kind, plural, singular, and short names.
+- **Section 2: OpenAPI v3 Structural Validation**: Enforcing schema validation (`required` fields, minimum/maximum values, enums) at admission time.
+- **Section 3: Custom Resource Lifecycle**: Instantiating custom objects, verifying CLI additional columns, and validating admission rejection on malformed specs.
+
+### Scenario Directory Structure
+
+```text
+{{ cka_lab_crds_dir }}/
+├── README.md                                  # This master guide
+├── test-crds-drills.sh                        # Non-interactive automated test suite
+└── 01-crd-schema/                             # Section 1: Schema & Object Lifecycle
+    ├── cka-lab-backup-crd.yaml                # BackupSchedule CRD definition
+    ├── cka-lab-backup-custom-resource.yaml    # Valid custom object manifest
+    └── test-crds.sh                           # Non-interactive verification script
+```
+
+---
+
+## 2. Walkthrough & Exam Drills
+
+### Drill 1: Apply CRD & Inspect Established State (`01-crd-schema/`)
+
+1. **Deploy CRD**:
+
+   ```bash
+   kubectl apply -f {{ cka_lab_crds_dir }}/01-crd-schema/cka-lab-backup-crd.yaml
+   kubectl wait --for=condition=established crd/backupschedules.automation.cka.priv
+   kubectl get crd backupschedules.automation.cka.priv
+   ```
+
+1. **Deploy Custom Resource & Query via ShortName**:
+
+   ```bash
+   kubectl apply -f {{ cka_lab_crds_dir }}/01-crd-schema/cka-lab-backup-custom-resource.yaml
+   kubectl get bs
+   ```
+
+---
+
+## 3. Automated Validation
+
+Execute the automated non-interactive verification suite:
+
+```bash
+{{ cka_lab_crds_dir }}/test-crds-drills.sh
+```

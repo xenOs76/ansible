@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# cka-lab-taint-drill.sh: Non-Interactive Taints and Tolerations Drill
+# ==============================================================================
+set -euo pipefail
+
+NAMESPACE="{{ cka_lab_scheduling_namespace | default('default') }}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Identify target worker node
+TARGET_NODE=$(kubectl get nodes -l '!node-role.kubernetes.io/control-plane' -o jsonpath='{.items[0].metadata.name}' || echo "kube-worker-1")
+
+echo "==> [Taints Drill] Target node for taint testing: ${TARGET_NODE}"
+
+# Helper cleanup trap ensuring taints and test pods are removed cleanly
+cleanup() {
+  echo "==> Cleaning up taint drill resources..."
+  kubectl delete pod cka-lab-tolerating-pod cka-lab-intolerant-pod -n "${NAMESPACE}" \
+    --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
+  kubectl taint nodes "${TARGET_NODE}" dedicated:NoSchedule- >/dev/null 2>&1 || true
+  kubectl taint nodes "${TARGET_NODE}" maintenance:NoExecute- >/dev/null 2>&1 || true
+}
+
+trap cleanup EXIT
+
+echo "1. Applying taint dedicated=analytics:NoSchedule to ${TARGET_NODE}..."
+kubectl taint nodes "${TARGET_NODE}" dedicated=analytics:NoSchedule --overwrite
+
+echo "2. Deploying tolerating and intolerant test pods..."
+kubectl apply -f "${SCRIPT_DIR}/cka-lab-tolerating-pod.yaml" -n "${NAMESPACE}"
+kubectl apply -f "${SCRIPT_DIR}/cka-lab-intolerant-pod.yaml" -n "${NAMESPACE}"
+
+echo "Waiting up to 30s for pods to schedule..."
+kubectl wait --for=condition=Ready pod/cka-lab-tolerating-pod -n "${NAMESPACE}" --timeout=30s
+kubectl wait --for=condition=Ready pod/cka-lab-intolerant-pod -n "${NAMESPACE}" --timeout=30s
+
+TOLERATING_NODE=$(kubectl get pod cka-lab-tolerating-pod -n "${NAMESPACE}" -o jsonpath='{.spec.nodeName}')
+INTOLERANT_NODE=$(kubectl get pod cka-lab-intolerant-pod -n "${NAMESPACE}" -o jsonpath='{.spec.nodeName}')
+
+echo "    Tolerating Pod scheduled on: ${TOLERATING_NODE}"
+echo "    Intolerant Pod scheduled on: ${INTOLERANT_NODE}"
+
+if [[ "${INTOLERANT_NODE}" == "${TARGET_NODE}" ]]; then
+  echo "    ERROR: Intolerant pod unexpectedly landed on tainted node ${TARGET_NODE}!"
+  exit 1
+else
+  echo "    OK: Intolerant pod avoided tainted node ${TARGET_NODE}."
+fi
+
+echo "3. Removing taint dedicated:NoSchedule from ${TARGET_NODE}..."
+kubectl taint nodes "${TARGET_NODE}" dedicated:NoSchedule-
+
+echo "==> Taints and Tolerations drill completed successfully."

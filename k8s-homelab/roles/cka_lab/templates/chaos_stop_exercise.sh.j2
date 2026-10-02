@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# ====================================================================
+# [CKA LAB] Stop Chaos Troubleshooting Exercise & Teardown
+# Safely halts all running chaos experiments and cleans up engines.
+# ====================================================================
+set -euo pipefail
+
+NAMESPACE="{{ cka_lab_chaos_namespace }}"
+
+echo "==> Halting all active ChaosEngines in namespace '${NAMESPACE}'..."
+kubectl delete chaosengine --all -n "${NAMESPACE}" --interactive=false --ignore-not-found=true
+
+echo "==> Waiting for transient runner pods to terminate..."
+kubectl delete pods -l app.kubernetes.io/part-of=litmus -n "${NAMESPACE}" --interactive=false --ignore-not-found=true 2>/dev/null || true
+
+echo "==> Resetting target workloads in '${NAMESPACE}'..."
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -f "${SCRIPT_DIR}/00-target-app/target-app.yaml" ]; then
+  kubectl apply -f "${SCRIPT_DIR}/00-target-app/target-app.yaml"
+fi
+
+echo "==> [SUCCESS] Chaos exercises halted and cluster state restored to baseline."

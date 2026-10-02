@@ -1,0 +1,23 @@
+---
+apiVersion: litmuschaos.io/v1alpha1
+kind: ChaosEngine
+metadata:
+  name: cka-lab-node-memory-chaos
+  namespace: {{ cka_lab_chaos_namespace }}
+  labels:
+    app.kubernetes.io/part-of: cka-lab
+    cka.practice/drill: node-eviction-pressure
+spec:
+  engineState: "active"
+  chaosServiceAccount: litmus-admin
+  experiments:
+    - name: node-memory-hog
+      spec:
+        components:
+          env:
+            - name: TOTAL_CHAOS_DURATION
+              value: "300"
+            - name: MEMORY_CONSUMPTION_PERCENTAGE
+              value: "90"
+            - name: TARGET_NODES
+              value: "kube-worker-1"

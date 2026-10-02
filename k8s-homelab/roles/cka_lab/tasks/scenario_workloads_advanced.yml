@@ -1,0 +1,48 @@
+---
+- name: Ensure CKA lab advanced workloads directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ ansible_user | default('vagrant') }}"
+    group: "{{ ansible_user | default('vagrant') }}"
+    mode: "0755"
+  loop:
+    - "{{ cka_lab_workloads_advanced_dir }}"
+    - "{{ cka_lab_workloads_advanced_dir }}/01-daemonsets"
+    - "{{ cka_lab_workloads_advanced_dir }}/02-batch-jobs"
+    - "{{ cka_lab_workloads_advanced_dir }}/03-multi-container"
+  tags:
+    - cka_lab
+    - workloads_advanced
+    - daemonsets
+    - jobs
+    - cronjobs
+    - sidecars
+
+- name: Render CKA advanced workloads drill manifests and guides
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "{{ cka_lab_workloads_advanced_dir }}/{{ item.dest }}"
+    owner: "{{ ansible_user | default('vagrant') }}"
+    group: "{{ ansible_user | default('vagrant') }}"
+    mode: "{{ item.mode | default('0644') }}"
+  loop:
+    - {src: "workloads_advanced_readme.md.j2", dest: "README.md", mode: "0644"}
+    - {src: "workloads_advanced_test_drills.sh.j2", dest: "test-workloads-advanced-drills.sh", mode: "0755"}
+    - {src: "workloads_advanced_01_daemonset.yaml.j2", dest: "01-daemonsets/cka-lab-log-collector-ds.yaml"}
+    - {src: "workloads_advanced_01_test_ds.sh.j2", dest: "01-daemonsets/test-daemonset.sh", mode: "0755"}
+    - {src: "workloads_advanced_02_job.yaml.j2", dest: "02-batch-jobs/cka-lab-parallel-job.yaml"}
+    - {src: "workloads_advanced_02_cronjob.yaml.j2", dest: "02-batch-jobs/cka-lab-cronjob.yaml"}
+    - {src: "workloads_advanced_02_test_batch.sh.j2", dest: "02-batch-jobs/test-batch.sh", mode: "0755"}
+    - {src: "workloads_advanced_03_init_container.yaml.j2", dest: "03-multi-container/cka-lab-init-container-pod.yaml"}
+    - {src: "workloads_advanced_03_native_sidecar.yaml.j2", dest: "03-multi-container/cka-lab-native-sidecar-pod.yaml"}
+    - {src: "workloads_advanced_03_test_multi.sh.j2", dest: "03-multi-container/test-multi-container.sh", mode: "0755"}
+  loop_control:
+    label: "workloads_advanced/{{ item.dest }}"
+  tags:
+    - cka_lab
+    - workloads_advanced
+    - daemonsets
+    - jobs
+    - cronjobs
+    - sidecars

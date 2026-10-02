@@ -1,0 +1,91 @@
+# CKA Lab Exercise: Specialized Workload Controllers & Multi-Container Pods
+
+Hands-on training scenario for the Certified Kubernetes Administrator (CKA) certification, covering DaemonSets, parallel Jobs, scheduled CronJobs, Gated Init Containers, and Native Sidecar Containers.
+
+---
+
+## 1. Overview & Objectives
+
+Kubernetes provides controllers tailored for batch processing, node daemon services, and multi-container lifecycle coordination:
+
+- **Section 1: DaemonSets**: Ensuring a copy of a pod runs on all (or subset of) nodes for logging, monitoring, or storage daemons.
+- **Section 2: Batch Processing (Jobs & CronJobs)**: Finite task execution with `completions`, `parallelism`, `backoffLimit`, and recurring CronJob scheduling policies.
+- **Section 3: Multi-Container Pod Patterns**: Sequential initialization via `initContainers`, and persistent background helper execution via native sidecar containers (`restartPolicy: Always` in `initContainers`).
+
+### Scenario Directory Structure
+
+```text
+{{ cka_lab_workloads_advanced_dir }}/
+├── README.md                                  # This master guide
+├── test-workloads-advanced-drills.sh          # Non-interactive automated test suite
+├── 01-daemonsets/                             # Section 1: DaemonSets
+│   ├── cka-lab-log-collector-ds.yaml          # Cluster-wide log collector daemon
+│   └── test-daemonset.sh                      # Non-interactive DaemonSet test script
+├── 02-batch-jobs/                             # Section 2: Jobs & CronJobs
+│   ├── cka-lab-parallel-job.yaml              # Parallel batch processing job
+│   ├── cka-lab-cronjob.yaml                   # Scheduled maintenance CronJob
+│   └── test-batch.sh                          # Non-interactive Job/CronJob verification
+└── 03-multi-container/                        # Section 3: Init & Sidecar Containers
+    ├── cka-lab-init-container-pod.yaml        # Gated configuration initialization
+    ├── cka-lab-native-sidecar-pod.yaml        # Modern native sidecar container
+    └── test-multi-container.sh                # Multi-container verification script
+```
+
+---
+
+## 2. Walkthrough & Exam Drills
+
+### Drill 1: DaemonSet Deployment (`01-daemonsets/`)
+
+1. **Deploy Cluster-Wide DaemonSet**:
+
+   ```bash
+   kubectl apply -f {{ cka_lab_workloads_advanced_dir }}/01-daemonsets/cka-lab-log-collector-ds.yaml
+   kubectl rollout status daemonset/cka-lab-log-collector-ds
+   kubectl get pods -l app=cka-lab-log-collector -o wide
+   ```
+
+### Drill 2: Batch Processing & CronJobs (`02-batch-jobs/`)
+
+1. **Deploy Parallel Batch Job**:
+
+   ```bash
+   kubectl apply -f {{ cka_lab_workloads_advanced_dir }}/02-batch-jobs/cka-lab-parallel-job.yaml
+   kubectl wait --for=condition=complete job/cka-lab-parallel-job --timeout=60s
+   kubectl get jobs,pods -l app=cka-lab-parallel-task
+   ```
+
+1. **Deploy Scheduled CronJob**:
+
+   ```bash
+   kubectl apply -f {{ cka_lab_workloads_advanced_dir }}/02-batch-jobs/cka-lab-cronjob.yaml
+   kubectl get cronjobs
+   ```
+
+### Drill 3: Multi-Container & Native Sidecars (`03-multi-container/`)
+
+1. **Deploy Init Container Pod**:
+
+   ```bash
+   kubectl apply -f {{ cka_lab_workloads_advanced_dir }}/03-multi-container/cka-lab-init-container-pod.yaml
+   kubectl wait --for=condition=Ready pod/cka-lab-init-pod --timeout=60s
+   kubectl logs cka-lab-init-pod -c main-app
+   ```
+
+1. **Deploy Native Sidecar Container**:
+
+   ```bash
+   kubectl apply -f {{ cka_lab_workloads_advanced_dir }}/03-multi-container/cka-lab-native-sidecar-pod.yaml
+   kubectl wait --for=condition=Ready pod/cka-lab-native-sidecar-pod --timeout=60s
+   kubectl logs cka-lab-native-sidecar-pod -c telemetry-sidecar
+   ```
+
+---
+
+## 3. Automated Validation
+
+Execute the automated non-interactive verification suite:
+
+```bash
+{{ cka_lab_workloads_advanced_dir }}/test-workloads-advanced-drills.sh
+```

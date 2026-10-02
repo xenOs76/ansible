@@ -1,0 +1,114 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ cka_lab_chaos_namespace }}
+  labels:
+    app.kubernetes.io/part-of: cka-lab
+    cka.practice/scenario: chaos-troubleshooting
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cka-lab-payment-svc
+  namespace: {{ cka_lab_chaos_namespace }}
+  labels:
+    app: cka-lab-payment-svc
+    tier: backend
+    app.kubernetes.io/part-of: cka-lab
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cka-lab-payment-svc
+  template:
+    metadata:
+      labels:
+        app: cka-lab-payment-svc
+        tier: backend
+    spec:
+      containers:
+        - name: payment-api
+          image: registry.k8s.io/e2e-test-images/agnhost:2.45
+          command:
+            - /agnhost
+            - netexec
+            - --http-port=8080
+          ports:
+            - name: http
+              containerPort: 8080
+          resources:
+            requests:
+              cpu: 20m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cka-lab-payment-svc
+  namespace: {{ cka_lab_chaos_namespace }}
+  labels:
+    app: cka-lab-payment-svc
+spec:
+  selector:
+    app: cka-lab-payment-svc
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cka-lab-web-portal
+  namespace: {{ cka_lab_chaos_namespace }}
+  labels:
+    app: cka-lab-web-portal
+    tier: frontend
+    app.kubernetes.io/part-of: cka-lab
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: cka-lab-web-portal
+  template:
+    metadata:
+      labels:
+        app: cka-lab-web-portal
+        tier: frontend
+    spec:
+      containers:
+        - name: web-frontend
+          image: registry.k8s.io/e2e-test-images/agnhost:2.45
+          command:
+            - /agnhost
+            - netexec
+            - --http-port=80
+          ports:
+            - name: http
+              containerPort: 80
+          resources:
+            requests:
+              cpu: 20m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cka-lab-web-portal
+  namespace: {{ cka_lab_chaos_namespace }}
+  labels:
+    app: cka-lab-web-portal
+spec:
+  selector:
+    app: cka-lab-web-portal
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80

@@ -1,0 +1,98 @@
+#!/usr/bin/env bash
+# ====================================================================
+# [CKA LAB] Start On-Demand Chaos Troubleshooting Exercise
+# Usage: ./start-chaos-exercise.sh <oom|network|dns|eviction>
+# ====================================================================
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+NAMESPACE="{{ cka_lab_chaos_namespace }}"
+DRILL="${1:-}"
+
+if [ -z "${DRILL}" ]; then
+  echo "Usage: $0 <oom|network|dns|eviction>"
+  echo "Available drills:"
+  echo "  oom       : Simulate container memory exhaustion (OOMKilled ExitCode 137)"
+  echo "  network   : Simulate severe packet loss (70%) and timeout degradation"
+  echo "  dns       : Simulate CoreDNS lookup disruption for inter-service calls"
+  echo "  eviction  : Simulate node memory pressure and QoS eviction behavior"
+  exit 1
+fi
+
+# Ensure Litmus operator CRDs are installed
+if ! kubectl get crd chaosengines.litmuschaos.io >/dev/null 2>&1; then
+  echo "==> [ERROR] LitmusChaos CRDs are not installed."
+  echo "    Please run '${SCRIPT_DIR}/install-litmus-headless.sh' first." >&2
+  exit 1
+fi
+
+echo "==> 1. Deploying steady-state target workloads into '${NAMESPACE}'..."
+kubectl apply -f "${SCRIPT_DIR}/00-target-app/target-app.yaml"
+kubectl rollout status deployment/cka-lab-payment-svc -n "${NAMESPACE}" --timeout=60s
+kubectl rollout status deployment/cka-lab-web-portal -n "${NAMESPACE}" --timeout=60s
+
+echo "==> 2. Initiating Chaos Fault Injection: '${DRILL}'..."
+
+case "${DRILL}" in
+  oom)
+    kubectl apply -f "${SCRIPT_DIR}/01-memory-oom/engine-oom.yaml"
+    echo "===================================================================="
+    echo "  [MISSION] Payment Service is Crashing Repeatedly!"
+    echo "===================================================================="
+    echo "Symptom: Users report payment failures. The pod restarts continuously."
+    echo "Tasks:"
+    echo "  1. Investigate the pod status in namespace '${NAMESPACE}'."
+    echo "  2. Inspect the termination reason and ExitCode with:"
+    echo "     kubectl describe pod -l app=cka-lab-payment-svc -n ${NAMESPACE}"
+    echo "  3. Identify the memory limits set on deployment 'cka-lab-payment-svc'."
+    echo "  4. Edit the deployment to increase memory limit to 256Mi."
+    echo "  5. Verify stability with: ./verify-chaos-exercise.sh oom"
+    echo "===================================================================="
+    ;;
+  network)
+    kubectl apply -f "${SCRIPT_DIR}/02-network-latency/engine-network.yaml"
+    echo "===================================================================="
+    echo "  [MISSION] High Latency & Dropped Requests to Payment Gateway!"
+    echo "===================================================================="
+    echo "Symptom: Web portal requests to payment service timeout intermittently."
+    echo "Tasks:"
+    echo "  1. Test connectivity from a web portal pod to payment-svc:8080."
+    echo "  2. Use an ephemeral debug container to observe packet loss:"
+    echo "     kubectl debug -it <web-pod> -n ${NAMESPACE} --image=registry.k8s.io/e2e-test-images/agnhost:2.45"
+    echo "  3. Verify stability with: ./verify-chaos-exercise.sh network"
+    echo "===================================================================="
+    ;;
+  dns)
+    kubectl apply -f "${SCRIPT_DIR}/03-dns-chaos/engine-dns.yaml"
+    echo "===================================================================="
+    echo "  [MISSION] CoreDNS Resolution Drops for Payment Hostname!"
+    echo "===================================================================="
+    echo "Symptom: Web portal cannot resolve 'cka-lab-payment-svc'."
+    echo "Tasks:"
+    echo "  1. Check DNS resolution inside the web portal pod:"
+    echo "     kubectl exec -n ${NAMESPACE} deploy/cka-lab-web-portal -- nslookup cka-lab-payment-svc"
+    echo "  2. Verify CoreDNS pods status in 'kube-system'."
+    echo "  3. Verify stability with: ./verify-chaos-exercise.sh dns"
+    echo "===================================================================="
+    ;;
+  eviction)
+    kubectl apply -f "${SCRIPT_DIR}/04-node-pressure/engine-node-pressure.yaml"
+    echo "===================================================================="
+    echo "  [MISSION] Worker Node Experiencing MemoryPressure & Evictions!"
+    echo "===================================================================="
+    echo "Symptom: Pods are getting evicted from worker nodes."
+    echo "Tasks:"
+    echo "  1. Check node conditions: kubectl describe node kube-worker-1"
+    echo "  2. Check which pods have QoS Class 'BestEffort' vs 'Burstable' vs 'Guaranteed':"
+    echo "     kubectl get pods -A -o custom-columns=NAME:.metadata.name,QOS:.status.qosClass"
+    echo "  3. Verify stability with: ./verify-chaos-exercise.sh eviction"
+    echo "===================================================================="
+    ;;
+  *)
+    echo "Unknown drill '${DRILL}'. Valid options: oom, network, dns, eviction" >&2
+    exit 1
+    ;;
+esac
+
+echo ""
+echo "==> Fault will run for 300 seconds or until cancelled via: ./stop-chaos-exercise.sh"

@@ -1,0 +1,51 @@
+---
+- name: Ensure CKA lab cluster troubleshooting directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ ansible_user | default('vagrant') }}"
+    group: "{{ ansible_user | default('vagrant') }}"
+    mode: "0755"
+  loop:
+    - "{{ cka_lab_cluster_troubleshooting_dir }}"
+    - "{{ cka_lab_cluster_troubleshooting_dir }}/01-node-maintenance"
+    - "{{ cka_lab_cluster_troubleshooting_dir }}/02-static-pod-recovery"
+    - "{{ cka_lab_cluster_troubleshooting_dir }}/03-kubelet-diagnostics"
+    - "{{ cka_lab_cluster_troubleshooting_dir }}/04-metrics-monitoring"
+  tags:
+    - cka_lab
+    - cluster_troubleshooting
+    - troubleshooting
+    - drain
+    - static_pods
+    - kubelet
+
+- name: Render CKA cluster troubleshooting drill manifests and guides
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "{{ cka_lab_cluster_troubleshooting_dir }}/{{ item.dest }}"
+    owner: "{{ ansible_user | default('vagrant') }}"
+    group: "{{ ansible_user | default('vagrant') }}"
+    mode: "{{ item.mode | default('0644') }}"
+  loop:
+    - {src: "cluster_troubleshooting_readme.md.j2", dest: "README.md", mode: "0644"}
+    - {src: "cluster_troubleshooting_test_drills.sh.j2", dest: "test-cluster-troubleshooting.sh", mode: "0755"}
+    - {src: "cluster_troubleshooting_01_drain_cordon.sh.j2", dest: "01-node-maintenance/drain-cordon-drill.sh", mode: "0755"}
+    - {src: "cluster_troubleshooting_02_break_scheduler.sh.j2", dest: "02-static-pod-recovery/break-scheduler.sh", mode: "0755"}
+    - {src: "cluster_troubleshooting_02_fix_scheduler.sh.j2", dest: "02-static-pod-recovery/fix-scheduler.sh", mode: "0755"}
+    - {src: "cluster_troubleshooting_02_break_apiserver.sh.j2", dest: "02-static-pod-recovery/break-apiserver.sh", mode: "0755"}
+    - {src: "cluster_troubleshooting_02_fix_apiserver.sh.j2", dest: "02-static-pod-recovery/fix-apiserver.sh", mode: "0755"}
+    - {src: "cluster_troubleshooting_02_guide.md.j2", dest: "02-static-pod-recovery/README.md", mode: "0644"}
+    - {src: "cluster_troubleshooting_03_break_kubelet.sh.j2", dest: "03-kubelet-diagnostics/break-kubelet.sh", mode: "0755"}
+    - {src: "cluster_troubleshooting_03_fix_kubelet.sh.j2", dest: "03-kubelet-diagnostics/fix-kubelet.sh", mode: "0755"}
+    - {src: "cluster_troubleshooting_03_guide.md.j2", dest: "03-kubelet-diagnostics/README.md", mode: "0644"}
+    - {src: "cluster_troubleshooting_04_test_metrics.sh.j2", dest: "04-metrics-monitoring/test-metrics-top.sh", mode: "0755"}
+  loop_control:
+    label: "cluster_troubleshooting/{{ item.dest }}"
+  tags:
+    - cka_lab
+    - cluster_troubleshooting
+    - troubleshooting
+    - drain
+    - static_pods
+    - kubelet

@@ -207,6 +207,85 @@ Dedicated Ansible role for provisioning isolated hands-on Certified Kubernetes A
   - Automated test suite: `/home/vagrant/cka/networking/test-networking-drills.sh`
   - Master practice guide: `/home/vagrant/cka/networking/README.md`
 
+### Scenario 9: Advanced Scheduling & Capacity Management (`scheduling`)
+
+- **Domain**: Workloads & Scheduling.
+- **Reference**: [Kubernetes Scheduling Documentation](https://kubernetes.io/docs/concepts/scheduling-eviction/).
+- **Objective**: Master node scheduling constraints, pod spreading, autoscaling, and namespace capacity governance:
+  1. **Taints & Tolerations (`01-taints-tolerations/`)**: Applying and removing `NoSchedule` taints to nodes and configuring matching pod tolerations.
+  2. **Affinities & Anti-Affinities (`02-affinities/`)**: Hard and soft `nodeAffinity` placement rules, and multi-replica hostname spreading via `podAntiAffinity`.
+  3. **Horizontal Pod Autoscaling (`03-hpa-autoscaling/`)**: Dynamic pod replica autoscaling using `autoscaling/v2` based on target CPU utilization.
+  4. **Capacity Governance (`04-quotas-limits/`)**: Namespace boundary enforcement using `ResourceQuota` and default limit/request injection via `LimitRange`.
+- **Artifacts**:
+  - Scheduling drill directory: `/home/vagrant/cka/scheduling/`
+  - Automated test suite: `/home/vagrant/cka/scheduling/test-scheduling-drills.sh`
+  - Master practice guide: `/home/vagrant/cka/scheduling/README.md`
+
+### Scenario 10: Specialized Workload Controllers & Multi-Container Pods (`workloads_advanced`)
+
+- **Domain**: Workloads & Scheduling.
+- **Reference**: [Kubernetes Workloads Documentation](https://kubernetes.io/docs/concepts/workloads/).
+- **Objective**: Deploy and maintain background node daemons, batch workloads, and coordinated multi-container pods:
+  1. **DaemonSets (`01-daemonsets/`)**: Deploying node agents across all cluster nodes with control plane tolerations and hostPath inspection.
+  2. **Batch Jobs & CronJobs (`02-batch-jobs/`)**: Parallel batch jobs (`completions`, `parallelism`) and scheduled CronJobs (`concurrencyPolicy: Forbid`).
+  3. **Multi-Container Pods (`03-multi-container/`)**: Gated sequential initialization via `initContainers`, and native persistent helper execution via Kubernetes 1.28+ native sidecar containers (`restartPolicy: Always`).
+- **Artifacts**:
+  - Workloads drill directory: `/home/vagrant/cka/workloads-advanced/`
+  - Automated test suite: `/home/vagrant/cka/workloads-advanced/test-workloads-advanced-drills.sh`
+  - Master practice guide: `/home/vagrant/cka/workloads-advanced/README.md`
+
+### Scenario 11: Dynamic Provisioning & StorageClasses (`storage_classes`)
+
+- **Domain**: Storage.
+- **Reference**: [Kubernetes Storage Documentation](https://kubernetes.io/docs/concepts/storage/).
+- **Objective**: Configure dynamic storage provisioners, customize StorageClass operational parameters, and manage dynamic volume lifecycles:
+  1. **Dynamic Provisioners (`01-provisioners/`)**: Deploying Rancher's lightweight `local-path-provisioner`.
+  2. **StorageClass Lifecycle (`02-storage-classes/`)**: Configuring `reclaimPolicy` (`Delete` vs `Retain`), delayed binding (`volumeBindingMode: WaitForFirstConsumer`), dynamic PVC binding upon first pod consumer, and PVC volume expansion.
+- **Artifacts**:
+  - StorageClasses drill directory: `/home/vagrant/cka/storage-classes/`
+  - Automated test suite: `/home/vagrant/cka/storage-classes/test-storage-classes-drills.sh`
+  - Master practice guide: `/home/vagrant/cka/storage-classes/README.md`
+
+### Scenario 12: Cluster Maintenance & Node Troubleshooting (`cluster_troubleshooting`)
+
+- **Domain**: Troubleshooting.
+- **Reference**: [Kubernetes Troubleshooting Documentation](https://kubernetes.io/docs/tasks/debug/).
+- **Objective**: Execute safe cluster node maintenance workflows, recover failing control plane static pods, and inspect resource telemetry:
+  1. **Node Maintenance (`01-node-maintenance/`)**: Non-interactive node cordoning (`kubectl cordon`), workload eviction (`kubectl drain --ignore-daemonsets --delete-emptydir-data`), and return to service (`kubectl uncordon`).
+  2. **Static Pod Break-Fix (`02-static-pod-recovery/`)**: Diagnosing and repairing corrupted control plane manifests in `/etc/kubernetes/manifests/` using `crictl` and system logs.
+  3. **Kubelet Diagnostics (`03-kubelet-diagnostics/`)**: Troubleshooting worker node systemd `kubelet.service` failures and configuration syntax errors.
+  4. **Resource Telemetry (`04-metrics-monitoring/`)**: Live node and pod CPU/memory consumption inspection using `kubectl top nodes` and `kubectl top pods`.
+- **Artifacts**:
+  - Troubleshooting drill directory: `/home/vagrant/cka/cluster-troubleshooting/`
+  - Automated test suite: `/home/vagrant/cka/cluster-troubleshooting/test-cluster-troubleshooting.sh`
+  - Master practice guide: `/home/vagrant/cka/cluster-troubleshooting/README.md`
+
+### Scenario 13: Custom Resource Definitions & Operators (`crds`)
+
+- **Domain**: Cluster Architecture, Installation & Configuration.
+- **Reference**: [Kubernetes Extend API Documentation](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/).
+- **Objective**: Define custom API schemas with OpenAPI v3 validation and manage custom resource lifecycles:
+  1. **CRD Specification (`01-crd-schema/`)**: Declaring group, version, kind, shortNames, additional printer columns, and OpenAPI v3 structural validation rules.
+  2. **Custom Resource Lifecycle**: Creating declarative instances and testing admission webhook rejection on malformed specifications.
+- **Artifacts**:
+  - CRD drill directory: `/home/vagrant/cka/crds-operators/`
+  - Automated test suite: `/home/vagrant/cka/crds-operators/test-crds-drills.sh`
+  - Master practice guide: `/home/vagrant/cka/crds-operators/README.md`
+
+### Scenario 14: Chaos Engineering & Dynamic Troubleshooting (`chaos_troubleshooting`)
+
+- **Domain**: Troubleshooting & Resilience.
+- **Reference**: [LitmusChaos Documentation](https://litmuschaos.io/).
+- **Objective**: On-demand runtime fault injection using Headless LitmusChaos to simulate live service failures:
+  1. **Memory OOM Drill (`01-memory-oom`)**: Simulates container memory exhaustion (`pod-memory-hog`), inspecting `OOMKilled` (ExitCode 137), and adjusting resource limits.
+  2. **Network Degradation Drill (`02-network-latency`)**: Injects 70% packet loss (`pod-network-loss`) to troubleshoot timeouts using ephemeral debug containers (`kubectl debug`).
+  3. **CoreDNS Blackhole Drill (`03-dns-chaos`)**: Disrupts inter-service DNS lookups (`pod-dns-error`) to diagnose resolution paths.
+  4. **Node MemoryPressure Drill (`04-node-pressure`)**: Induces node memory saturation (`node-memory-hog`) to examine node conditions and QoS pod eviction priorities.
+- **Artifacts**:
+  - Chaos drill directory: `/home/vagrant/cka/chaos-troubleshooting/`
+  - Automated verification test suite: `/home/vagrant/cka/chaos-troubleshooting/test-chaos-drills.sh`
+  - Master practice guide: `/home/vagrant/cka/chaos-troubleshooting/README.md`
+
 ## Verification inside Control Plane
 
 ### Verify RBAC Scenario
@@ -411,4 +490,46 @@ cd /home/vagrant/cka/networking
 ./02-ingresses/test-ingress.sh
 ./03-gateway-api/test-gateway.sh
 ./04-network-policies/test-network-policies.sh
+```
+
+### Verify Scheduling Scenario
+
+```bash
+cd /home/vagrant/cka/scheduling
+./test-scheduling-drills.sh
+```
+
+### Verify Workloads Advanced Scenario
+
+```bash
+cd /home/vagrant/cka/workloads-advanced
+./test-workloads-advanced-drills.sh
+```
+
+### Verify StorageClasses Scenario
+
+```bash
+cd /home/vagrant/cka/storage-classes
+./test-storage-classes-drills.sh
+```
+
+### Verify Cluster Troubleshooting Scenario
+
+```bash
+cd /home/vagrant/cka/cluster-troubleshooting
+./test-cluster-troubleshooting.sh
+```
+
+### Verify Custom Resource Definitions Scenario
+
+```bash
+cd /home/vagrant/cka/crds-operators
+./test-crds-drills.sh
+```
+
+### Verify Chaos Troubleshooting Scenario
+
+```bash
+cd /home/vagrant/cka/chaos-troubleshooting
+./test-chaos-drills.sh
 ```

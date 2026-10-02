@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# ====================================================================
+# [CKA LAB] Static Pod Diagnostics Drill: Break Kube-Apiserver
+# Simulates a broken API server by corrupting its static pod manifest.
+# ====================================================================
+set -euo pipefail
+
+MANIFEST="/etc/kubernetes/manifests/kube-apiserver.yaml"
+BACKUP="/etc/kubernetes/manifests/kube-apiserver.yaml.bak"
+
+if [ "$(id -u)" -ne 0 ]; then
+  echo "Error: This script modifies static pod manifests and must be run as root (use sudo)." >&2
+  exit 1
+fi
+
+if [ ! -f "${MANIFEST}" ]; then
+  echo "Error: Manifest ${MANIFEST} not found on this node." >&2
+  exit 1
+fi
+
+echo "==> Backing up ${MANIFEST} to ${BACKUP}..."
+cp -f "${MANIFEST}" "${BACKUP}"
+
+echo "==> Corrupting kube-apiserver static pod configuration (invalid etcd certificate path)..."
+sed -i 's|--etcd-cafile=.*|--etcd-cafile=/etc/kubernetes/pki/etcd/ca-broken.crt|g' "${MANIFEST}"
+
+echo "==> Modification complete. Kubelet will detect the change and restart kube-apiserver."
+echo "==> Verify failure with:"
+echo "    kubectl get nodes   # (Will fail to connect)"
+echo "    sudo crictl ps -a | grep -i apiserver"
+echo "    sudo crictl logs <container_id>"
+echo ""
+echo "==> To recover, run: sudo ./fix-apiserver.sh"

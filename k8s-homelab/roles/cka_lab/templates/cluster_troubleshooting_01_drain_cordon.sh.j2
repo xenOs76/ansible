@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# drain-cordon-drill.sh: Non-Interactive Node Maintenance Verification
+# ==============================================================================
+set -euo pipefail
+
+TARGET_NODE=$(kubectl get nodes -l '!node-role.kubernetes.io/control-plane' -o jsonpath='{.items[0].metadata.name}' || echo "kube-worker-1")
+
+echo "==> [Node Maintenance Drill] Target worker node: ${TARGET_NODE}"
+
+cleanup() {
+  echo "==> Ensuring ${TARGET_NODE} is uncordoned..."
+  kubectl uncordon "${TARGET_NODE}" >/dev/null 2>&1 || true
+}
+
+trap cleanup EXIT
+
+echo "1. Cordoning ${TARGET_NODE}..."
+kubectl cordon "${TARGET_NODE}"
+
+NODE_STATUS=$(kubectl get node "${TARGET_NODE}" -o jsonpath='{.spec.unschedulable}')
+echo "    Node unschedulable flag: ${NODE_STATUS}"
+if [[ "${NODE_STATUS}" != "true" ]]; then
+  echo "    ERROR: Node was not cordoned!"
+  exit 1
+fi
+echo "    OK: ${TARGET_NODE} cordoned (SchedulingDisabled)."
+
+echo "2. Draining ${TARGET_NODE}..."
+kubectl drain "${TARGET_NODE}" \
+  --ignore-daemonsets \
+  --delete-emptydir-data \
+  --force \
+  --grace-period=10 \
+  --timeout=60s
+
+echo "    OK: Workloads evicted cleanly."
+
+echo "3. Uncordoning ${TARGET_NODE}..."
+kubectl uncordon "${TARGET_NODE}"
+
+FINAL_STATUS=$(kubectl get node "${TARGET_NODE}" -o jsonpath='{.spec.unschedulable}')
+if [[ -z "${FINAL_STATUS}" || "${FINAL_STATUS}" == "false" ]]; then
+  echo "    OK: ${TARGET_NODE} returned to active scheduling state."
+fi
+
+echo "==> Node cordon and drain drill completed successfully."

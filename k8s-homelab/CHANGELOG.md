@@ -10,6 +10,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Implemented CKA training scenario `scheduling` (`roles/cka_lab/tasks/scenario_scheduling.yml`) covering node scheduling constraints, pod spreading, autoscaling, and namespace capacity governance:
+  - `01-taints-tolerations/`: Applying and removing `NoSchedule` taints to nodes and configuring matching pod tolerations (`cka-lab-tolerating-pod`, `cka-lab-intolerant-pod`).
+  - `02-affinities/`: Hard and soft `nodeAffinity` matching expressions (`cka-lab-node-affinity-pod`), and multi-replica hostname spreading via `podAntiAffinity` (`cka-lab-anti-affinity-deploy`).
+  - `03-hpa-autoscaling/`: Dynamic pod replica autoscaling using `autoscaling/v2` based on target CPU utilization (`cka-lab-autoscale-app`, `cka-lab-hpa`).
+  - `04-quotas-limits/`: Namespace boundary enforcement using `ResourceQuota` (`cka-lab-compute-quota`) and default limit/request injection via `LimitRange` (`cka-lab-limit-range`).
+  - Added master guide `/home/vagrant/cka/scheduling/README.md` and automated test suite (`test-scheduling-drills.sh`).
+- Implemented CKA training scenario `workloads_advanced` (`roles/cka_lab/tasks/scenario_workloads_advanced.yml`) covering background node daemons, batch workloads, and coordinated multi-container pods:
+  - `01-daemonsets/`: Deploying node agents across all cluster nodes with control plane tolerations and hostPath inspection (`cka-lab-log-collector-ds`).
+  - `02-batch-jobs/`: Parallel batch jobs (`cka-lab-parallel-job` with completions and parallelism) and scheduled CronJobs (`cka-lab-cronjob`).
+  - `03-multi-container/`: Gated sequential initialization via `initContainers` (`cka-lab-init-pod`), and native persistent helper execution via Kubernetes 1.28+ native sidecar containers (`cka-lab-native-sidecar-pod` with `restartPolicy: Always`).
+  - Added master guide `/home/vagrant/cka/workloads-advanced/README.md` and automated test suite (`test-workloads-advanced-drills.sh`).
+- Implemented CKA training scenario `storage_classes` (`roles/cka_lab/tasks/scenario_storage_classes.yml`) covering dynamic storage provisioners, StorageClasses, and dynamic PVC lifecycles:
+  - `01-provisioners/`: Deploying Rancher's lightweight `local-path-provisioner` (`install-local-path-provisioner.sh`).
+  - `02-storage-classes/`: Configuring `reclaimPolicy` (`cka-lab-sc-retain` vs `cka-lab-sc-delete-wait`), delayed binding (`volumeBindingMode: WaitForFirstConsumer`), dynamic PVC binding upon first pod consumer (`cka-lab-dynamic-pvc`, `cka-lab-storage-consumer`), and PVC volume expansion.
+  - Added master guide `/home/vagrant/cka/storage-classes/README.md` and automated test suite (`test-storage-classes-drills.sh`).
+- Implemented CKA training scenario `cluster_troubleshooting` (`roles/cka_lab/tasks/scenario_cluster_troubleshooting.yml`) covering safe cluster node maintenance workflows, control plane static pod recovery, and resource telemetry:
+  - `01-node-maintenance/`: Non-interactive node cordoning (`kubectl cordon`), workload eviction (`kubectl drain --ignore-daemonsets --delete-emptydir-data`), and return to service (`kubectl uncordon`).
+  - `02-static-pod-recovery/`: Diagnosing and repairing corrupted control plane manifests in `/etc/kubernetes/manifests/` using `crictl` and system logs (`break-scheduler.sh`, `fix-scheduler.sh`, `break-apiserver.sh`, `fix-apiserver.sh`).
+  - `03-kubelet-diagnostics/`: Interactive break-fix drills for diagnosing and repairing worker node systemd `kubelet.service` failures and configuration syntax errors (`break-kubelet.sh`, `fix-kubelet.sh`).
+  - `04-metrics-monitoring/`: Live node and pod CPU/memory consumption inspection using `kubectl top nodes` and `kubectl top pods` (`test-metrics-top.sh`).
+  - Added master guide `/home/vagrant/cka/cluster-troubleshooting/README.md` and automated test suite (`test-cluster-troubleshooting.sh`).
+- Implemented CKA training scenario `crds` (`roles/cka_lab/tasks/scenario_crds.yml`) covering CustomResourceDefinition schemas, OpenAPI v3 structural validation, and custom resource lifecycle:
+  - `01-crd-schema/`: Declaring group, version, kind, shortNames, additional printer columns, and OpenAPI v3 structural validation rules (`backupschedules.automation.cka.priv`).
+  - Declarative custom resource instances (`cka-lab-daily-backup`) and automated admission webhook rejection testing on malformed specs.
+  - Added master guide `/home/vagrant/cka/crds-operators/README.md` and automated test suite (`test-crds-drills.sh`).
+- Implemented CKA training scenario `chaos_troubleshooting` (`roles/cka_lab/tasks/scenario_chaos_troubleshooting.yml`) covering on-demand dynamic runtime resilience and failure diagnostics via Headless LitmusChaos:
+  - Minimal operator architecture without UI/MongoDB portal (`install-litmus-headless.sh`), maintaining a minimal ~60MB footprint suited for 2GB homelab worker VMs.
+  - `01-memory-oom/`: Container memory starvation and cgroup OOMKilled diagnosis (`pod-memory-hog`), inspecting ExitCode 137, and adjusting deployment memory limits.
+  - `02-network-latency/`: Inter-pod packet loss and timeout degradation (`pod-network-loss`), troubleshooting connectivity with ephemeral debug containers (`kubectl debug`).
+  - `03-dns-chaos/`: Service discovery blackholing (`pod-dns-error`), investigating CoreDNS query paths and resolver configurations.
+  - `04-node-pressure/`: Node memory saturation (`node-memory-hog`), analyzing `MemoryPressure` node conditions and QoS-based pod eviction prioritization.
+  - Interactive drill launcher (`start-chaos-exercise.sh`), resolution verifier (`verify-chaos-exercise.sh`), and safe cleanup teardown (`stop-chaos-exercise.sh`).
+  - Added master guide `/home/vagrant/cka/chaos-troubleshooting/README.md`, automated verification suite (`test-chaos-drills.sh`), and `make preprod-cka-chaos` target.
+
 - Implemented CKA training scenario `networking` (`roles/cka_lab/tasks/scenario_networking.yml`) covering Service discovery and routing (`ClusterIP`, `NodePort`, multi-port endpoints, CoreDNS FQDN resolution), Ingress traffic routing with path-based and host-based rules, Gateway API architecture (`GatewayClass`, `Gateway`, and `HTTPRoute` integrated with NGINX Gateway Fabric and Caddy port 443 reverse proxy), and multi-tier NetworkPolicy enforcement (`default-deny-ingress`, namespace/pod selector ingress isolation, and egress rules preserving CoreDNS port 53).
 - Scaffolded comprehensive networking manifests and non-interactive drills under `/home/vagrant/cka/networking/`:
   - `01-services/`: `cka-lab-backend-app` deployment, `cka-lab-clusterip-svc` (multi-port HTTP/metrics), `cka-lab-nodeport-svc` (NodePort 31080/31090), and verification script (`test-services.sh`).

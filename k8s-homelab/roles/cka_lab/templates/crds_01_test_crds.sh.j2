@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# test-crds.sh: Non-Interactive Verification of CustomResourceDefinitions (CRDs)
+# ==============================================================================
+set -euo pipefail
+
+NAMESPACE="{{ cka_lab_crds_namespace | default('default') }}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+cleanup() {
+  echo "==> Cleaning up CRD drill resources..."
+  kubectl delete backupschedule cka-lab-daily-backup -n "${NAMESPACE}" --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
+  kubectl delete crd backupschedules.automation.cka.priv --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
+}
+
+trap cleanup EXIT
+
+echo "1. Applying CustomResourceDefinition schema..."
+kubectl apply -f "${SCRIPT_DIR}/cka-lab-backup-crd.yaml"
+
+echo "Waiting for CRD established condition..."
+kubectl wait --for=condition=established crd/backupschedules.automation.cka.priv --timeout=30s
+
+echo "2. Applying valid custom resource instance..."
+kubectl apply -f "${SCRIPT_DIR}/cka-lab-backup-custom-resource.yaml" -n "${NAMESPACE}"
+
+echo "3. Querying custom resource via shortName 'bs':"
+kubectl get bs -n "${NAMESPACE}"
+
+TARGET_NS=$(kubectl get bs cka-lab-daily-backup -n "${NAMESPACE}" -o jsonpath='{.spec.targetNamespace}')
+RETENTION=$(kubectl get bs cka-lab-daily-backup -n "${NAMESPACE}" -o jsonpath='{.spec.retentionDays}')
+echo "    Found instance: targetNamespace=${TARGET_NS}, retentionDays=${RETENTION}"
+
+echo "4. Testing OpenAPI v3 validation rejection on invalid schema (missing required fields)..."
+cat <<'EOF' > /tmp/cka-lab-invalid-cr.yaml
+apiVersion: automation.cka.priv/v1
+kind: BackupSchedule
+metadata:
+  name: cka-lab-invalid-backup
+spec:
+  cronExpression: "0 0 * * *"
+EOF
+
+if kubectl apply -f /tmp/cka-lab-invalid-cr.yaml -n "${NAMESPACE}" >/dev/null 2>&1; then
+  echo "    ERROR: Invalid custom resource was accepted without required fields!"
+  rm -f /tmp/cka-lab-invalid-cr.yaml
+  exit 1
+else
+  echo "    OK: API server correctly rejected invalid resource missing required fields."
+  rm -f /tmp/cka-lab-invalid-cr.yaml
+fi
+
+echo "==> CustomResourceDefinition drill verified successfully."

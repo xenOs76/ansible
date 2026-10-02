@@ -1,0 +1,23 @@
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: cka-lab-hpa
+  namespace: {{ cka_lab_scheduling_namespace | default('default') }}
+  labels:
+    app.kubernetes.io/name: cka-lab-hpa
+    app.kubernetes.io/part-of: cka-lab
+    cka.practice/scenario: scheduling
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: cka-lab-autoscale-app
+  minReplicas: 1
+  maxReplicas: 4
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 50

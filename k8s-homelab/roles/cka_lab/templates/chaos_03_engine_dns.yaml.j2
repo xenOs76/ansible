@@ -1,0 +1,29 @@
+---
+apiVersion: litmuschaos.io/v1alpha1
+kind: ChaosEngine
+metadata:
+  name: cka-lab-dns-chaos
+  namespace: {{ cka_lab_chaos_namespace }}
+  labels:
+    app.kubernetes.io/part-of: cka-lab
+    cka.practice/drill: dns-blackhole
+spec:
+  engineState: "active"
+  appinfo:
+    appns: "{{ cka_lab_chaos_namespace }}"
+    applabel: "app=cka-lab-web-portal"
+    appkind: "deployment"
+  chaosServiceAccount: litmus-admin
+  experiments:
+    - name: pod-dns-error
+      spec:
+        components:
+          env:
+            - name: TOTAL_CHAOS_DURATION
+              value: "300"
+            - name: TARGET_HOSTNAMES
+              value: "cka-lab-payment-svc.{{ cka_lab_chaos_namespace }}.svc.cluster.local"
+            - name: CONTAINER_RUNTIME
+              value: "containerd"
+            - name: SOCKET_PATH
+              value: "/run/containerd/containerd.sock"

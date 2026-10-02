@@ -1,0 +1,71 @@
+# Kubelet & Worker Node Diagnostics Guide
+
+Worker node failures and `NotReady` states in the CKA exam typically stem from kubelet service failure, container runtime issues, or invalid configuration parameters.
+
+---
+
+## 1. Systemd Service Diagnostics
+
+1. **Check Service Status**:
+
+   ```bash
+   sudo systemctl status kubelet
+   ```
+
+1. **Inspect Failure Logs**:
+
+   ```bash
+   sudo journalctl -u kubelet -e --no-pager
+   ```
+
+1. **Inspect Container Runtime**:
+
+   ```bash
+   sudo systemctl status containerd
+   sudo journalctl -u containerd -e --no-pager
+   ```
+
+---
+
+## 2. Interactive Break-Fix Drill
+
+1. **Break the Kubelet configuration**:
+
+   ```bash
+   sudo ./break-kubelet.sh
+   ```
+
+1. **Investigate failure symptoms**:
+   Check service status and journal logs to locate the error:
+
+   ```bash
+   sudo systemctl status kubelet
+   sudo journalctl -u kubelet -e --no-pager | grep -i "failed to run kubelet"
+   ```
+
+1. **Restore healthy state**:
+
+   ```bash
+   sudo ./fix-kubelet.sh
+   ```
+
+---
+
+## 3. Common Root Causes & Solutions
+
+1. **Wrong Configuration File**:
+   Kubelet configuration lives at `/var/lib/kubelet/config.yaml`. Syntax errors (e.g. invalid YAML indentation or wrong cgroup driver) will prevent kubelet from starting.
+
+1. **Expired or Invalid Certificates**:
+   Check kubelet client certificate in `/var/lib/kubelet/pki/kubelet-client-current.pem`:
+
+   ```bash
+   openssl x509 -in /var/lib/kubelet/pki/kubelet-client-current.pem -text -noout | grep -A 2 "Validity"
+   ```
+
+1. **Swap Enabled**:
+   By default, kubelet fails to start if swap is enabled on the node. Disable with:
+
+   ```bash
+   sudo swapoff -a
+   ```

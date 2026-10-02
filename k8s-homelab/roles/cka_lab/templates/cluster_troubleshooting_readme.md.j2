@@ -1,0 +1,103 @@
+# CKA Lab Exercise: Cluster Maintenance & Node Troubleshooting
+
+Hands-on training scenario for the Certified Kubernetes Administrator (CKA) certification, covering node cordon and drain workflows, static pod recovery in `/etc/kubernetes/manifests`, systemd kubelet diagnostics, and cluster resource telemetry.
+
+---
+
+## 1. Overview & Objectives
+
+Troubleshooting makes up the largest scoring weight (30%) of the CKA exam:
+
+- **Section 1: Node Maintenance**: Safely evacuating worker nodes for OS patching via `kubectl cordon` and `kubectl drain`, and restoring scheduling via `kubectl uncordon`.
+- **Section 2: Static Pod Recovery**: Diagnosing and repairing control plane static pod failures (`kube-scheduler`, `kube-apiserver`) directly on the host using `crictl` and `/etc/kubernetes/manifests`.
+- **Section 3: Kubelet Diagnostics**: Diagnosing failing worker node daemons using `systemctl status kubelet`, `journalctl -u kubelet`, and `/var/lib/kubelet/config.yaml`.
+- **Section 4: Resource Telemetry**: Identifying resource-constrained nodes and pods using `kubectl top nodes` and `kubectl top pods`.
+
+### Scenario Directory Structure
+
+```text
+{{ cka_lab_cluster_troubleshooting_dir }}/
+├── README.md                                  # This master guide
+├── test-cluster-troubleshooting.sh            # Non-interactive automated test suite
+├── 01-node-maintenance/                       # Section 1: Cordon & Drain
+│   └── drain-cordon-drill.sh                  # Non-interactive drain/uncordon script
+├── 02-static-pod-recovery/                    # Section 2: Control Plane Recovery
+│   ├── break-scheduler.sh                     # Simulates broken scheduler static pod
+│   ├── fix-scheduler.sh                       # Restores valid scheduler manifest
+│   ├── break-apiserver.sh                     # Simulates broken apiserver static pod
+│   ├── fix-apiserver.sh                       # Restores valid apiserver manifest
+│   └── README.md                              # Static pod troubleshooting guide
+├── 03-kubelet-diagnostics/                    # Section 3: Kubelet & Node Diagnostics
+│   ├── break-kubelet.sh                       # Simulates invalid kubelet configuration
+│   ├── fix-kubelet.sh                         # Restores valid kubelet service
+│   └── README.md                              # Kubelet failure diagnosis guide
+└── 04-metrics-monitoring/                     # Section 4: Resource Telemetry
+    └── test-metrics-top.sh                    # kubectl top verification script
+```
+
+---
+
+## 2. Walkthrough & Exam Drills
+
+### Drill 1: Node Cordon & Drain (`01-node-maintenance/`)
+
+1. **Cordon and Drain Worker Node**:
+
+   ```bash
+   {{ cka_lab_cluster_troubleshooting_dir }}/01-node-maintenance/drain-cordon-drill.sh
+   ```
+
+### Drill 2: Static Pod Recovery (`02-static-pod-recovery/`)
+
+1. **Break and Recover Scheduler**:
+
+   ```bash
+   cd {{ cka_lab_cluster_troubleshooting_dir }}/02-static-pod-recovery
+   sudo ./break-scheduler.sh
+   # Observe failure:
+   kubectl get pods -n kube-system -l component=kube-scheduler
+   # Restore healthy state:
+   sudo ./fix-scheduler.sh
+   ```
+
+1. **Break and Recover API Server**:
+
+   ```bash
+   cd {{ cka_lab_cluster_troubleshooting_dir }}/02-static-pod-recovery
+   sudo ./break-apiserver.sh
+   # Observe failure:
+   kubectl get nodes
+   # Restore healthy state:
+   sudo ./fix-apiserver.sh
+   ```
+
+### Drill 3: Kubelet Diagnostics (`03-kubelet-diagnostics/`)
+
+1. **Break and Recover Kubelet**:
+
+   ```bash
+   cd {{ cka_lab_cluster_troubleshooting_dir }}/03-kubelet-diagnostics
+   sudo ./break-kubelet.sh
+   # Inspect failure:
+   sudo systemctl status kubelet
+   # Restore healthy state:
+   sudo ./fix-kubelet.sh
+   ```
+
+### Drill 4: Resource Telemetry (`04-metrics-monitoring/`)
+
+1. **Query Metrics Server**:
+
+   ```bash
+   {{ cka_lab_cluster_troubleshooting_dir }}/04-metrics-monitoring/test-metrics-top.sh
+   ```
+
+---
+
+## 3. Automated Validation
+
+Execute the automated non-interactive verification suite:
+
+```bash
+{{ cka_lab_cluster_troubleshooting_dir }}/test-cluster-troubleshooting.sh
+```

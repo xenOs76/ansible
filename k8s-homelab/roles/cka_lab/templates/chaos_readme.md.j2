@@ -1,0 +1,162 @@
+# CKA Lab Exercise: Chaos Engineering & Dynamic Troubleshooting
+
+Hands-on training scenario using Headless LitmusChaos to generate on-demand, realistic runtime failure drills for CKA exam preparation.
+
+---
+
+## 1. Overview & Architecture
+
+While traditional CKA questions test static configuration errors in `/etc/kubernetes/manifests/` or systemd, modern troubleshooting requires diagnosing live dynamic degradations:
+
+- **Drill 1: Container OOMKills (`01-memory-oom`)**: Diagnosing `OOMKilled` (ExitCode 137), inspecting container limits vs usage, and right-sizing memory requests.
+- **Drill 2: Inter-Pod Network Degradation (`02-network-latency`)**: Diagnosing severe packet drops (70%) and connection timeouts using ephemeral debug containers (`kubectl debug`).
+- **Drill 3: CoreDNS Blackholing (`03-dns-chaos`)**: Diagnosing intermittent DNS resolution failures for target services.
+- **Drill 4: Node MemoryPressure & Eviction (`04-node-pressure`)**: Observing node conditions (`MemoryPressure`), understanding QoS classes (`BestEffort`, `Burstable`, `Guaranteed`), and tracking eviction order.
+
+### Headless Operator Footprint
+
+To prevent memory starvation on local 2GB worker VMs, this lab runs LitmusChaos in **Headless / Execution-Only mode**:
+
+- **No UI / MongoDB Portal**: Saves ~1.5–2.5 GB of RAM.
+- **Operator Footprint**: ~50–60 MB in namespace `litmus`.
+- **Automatic Timeouts**: Every experiment defaults to `TOTAL_CHAOS_DURATION=300` (5 minutes) so that experiments self-heal automatically.
+
+### Directory Structure
+
+```text
+{{ cka_lab_chaos_troubleshooting_dir }}/
+├── README.md                      # This guide
+├── install-litmus-headless.sh     # One-time minimal operator installer
+├── start-chaos-exercise.sh        # On-demand exercise launcher
+├── verify-chaos-exercise.sh       # Objective validation script
+├── stop-chaos-exercise.sh         # Emergency stop and cleanup script
+├── test-chaos-drills.sh           # Automated syntax and structure tests
+├── 00-target-app/                 # Target frontend and backend workloads
+├── 01-memory-oom/                 # Memory hog chaos engine
+├── 02-network-latency/            # Network packet loss chaos engine
+├── 03-dns-chaos/                  # DNS disruption chaos engine
+└── 04-node-pressure/              # Node memory pressure chaos engine
+```
+
+---
+
+## 2. Walkthrough & Practice Drills
+
+### One-Time Setup: Install Headless Operator
+
+Before running drills for the first time, install the minimal operator:
+
+```bash
+{{ cka_lab_chaos_troubleshooting_dir }}/install-litmus-headless.sh
+```
+
+### Drill 1: OOMKilled Container Diagnosis
+
+1. **Launch the exercise**:
+
+   ```bash
+   {{ cka_lab_chaos_troubleshooting_dir }}/start-chaos-exercise.sh oom
+   ```
+
+1. **Diagnose**:
+   Inspect pod status and container exit reasons:
+
+   ```bash
+   kubectl get pods -n {{ cka_lab_chaos_namespace }}
+   kubectl describe pod -l app=cka-lab-payment-svc -n {{ cka_lab_chaos_namespace }}
+   ```
+
+   Notice `Last State: Terminated`, `Reason: OOMKilled`, and `Exit Code: 137`.
+
+1. **Fix**:
+   Edit the deployment to increase memory limit from 64Mi to 256Mi:
+
+   ```bash
+   kubectl set resources deployment cka-lab-payment-svc -n {{ cka_lab_chaos_namespace }} --limits=memory=256Mi
+   ```
+
+1. **Verify**:
+
+   ```bash
+   {{ cka_lab_chaos_troubleshooting_dir }}/verify-chaos-exercise.sh oom
+   ```
+
+### Drill 2: Network Degradation & Ephemeral Debugging
+
+1. **Launch the exercise**:
+
+   ```bash
+   {{ cka_lab_chaos_troubleshooting_dir }}/start-chaos-exercise.sh network
+   ```
+
+1. **Diagnose**:
+   Attach an ephemeral container to a web portal pod to test HTTP connectivity to payment service:
+
+   ```bash
+   WEB_POD=$(kubectl get pod -l app=cka-lab-web-portal -n {{ cka_lab_chaos_namespace }} -o jsonpath='{.items[0].metadata.name}')
+   kubectl debug -it "${WEB_POD}" -n {{ cka_lab_chaos_namespace }} --image=registry.k8s.io/e2e-test-images/agnhost:2.45 -- /agnhost connect cka-lab-payment-svc:8080 --timeout=2s
+   ```
+
+1. **Stop / Reset**:
+
+   ```bash
+   {{ cka_lab_chaos_troubleshooting_dir }}/stop-chaos-exercise.sh
+   ```
+
+### Drill 3: CoreDNS Resolution Blackhole
+
+1. **Launch the exercise**:
+
+   ```bash
+   {{ cka_lab_chaos_troubleshooting_dir }}/start-chaos-exercise.sh dns
+   ```
+
+1. **Diagnose**:
+   Test name resolution inside the web portal container:
+
+   ```bash
+   kubectl exec -n {{ cka_lab_chaos_namespace }} deploy/cka-lab-web-portal -- nslookup cka-lab-payment-svc
+   ```
+
+1. **Stop / Reset**:
+
+   ```bash
+   {{ cka_lab_chaos_troubleshooting_dir }}/stop-chaos-exercise.sh
+   ```
+
+### Drill 4: Node MemoryPressure & Pod Evictions
+
+1. **Launch the exercise**:
+
+   ```bash
+   {{ cka_lab_chaos_troubleshooting_dir }}/start-chaos-exercise.sh eviction
+   ```
+
+1. **Diagnose**:
+   Check node conditions:
+
+   ```bash
+   kubectl describe node kube-worker-1 | grep -A 5 "Conditions:"
+   ```
+
+   Check Pod QoS classes to see eviction priority:
+
+   ```bash
+   kubectl get pods -A -o custom-columns=NAME:.metadata.name,NAMESPACE:.metadata.namespace,QOS:.status.qosClass
+   ```
+
+1. **Stop / Reset**:
+
+   ```bash
+   {{ cka_lab_chaos_troubleshooting_dir }}/stop-chaos-exercise.sh
+   ```
+
+---
+
+## 3. Automated Validation
+
+Execute the automated non-interactive verification script:
+
+```bash
+{{ cka_lab_chaos_troubleshooting_dir }}/test-chaos-drills.sh
+```

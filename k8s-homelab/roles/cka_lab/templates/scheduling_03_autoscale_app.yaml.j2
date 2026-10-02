@@ -1,0 +1,51 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cka-lab-autoscale-app
+  namespace: {{ cka_lab_scheduling_namespace | default('default') }}
+  labels:
+    app.kubernetes.io/name: cka-lab-autoscale-app
+    app.kubernetes.io/part-of: cka-lab
+    cka.practice/scenario: scheduling
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cka-lab-autoscale-app
+  template:
+    metadata:
+      labels:
+        app: cka-lab-autoscale-app
+        cka.practice/scenario: scheduling
+    spec:
+      containers:
+        - name: web
+          image: nginx:alpine
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+              cpu: 20m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cka-lab-autoscale-svc
+  namespace: {{ cka_lab_scheduling_namespace | default('default') }}
+  labels:
+    app.kubernetes.io/name: cka-lab-autoscale-svc
+    app.kubernetes.io/part-of: cka-lab
+    cka.practice/scenario: scheduling
+spec:
+  type: ClusterIP
+  selector:
+    app: cka-lab-autoscale-app
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80

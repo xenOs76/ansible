@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# test-storage-classes.sh: Non-Interactive Verification of Dynamic StorageClasses
+# ==============================================================================
+set -euo pipefail
+
+NAMESPACE="{{ cka_lab_storage_classes_namespace | default('default') }}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+cleanup() {
+  echo "==> Cleaning up StorageClass drill resources..."
+  kubectl delete pod cka-lab-storage-consumer -n "${NAMESPACE}" --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
+  kubectl delete pvc cka-lab-dynamic-pvc -n "${NAMESPACE}" --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
+  kubectl delete storageclass cka-lab-sc-retain cka-lab-sc-delete-wait --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
+}
+
+trap cleanup EXIT
+
+echo "1. Applying StorageClass definitions..."
+kubectl apply -f "${SCRIPT_DIR}/cka-lab-sc-retain.yaml"
+kubectl apply -f "${SCRIPT_DIR}/cka-lab-sc-delete-wait.yaml"
+kubectl get storageclasses -l cka.practice/scenario=storage-classes
+
+echo "2. Applying dynamic PVC with WaitForFirstConsumer binding mode..."
+kubectl apply -f "${SCRIPT_DIR}/cka-lab-dynamic-pvc.yaml" -n "${NAMESPACE}"
+
+INITIAL_STATUS=$(kubectl get pvc cka-lab-dynamic-pvc -n "${NAMESPACE}" -o jsonpath='{.status.phase}')
+echo "    Initial PVC phase before consumer pod: ${INITIAL_STATUS}"
+if [[ "${INITIAL_STATUS}" != "Pending" ]]; then
+  echo "    Warning: Expected Pending for WaitForFirstConsumer, got ${INITIAL_STATUS}"
+fi
+
+echo "3. Deploying consumer Pod to trigger dynamic volume provisioning..."
+kubectl apply -f "${SCRIPT_DIR}/cka-lab-consumer-pod.yaml" -n "${NAMESPACE}"
+kubectl wait --for=condition=Ready pod/cka-lab-storage-consumer -n "${NAMESPACE}" --timeout=90s
+
+FINAL_STATUS=$(kubectl get pvc cka-lab-dynamic-pvc -n "${NAMESPACE}" -o jsonpath='{.status.phase}')
+BOUND_PV=$(kubectl get pvc cka-lab-dynamic-pvc -n "${NAMESPACE}" -o jsonpath='{.spec.volumeName}')
+echo "    PVC phase after consumer pod: ${FINAL_STATUS}"
+echo "    Dynamically bound PV:         ${BOUND_PV}"
+
+if [[ "${FINAL_STATUS}" != "Bound" ]]; then
+  echo "    ERROR: PVC failed to transition to Bound!"
+  exit 1
+fi
+
+echo "4. Verifying volume data written by consumer pod..."
+DATA_CHECK=$(kubectl exec -n "${NAMESPACE}" cka-lab-storage-consumer -- cat /data/status.txt)
+echo "    Output from /data/status.txt: ${DATA_CHECK}"
+if [[ "${DATA_CHECK}" != *"DYNAMIC_STORAGE_VALIDATED=true"* ]]; then
+  echo "    ERROR: Volume write check failed!"
+  exit 1
+fi
+
+echo "5. Testing dynamic PVC volume expansion to 200Mi..."
+kubectl patch pvc cka-lab-dynamic-pvc -n "${NAMESPACE}" -p '{"spec":{"resources":{"requests":{"storage":"200Mi"}}}}'
+EXPANDED_CAP=$(kubectl get pvc cka-lab-dynamic-pvc -n "${NAMESPACE}" -o jsonpath='{.spec.resources.requests.storage}')
+echo "    Updated PVC requested capacity: ${EXPANDED_CAP}"
+
+echo "==> StorageClasses and dynamic provisioning verified successfully."

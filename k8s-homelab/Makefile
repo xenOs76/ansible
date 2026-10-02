@@ -23,6 +23,7 @@ help:
 	@echo "make preprod-upgrade   - Run rolling upgrade on preprod"
 	@echo "make preprod-reset     - Teardown/reset cluster on preprod"
 	@echo "make preprod-cka-lab   - Deploy CKA training lab scenarios on preprod"
+	@echo "make preprod-cka-chaos - Deploy CKA lab including Litmus dynamic chaos drills"
 
 deps:
 	ansible-galaxy collection install -r requirements.yml
@@ -86,3 +87,6 @@ preprod-reset:
 
 preprod-cka-lab:
 	./scripts/run-playbook.sh -e preprod -p cka_lab.yml
+
+preprod-cka-chaos:
+	./scripts/run-playbook.sh -e preprod -p cka_lab.yml --extra-vars "cka_lab_scenario_chaos_troubleshooting_enabled=true"

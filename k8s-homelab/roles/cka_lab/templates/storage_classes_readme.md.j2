@@ -1,0 +1,84 @@
+# CKA Lab Exercise: Dynamic Provisioning & StorageClasses
+
+Hands-on training scenario for the Certified Kubernetes Administrator (CKA) certification, covering StorageClasses, dynamic volume provisioning, volumeBindingModes, reclaim policies, and dynamic PVC expansion.
+
+---
+
+## 1. Overview & Objectives
+
+In production Kubernetes clusters, administrators avoid manually provisioning static PersistentVolumes for every application. Instead, StorageClasses define dynamic storage templates:
+
+- **Section 1: Dynamic Storage Provisioners**: Deploying and operating CSI/volume provisioners.
+- **Section 2: StorageClass Parameters**: Reclaim policies (`Retain` vs `Delete`), delayed binding (`volumeBindingMode: WaitForFirstConsumer`), and volume expansion (`allowVolumeExpansion: true`).
+- **Section 3: Dynamic PVC Lifecycle**: Automatic PV generation, consumer pod triggering, data persistence, and live PVC resizing.
+
+### Scenario Directory Structure
+
+```text
+{{ cka_lab_storage_classes_dir }}/
+├── README.md                                  # This master guide
+├── test-storage-classes-drills.sh             # Non-interactive automated test suite
+├── 01-provisioners/                           # Section 1: Provisioner Installation
+│   └── install-local-path-provisioner.sh      # Rancher local-path-provisioner deployment
+└── 02-storage-classes/                        # Section 2: StorageClasses & Dynamic PVCs
+    ├── cka-lab-sc-retain.yaml                 # ReclaimPolicy Retain, Immediate
+    ├── cka-lab-sc-delete-wait.yaml            # ReclaimPolicy Delete, WaitForFirstConsumer
+    ├── cka-lab-dynamic-pvc.yaml               # Dynamic volume claim
+    ├── cka-lab-consumer-pod.yaml              # Pod mounting dynamically bound PVC
+    └── test-storage-classes.sh                # Non-interactive verification script
+```
+
+---
+
+## 2. Walkthrough & Exam Drills
+
+### Drill 1: Deploy Storage Provisioner (`01-provisioners/`)
+
+1. **Deploy Local Path Provisioner**:
+
+   ```bash
+   {{ cka_lab_storage_classes_dir }}/01-provisioners/install-local-path-provisioner.sh
+   kubectl get pods -n local-path-storage
+   ```
+
+### Drill 2: Apply StorageClasses & Dynamic PVC (`02-storage-classes/`)
+
+1. **Deploy StorageClasses**:
+
+   ```bash
+   kubectl apply -f {{ cka_lab_storage_classes_dir }}/02-storage-classes/cka-lab-sc-retain.yaml
+   kubectl apply -f {{ cka_lab_storage_classes_dir }}/02-storage-classes/cka-lab-sc-delete-wait.yaml
+   kubectl get storageclass
+   ```
+
+1. **Create Dynamic PVC & Inspect Delayed Binding**:
+
+   ```bash
+   kubectl apply -f {{ cka_lab_storage_classes_dir }}/02-storage-classes/cka-lab-dynamic-pvc.yaml
+   kubectl get pvc cka-lab-dynamic-pvc
+   ```
+
+1. **Create Consumer Pod & Verify Bound Phase**:
+
+   ```bash
+   kubectl apply -f {{ cka_lab_storage_classes_dir }}/02-storage-classes/cka-lab-consumer-pod.yaml
+   kubectl wait --for=condition=Ready pod/cka-lab-storage-consumer --timeout=60s
+   kubectl get pvc,pv
+   ```
+
+1. **Verify Volume Expansion**:
+
+   ```bash
+   kubectl patch pvc cka-lab-dynamic-pvc -p '{"spec":{"resources":{"requests":{"storage":"200Mi"}}}}'
+   kubectl get pvc cka-lab-dynamic-pvc
+   ```
+
+---
+
+## 3. Automated Validation
+
+Execute the automated non-interactive verification suite:
+
+```bash
+{{ cka_lab_storage_classes_dir }}/test-storage-classes-drills.sh
+```

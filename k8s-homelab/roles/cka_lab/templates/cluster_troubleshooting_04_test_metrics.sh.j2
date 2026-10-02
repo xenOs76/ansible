@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# test-metrics-top.sh: Non-Interactive Verification of Node & Pod Resource Metrics
+# ==============================================================================
+set -euo pipefail
+
+echo "==> [Metrics Drill] Verifying Metrics Server availability..."
+
+if ! kubectl get apiservice v1beta1.metrics.k8s.io >/dev/null 2>&1; then
+  echo "    Notice: Metrics Server API service not yet registered."
+  echo "    Run ~/cka/helm/install-kube-metrics.sh to deploy Metrics Server."
+  exit 0
+fi
+
+echo "1. Querying Node resource utilization (kubectl top nodes)..."
+if kubectl top nodes --no-headers >/dev/null 2>&1; then
+  kubectl top nodes
+  echo "    OK: Node metrics retrieved successfully."
+else
+  echo "    Warning: Metrics Server is still collecting first samples."
+fi
+
+echo "2. Querying Pod resource consumption (kubectl top pods -A)..."
+if kubectl top pods -A --sort-by=cpu --no-headers >/dev/null 2>&1; then
+  kubectl top pods -A --sort-by=cpu | head -n 10
+  echo "    OK: Pod metrics sorted by CPU consumption retrieved."
+fi
+
+echo "==> Metrics drill completed."

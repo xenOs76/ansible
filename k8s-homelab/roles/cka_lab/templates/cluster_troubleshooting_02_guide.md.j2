@@ -1,0 +1,77 @@
+# Control Plane Static Pod Troubleshooting Guide
+
+Control plane components (`etcd`, `kube-apiserver`, `kube-controller-manager`, and `kube-scheduler`) are managed by the local `kubelet` daemon as **Static Pods** defined in `/etc/kubernetes/manifests/`.
+
+---
+
+## 1. Key Diagnostic Techniques
+
+1. **Check Manifest Location**:
+   The static pod manifest path is defined in `/var/lib/kubelet/config.yaml` under `staticPodPath: /etc/kubernetes/manifests`.
+
+1. **Inspect Control Plane Pod Status**:
+
+   ```bash
+   kubectl get pods -n kube-system
+   ```
+
+1. **Inspect Directly via Container Runtime (`crictl`)**:
+   When the control plane API server is down, `kubectl` commands will fail. Use `crictl` directly on the host:
+
+   ```bash
+   sudo crictl ps -a
+   sudo crictl logs <container-id>
+   ```
+
+1. **Inspect Host System Logs**:
+
+   ```bash
+   sudo journalctl -u kubelet -e --no-pager
+   ```
+
+---
+
+## 2. Interactive Break-Fix Drills
+
+### Drill A: Kube-Scheduler Manifest Corruption
+
+1. **Break the scheduler**:
+
+   ```bash
+   sudo ./break-scheduler.sh
+   ```
+
+1. **Diagnose why it stopped**:
+
+   ```bash
+   kubectl get pods -n kube-system
+   sudo journalctl -u kubelet | grep -i "scheduler"
+   ```
+
+1. **Restore healthy state**:
+
+   ```bash
+   sudo ./fix-scheduler.sh
+   ```
+
+### Drill B: Kube-Apiserver Certificate Path Failure
+
+1. **Break the API server**:
+
+   ```bash
+   sudo ./break-apiserver.sh
+   ```
+
+1. **Diagnose connection refusal**:
+   Observe `kubectl get nodes` failing, then inspect the container runtime directly:
+
+   ```bash
+   sudo crictl ps -a | grep apiserver
+   sudo crictl logs <container_id>
+   ```
+
+1. **Restore healthy state**:
+
+   ```bash
+   sudo ./fix-apiserver.sh
+   ```

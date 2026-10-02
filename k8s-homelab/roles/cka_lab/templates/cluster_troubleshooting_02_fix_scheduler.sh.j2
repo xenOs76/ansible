@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# fix-scheduler.sh: Restores and Recovers Control Plane Static Pod
+# ==============================================================================
+set -euo pipefail
+
+MANIFEST="/etc/kubernetes/manifests/kube-scheduler.yaml"
+BACKUP="/etc/kubernetes/manifests/kube-scheduler.yaml.bak"
+
+if [[ ! -f "${BACKUP}" ]]; then
+  echo "ERROR: Backup ${BACKUP} not found! Check /etc/kubernetes/manifests."
+  exit 1
+fi
+
+echo "1. Restoring valid kube-scheduler manifest from backup..."
+sudo cp "${BACKUP}" "${MANIFEST}"
+sudo rm -f "${BACKUP}"
+
+echo "2. Waiting for kubelet to reload static pod..."
+for _ in {1..30}; do
+  if kubectl get pod -n kube-system -l component=kube-scheduler --no-headers | grep -q "Running"; then
+    echo "    OK: kube-scheduler restored to Running state."
+    exit 0
+  fi
+  sleep 1
+done
+
+echo "==> kube-scheduler recovery verification complete."

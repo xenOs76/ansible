@@ -1,0 +1,43 @@
+---
+- name: Ensure CKA lab storage classes directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ ansible_user | default('vagrant') }}"
+    group: "{{ ansible_user | default('vagrant') }}"
+    mode: "0755"
+  loop:
+    - "{{ cka_lab_storage_classes_dir }}"
+    - "{{ cka_lab_storage_classes_dir }}/01-provisioners"
+    - "{{ cka_lab_storage_classes_dir }}/02-storage-classes"
+  tags:
+    - cka_lab
+    - storage_classes
+    - storage
+    - pvc
+    - provisioner
+
+- name: Render CKA storage classes drill manifests and guides
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "{{ cka_lab_storage_classes_dir }}/{{ item.dest }}"
+    owner: "{{ ansible_user | default('vagrant') }}"
+    group: "{{ ansible_user | default('vagrant') }}"
+    mode: "{{ item.mode | default('0644') }}"
+  loop:
+    - {src: "storage_classes_readme.md.j2", dest: "README.md", mode: "0644"}
+    - {src: "storage_classes_test_drills.sh.j2", dest: "test-storage-classes-drills.sh", mode: "0755"}
+    - {src: "storage_classes_01_install_provisioner.sh.j2", dest: "01-provisioners/install-local-path-provisioner.sh", mode: "0755"}
+    - {src: "storage_classes_02_sc_retain.yaml.j2", dest: "02-storage-classes/cka-lab-sc-retain.yaml"}
+    - {src: "storage_classes_02_sc_delete_wait.yaml.j2", dest: "02-storage-classes/cka-lab-sc-delete-wait.yaml"}
+    - {src: "storage_classes_03_dynamic_pvc.yaml.j2", dest: "02-storage-classes/cka-lab-dynamic-pvc.yaml"}
+    - {src: "storage_classes_03_consumer_pod.yaml.j2", dest: "02-storage-classes/cka-lab-consumer-pod.yaml"}
+    - {src: "storage_classes_02_test_storage.sh.j2", dest: "02-storage-classes/test-storage-classes.sh", mode: "0755"}
+  loop_control:
+    label: "storage_classes/{{ item.dest }}"
+  tags:
+    - cka_lab
+    - storage_classes
+    - storage
+    - pvc
+    - provisioner

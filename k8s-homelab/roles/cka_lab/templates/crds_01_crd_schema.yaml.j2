@@ -1,0 +1,59 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: backupschedules.automation.cka.priv
+  labels:
+    app.kubernetes.io/name: backupschedules-crd
+    app.kubernetes.io/part-of: cka-lab
+    cka.practice/scenario: crds
+spec:
+  group: automation.cka.priv
+  names:
+    kind: BackupSchedule
+    listKind: BackupScheduleList
+    plural: backupschedules
+    singular: backupschedule
+    shortNames:
+      - bs
+  scope: Namespaced
+  versions:
+    - name: v1
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - targetNamespace
+                - retentionDays
+              properties:
+                targetNamespace:
+                  type: string
+                retentionDays:
+                  type: integer
+                  minimum: 1
+                  maximum: 365
+                cronExpression:
+                  type: string
+            status:
+              type: object
+              properties:
+                phase:
+                  type: string
+                lastBackup:
+                  type: string
+      additionalPrinterColumns:
+        - name: TargetNS
+          type: string
+          jsonPath: .spec.targetNamespace
+        - name: Retention
+          type: integer
+          jsonPath: .spec.retentionDays
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp

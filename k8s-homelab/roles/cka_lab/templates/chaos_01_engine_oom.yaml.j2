@@ -1,0 +1,27 @@
+---
+apiVersion: litmuschaos.io/v1alpha1
+kind: ChaosEngine
+metadata:
+  name: cka-lab-oom-chaos
+  namespace: {{ cka_lab_chaos_namespace }}
+  labels:
+    app.kubernetes.io/part-of: cka-lab
+    cka.practice/drill: oom-killer
+spec:
+  engineState: "active"
+  appinfo:
+    appns: "{{ cka_lab_chaos_namespace }}"
+    applabel: "app=cka-lab-payment-svc"
+    appkind: "deployment"
+  chaosServiceAccount: litmus-admin
+  experiments:
+    - name: pod-memory-hog
+      spec:
+        components:
+          env:
+            - name: TOTAL_CHAOS_DURATION
+              value: "300"
+            - name: MEMORY_CONSUMPTION
+              value: "128"
+            - name: NUMBER_OF_WORKERS
+              value: "1"

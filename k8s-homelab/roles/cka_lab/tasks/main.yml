@@ -68,3 +68,64 @@
     - ingress
     - gateway
     - networkpolicy
+
+- name: Execute CKA Lab Scenario - Advanced Scheduling & Capacity (scheduling)
+  ansible.builtin.include_tasks: scenario_scheduling.yml
+  when: cka_lab_scenario_scheduling_enabled | bool
+  tags:
+    - cka_lab
+    - scheduling
+    - taints
+    - affinity
+    - hpa
+    - quota
+
+- name: Execute CKA Lab Scenario - Advanced Workloads & Multi-Container (workloads_advanced)
+  ansible.builtin.include_tasks: scenario_workloads_advanced.yml
+  when: cka_lab_scenario_workloads_advanced_enabled | bool
+  tags:
+    - cka_lab
+    - workloads_advanced
+    - daemonsets
+    - jobs
+    - cronjobs
+    - sidecars
+
+- name: Execute CKA Lab Scenario - Dynamic Storage & StorageClasses (storage_classes)
+  ansible.builtin.include_tasks: scenario_storage_classes.yml
+  when: cka_lab_scenario_storage_classes_enabled | bool
+  tags:
+    - cka_lab
+    - storage_classes
+    - storage
+    - pvc
+    - provisioner
+
+- name: Execute CKA Lab Scenario - Cluster Maintenance & Troubleshooting (cluster_troubleshooting)
+  ansible.builtin.include_tasks: scenario_cluster_troubleshooting.yml
+  when: cka_lab_scenario_cluster_troubleshooting_enabled | bool
+  tags:
+    - cka_lab
+    - cluster_troubleshooting
+    - troubleshooting
+    - drain
+    - static_pods
+    - kubelet
+
+- name: Execute CKA Lab Scenario - Custom Resource Definitions (crds)
+  ansible.builtin.include_tasks: scenario_crds.yml
+  when: cka_lab_scenario_crds_enabled | bool
+  tags:
+    - cka_lab
+    - crds
+    - schema
+    - operators
+
+- name: Execute CKA Lab Scenario - Chaos Engineering & Dynamic Troubleshooting (chaos_troubleshooting)
+  ansible.builtin.include_tasks: scenario_chaos_troubleshooting.yml
+  when: cka_lab_scenario_chaos_troubleshooting_enabled | bool
+  tags:
+    - cka_lab
+    - chaos_troubleshooting
+    - chaos
+    - resilience

@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# test-workloads-advanced-drills.sh: Automated Verification Suite for CKA Advanced Workloads
+# ==============================================================================
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+NAMESPACE="{{ cka_lab_workloads_advanced_namespace | default('default') }}"
+
+echo "===================================================================="
+echo "  [CKA LAB] Running End-to-End Advanced Workloads Verification      "
+echo "===================================================================="
+
+cleanup() {
+  echo "==> Performing final advanced workloads cleanup..."
+  kubectl delete daemonset cka-lab-log-collector-ds -n "${NAMESPACE}" --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
+  kubectl delete job cka-lab-parallel-job -n "${NAMESPACE}" --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
+  kubectl delete cronjob cka-lab-cronjob -n "${NAMESPACE}" --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
+  kubectl delete pod cka-lab-init-pod cka-lab-native-sidecar-pod -n "${NAMESPACE}" --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
+}
+
+trap cleanup EXIT
+
+# ------------------------------------------------------------------------------
+# Drill 1: DaemonSet Controller
+# ------------------------------------------------------------------------------
+echo "--------------------------------------------------------------------"
+echo "  [1/3] Testing DaemonSets                                          "
+echo "--------------------------------------------------------------------"
+"${SCRIPT_DIR}/01-daemonsets/test-daemonset.sh"
+
+# ------------------------------------------------------------------------------
+# Drill 2: Batch Jobs and Scheduled CronJobs
+# ------------------------------------------------------------------------------
+echo "--------------------------------------------------------------------"
+echo "  [2/3] Testing Batch Jobs & CronJobs                               "
+echo "--------------------------------------------------------------------"
+"${SCRIPT_DIR}/02-batch-jobs/test-batch.sh"
+
+# ------------------------------------------------------------------------------
+# Drill 3: Init Containers & Native Sidecars
+# ------------------------------------------------------------------------------
+echo "--------------------------------------------------------------------"
+echo "  [3/3] Testing Init Containers and Native Sidecars                 "
+echo "--------------------------------------------------------------------"
+"${SCRIPT_DIR}/03-multi-container/test-multi-container.sh"
+
+echo "===================================================================="
+echo "  [SUCCESS] All CKA Advanced Workloads verified successfully!       "
+echo "===================================================================="

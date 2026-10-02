@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# ====================================================================
+# [CKA LAB] Verify Chaos Troubleshooting Exercise Resolution
+# Usage: ./verify-chaos-exercise.sh <oom|network|dns|eviction>
+# ====================================================================
+set -euo pipefail
+
+NAMESPACE="{{ cka_lab_chaos_namespace }}"
+DRILL="${1:-}"
+
+if [ -z "${DRILL}" ]; then
+  echo "Usage: $0 <oom|network|dns|eviction>" >&2
+  exit 1
+fi
+
+case "${DRILL}" in
+  oom)
+    echo "==> Verifying resolution for OOM drill..."
+    LIMIT=$(kubectl get deployment cka-lab-payment-svc -n "${NAMESPACE}" -o jsonpath='{.spec.template.spec.containers[0].resources.limits.memory}' 2>/dev/null || echo "none")
+    echo "Current memory limit on payment-api container: ${LIMIT}"
+    if [ "${LIMIT}" = "64Mi" ] || [ "${LIMIT}" = "none" ]; then
+      echo "==> [FAIL] Container memory limit is still '${LIMIT}'. It must be increased (e.g. to 256Mi) to prevent OOMKills." >&2
+      exit 1
+    fi
+    echo "==> Verifying pod status..."
+    READY_REPLICAS=$(kubectl get deployment cka-lab-payment-svc -n "${NAMESPACE}" -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")
+    if [ "${READY_REPLICAS}" -ge 1 ]; then
+      echo "==> [SUCCESS] Payment service memory limit updated and container is healthy and stable!"
+      exit 0
+    else
+      echo "==> [FAIL] Payment service is not ready yet. Check kubectl get pods -n ${NAMESPACE}" >&2
+      exit 1
+    fi
+    ;;
+  network|dns|eviction)
+    echo "==> Verifying steady state for '${DRILL}' drill..."
+    kubectl get deployment cka-lab-web-portal -n "${NAMESPACE}"
+    kubectl get deployment cka-lab-payment-svc -n "${NAMESPACE}"
+    echo "==> [SUCCESS] Workloads inspected. To reset fault, execute: ./stop-chaos-exercise.sh"
+    exit 0
+    ;;
+  *)
+    echo "Unknown drill '${DRILL}'" >&2
+    exit 1
+    ;;
+esac

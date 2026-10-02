@@ -1,0 +1,47 @@
+---
+- name: Ensure CKA lab chaos troubleshooting directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ ansible_user | default('vagrant') }}"
+    group: "{{ ansible_user | default('vagrant') }}"
+    mode: "0755"
+  loop:
+    - "{{ cka_lab_chaos_troubleshooting_dir }}"
+    - "{{ cka_lab_chaos_troubleshooting_dir }}/00-target-app"
+    - "{{ cka_lab_chaos_troubleshooting_dir }}/01-memory-oom"
+    - "{{ cka_lab_chaos_troubleshooting_dir }}/02-network-latency"
+    - "{{ cka_lab_chaos_troubleshooting_dir }}/03-dns-chaos"
+    - "{{ cka_lab_chaos_troubleshooting_dir }}/04-node-pressure"
+  tags:
+    - cka_lab
+    - chaos_troubleshooting
+    - chaos
+    - resilience
+
+- name: Render CKA lab chaos troubleshooting drill manifests and scripts
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "{{ cka_lab_chaos_troubleshooting_dir }}/{{ item.dest }}"
+    owner: "{{ ansible_user | default('vagrant') }}"
+    group: "{{ ansible_user | default('vagrant') }}"
+    mode: "{{ item.mode | default('0644') }}"
+  loop:
+    - {src: "chaos_readme.md.j2", dest: "README.md", mode: "0644"}
+    - {src: "chaos_install_litmus.sh.j2", dest: "install-litmus-headless.sh", mode: "0755"}
+    - {src: "chaos_start_exercise.sh.j2", dest: "start-chaos-exercise.sh", mode: "0755"}
+    - {src: "chaos_verify_exercise.sh.j2", dest: "verify-chaos-exercise.sh", mode: "0755"}
+    - {src: "chaos_stop_exercise.sh.j2", dest: "stop-chaos-exercise.sh", mode: "0755"}
+    - {src: "chaos_test_drills.sh.j2", dest: "test-chaos-drills.sh", mode: "0755"}
+    - {src: "chaos_00_target_app.yaml.j2", dest: "00-target-app/target-app.yaml", mode: "0644"}
+    - {src: "chaos_01_engine_oom.yaml.j2", dest: "01-memory-oom/engine-oom.yaml", mode: "0644"}
+    - {src: "chaos_02_engine_network.yaml.j2", dest: "02-network-latency/engine-network.yaml", mode: "0644"}
+    - {src: "chaos_03_engine_dns.yaml.j2", dest: "03-dns-chaos/engine-dns.yaml", mode: "0644"}
+    - {src: "chaos_04_engine_node_pressure.yaml.j2", dest: "04-node-pressure/engine-node-pressure.yaml", mode: "0644"}
+  loop_control:
+    label: "chaos_troubleshooting/{{ item.dest }}"
+  tags:
+    - cka_lab
+    - chaos_troubleshooting
+    - chaos
+    - resilience

@@ -1,0 +1,37 @@
+---
+- name: Ensure CKA lab CRD directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ ansible_user | default('vagrant') }}"
+    group: "{{ ansible_user | default('vagrant') }}"
+    mode: "0755"
+  loop:
+    - "{{ cka_lab_crds_dir }}"
+    - "{{ cka_lab_crds_dir }}/01-crd-schema"
+  tags:
+    - cka_lab
+    - crds
+    - schema
+    - operators
+
+- name: Render CKA CRD drill manifests and guides
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "{{ cka_lab_crds_dir }}/{{ item.dest }}"
+    owner: "{{ ansible_user | default('vagrant') }}"
+    group: "{{ ansible_user | default('vagrant') }}"
+    mode: "{{ item.mode | default('0644') }}"
+  loop:
+    - {src: "crds_readme.md.j2", dest: "README.md", mode: "0644"}
+    - {src: "crds_test_drills.sh.j2", dest: "test-crds-drills.sh", mode: "0755"}
+    - {src: "crds_01_crd_schema.yaml.j2", dest: "01-crd-schema/cka-lab-backup-crd.yaml"}
+    - {src: "crds_01_valid_cr.yaml.j2", dest: "01-crd-schema/cka-lab-backup-custom-resource.yaml"}
+    - {src: "crds_01_test_crds.sh.j2", dest: "01-crd-schema/test-crds.sh", mode: "0755"}
+  loop_control:
+    label: "crds/{{ item.dest }}"
+  tags:
+    - cka_lab
+    - crds
+    - schema
+    - operators

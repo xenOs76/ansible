@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# break-scheduler.sh: Simulates Control Plane Static Pod Failure
+# ==============================================================================
+set -euo pipefail
+
+MANIFEST="/etc/kubernetes/manifests/kube-scheduler.yaml"
+BACKUP="/etc/kubernetes/manifests/kube-scheduler.yaml.bak"
+
+if [[ ! -f "${MANIFEST}" ]]; then
+  echo "ERROR: ${MANIFEST} does not exist. Must be executed on the control plane node."
+  exit 1
+fi
+
+echo "1. Creating backup at ${BACKUP}..."
+sudo cp "${MANIFEST}" "${BACKUP}"
+
+echo "2. Injecting invalid flag into kube-scheduler static pod..."
+sudo sed -i 's/--leader-elect=true/--leader-elect=true\n    - --invalid-flag-for-troubleshooting=true/' "${MANIFEST}"
+
+echo "Static pod configuration broken. Notice kube-scheduler pod termination in kube-system."
+echo "Inspect with: kubectl get pods -n kube-system -l component=kube-scheduler"
+echo "To restore healthy state, run: ./fix-scheduler.sh"

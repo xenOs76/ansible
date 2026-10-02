@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# test-scheduling-drills.sh: Automated Verification Suite for CKA Scheduling
+# ==============================================================================
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+NAMESPACE="{{ cka_lab_scheduling_namespace | default('default') }}"
+CAPACITY_NS="{{ cka_lab_scheduling_capacity_namespace | default('cka-lab-capacity-ns') }}"
+
+echo "===================================================================="
+echo "  [CKA LAB] Running End-to-End Scheduling & Capacity Verification   "
+echo "===================================================================="
+
+cleanup() {
+  echo "==> Performing final scheduling cleanup..."
+  kubectl delete pod cka-lab-tolerating-pod cka-lab-intolerant-pod cka-lab-node-affinity-pod \
+    -n "${NAMESPACE}" --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
+  kubectl delete deployment cka-lab-anti-affinity-deploy cka-lab-autoscale-app \
+    -n "${NAMESPACE}" --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
+  kubectl delete hpa cka-lab-hpa -n "${NAMESPACE}" --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
+  kubectl delete service cka-lab-autoscale-svc -n "${NAMESPACE}" --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
+  kubectl delete namespace "${CAPACITY_NS}" --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
+}
+
+trap cleanup EXIT
+
+# ------------------------------------------------------------------------------
+# Drill 1: Taints & Tolerations
+# ------------------------------------------------------------------------------
+echo "--------------------------------------------------------------------"
+echo "  [1/4] Testing Taints and Tolerations                              "
+echo "--------------------------------------------------------------------"
+"${SCRIPT_DIR}/01-taints-tolerations/cka-lab-taint-drill.sh"
+
+# ------------------------------------------------------------------------------
+# Drill 2: Affinities & Anti-Affinities
+# ------------------------------------------------------------------------------
+echo "--------------------------------------------------------------------"
+echo "  [2/4] Testing NodeAffinity and PodAntiAffinity                    "
+echo "--------------------------------------------------------------------"
+"${SCRIPT_DIR}/02-affinities/test-affinities.sh"
+
+# ------------------------------------------------------------------------------
+# Drill 3: Horizontal Pod Autoscaler (HPA)
+# ------------------------------------------------------------------------------
+echo "--------------------------------------------------------------------"
+echo "  [3/4] Testing HorizontalPodAutoscaler                             "
+echo "--------------------------------------------------------------------"
+"${SCRIPT_DIR}/03-hpa-autoscaling/cka-lab-load-generator.sh"
+
+# ------------------------------------------------------------------------------
+# Drill 4: ResourceQuota & LimitRange
+# ------------------------------------------------------------------------------
+echo "--------------------------------------------------------------------"
+echo "  [4/4] Testing ResourceQuota and LimitRange Governance             "
+echo "--------------------------------------------------------------------"
+"${SCRIPT_DIR}/04-quotas-limits/test-quotas.sh"
+
+echo "===================================================================="
+echo "  [SUCCESS] All CKA Scheduling drills verified successfully!        "
+echo "===================================================================="
