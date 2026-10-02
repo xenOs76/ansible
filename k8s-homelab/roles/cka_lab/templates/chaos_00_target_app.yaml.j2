@@ -7,6 +7,31 @@ metadata:
     app.kubernetes.io/part-of: cka-lab
     cka.practice/scenario: chaos-troubleshooting
 ---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: litmus-admin
+  namespace: {{ cka_lab_chaos_namespace }}
+  labels:
+    app.kubernetes.io/part-of: cka-lab
+    app.kubernetes.io/component: rbac
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: litmus-admin-clusterrole-{{ cka_lab_chaos_namespace }}
+  labels:
+    app.kubernetes.io/part-of: cka-lab
+    app.kubernetes.io/component: rbac
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+  - kind: ServiceAccount
+    name: litmus-admin
+    namespace: {{ cka_lab_chaos_namespace }}
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
