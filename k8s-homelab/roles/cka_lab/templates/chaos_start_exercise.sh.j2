@@ -60,6 +60,10 @@ kubectl apply -f "${SCRIPT_DIR}/00-target-app/target-app.yaml"
 kubectl rollout status deployment/cka-lab-payment-svc -n "${NAMESPACE}" --timeout=60s
 kubectl rollout status deployment/cka-lab-web-portal -n "${NAMESPACE}" --timeout=60s
 
+echo "==> Cleaning up previous chaos runs in '${NAMESPACE}'..."
+kubectl delete chaosengine --all -n "${NAMESPACE}" --interactive=false --ignore-not-found=true
+kubectl delete pods -l app.kubernetes.io/part-of=litmus -n "${NAMESPACE}" --interactive=false --ignore-not-found=true 2>/dev/null || true
+
 echo "==> 2. Initiating Chaos Fault Injection: '${DRILL}' (${EXP_NAME})..."
 
 case "${DRILL}" in
@@ -118,6 +122,16 @@ case "${DRILL}" in
     echo "===================================================================="
     ;;
 esac
+
+echo "==> Awaiting chaos runner pod startup..."
+for _ in $(seq 1 15); do
+  if kubectl get pods -n "${NAMESPACE}" -l app.kubernetes.io/part-of=litmus --no-headers 2>/dev/null | grep -q "runner"; then
+    echo "==> Chaos runner pod active:"
+    kubectl get pods -n "${NAMESPACE}" -l app.kubernetes.io/part-of=litmus
+    break
+  fi
+  sleep 1
+done
 
 echo ""
 echo "==> Fault will run for 300 seconds or until cancelled via: ./stop-chaos-exercise.sh"

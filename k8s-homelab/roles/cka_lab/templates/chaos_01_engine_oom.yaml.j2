@@ -25,3 +25,9 @@ spec:
               value: "128"
             - name: NUMBER_OF_WORKERS
               value: "1"
+            - name: CONTAINER_RUNTIME
+              value: "containerd"
+            - name: SOCKET_PATH
+              value: "/run/containerd/containerd.sock"
+            - name: TARGET_CONTAINER
+              value: "payment-api"
