@@ -3,6 +3,7 @@
 ## CKA training
 
 * [x] install etcdctl and etcdutl when running 'preprod-up'. From Ubuntu repos, if possible
+* [x] install glow markdown CLI viewer from Charm official deb repo
 * [ ] add option to have multiple control plane hosts + VIP
 
 ## Homelab Kubernetes administration

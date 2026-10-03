@@ -364,6 +364,8 @@ make preprod-cka-chaos
    - `03-dns-chaos/`: Service discovery blackholing and CoreDNS resolver failure.
    - `04-node-pressure/`: Node memory saturation and QoS eviction prioritization.
 
+Trainees can also use the bundled `glow` CLI markdown reader (installed automatically from Charmbracelet's official Debian APT repository during the CKA lab phase) to view any exercise guide directly in the terminal with rich rendering (e.g. `glow ~/cka/scheduling/README.md`).
+
 ### 5. Fast Cluster Reset & Repeatable Practice Loop
 
 The key strength of this training lab is the ability to **wipe and reset
@@ -468,7 +470,7 @@ specific tasks:
 | `worker` | Execute `kubeadm join`, configure node IP in `/etc/default/kubelet` | `worker`, `join`, `kubelet` |
 | `cilium` | Download Cilium CLI, install Cilium daemonset, wait for status, verify nodes | `cni`, `cilium`, `verify` |
 | `caddy` | Build Caddy via xcaddy with PowerDNS plugin, reverse proxy 443 to NodePort 30443 | `caddy`, `ingress`, `caddy_install`, `caddy_config`, `caddy_service`, `caddy_version` |
-| `cka_lab` | Deploy 15 hands-on CKA practice scenarios, guides, and dynamic chaos drills | `cka_lab`, `motd`, `user_rbac`, `secrets`, `configmaps`, `helm`, `volumes`, `deployments`, `pods`, `networking`, `scheduling`, `workloads_advanced`, `storage_classes`, `cluster_troubleshooting`, `crds`, `chaos_troubleshooting` |
+| `cka_lab` | Deploy 15 hands-on CKA practice scenarios, guides, and dynamic chaos drills | `cka_lab`, `motd`, `glow`, `user_rbac`, `secrets`, `configmaps`, `helm`, `volumes`, `deployments`, `pods`, `networking`, `scheduling`, `workloads_advanced`, `storage_classes`, `cluster_troubleshooting`, `crds`, `chaos_troubleshooting` |
 | `upgrade` | Unhold, upgrade kubeadm, `kubeadm upgrade apply`, upgrade kubelet, hold | `upgrade`, `upgrade_control_plane`, `upgrade_worker` |
 | `reset` | `kubeadm reset -f`, flush iptables, clean CNI & `/var/lib/kubelet` | `reset` |
 

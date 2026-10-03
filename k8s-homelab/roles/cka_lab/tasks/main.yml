@@ -6,6 +6,14 @@
     - cka_lab
     - motd
 
+- name: Execute CKA Lab Scenario - Glow Markdown CLI Viewer (glow)
+  ansible.builtin.include_tasks: scenario_glow.yml
+  when: cka_lab_scenario_glow_enabled | bool
+  tags:
+    - cka_lab
+    - glow
+    - tools
+
 - name: Execute CKA Lab Scenario - User Authentication & RBAC (user_rbac)
   ansible.builtin.include_tasks: scenario_user_rbac.yml
   when: cka_lab_scenario_user_rbac_enabled | bool

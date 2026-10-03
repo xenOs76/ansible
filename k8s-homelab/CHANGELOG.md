@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added `glow` markdown CLI viewer installation to the CKA lab provisioning phase (`roles/cka_lab/tasks/scenario_glow.yml`):
+  - Configures Charmbracelet's official APT repository (`https://repo.charm.sh/apt/`) with GPG key validation (`ED927B38BE981E53CA09153D03BBF595D4DFD35C`) and dearmored keyring at `/etc/apt/keyrings/charm.gpg`.
+  - Installs `glow` on the control plane node to enable terminal-based rendering and reading of CKA drill guides with rich formatting.
+
 ## [1.3.0] - 2026-10-02
 
 ### Added
