@@ -6,3 +6,7 @@ environment_name: "prod"
 cluster_name: "k8s-homelab"
 k8s_context_name: "k8s-homelab"
 k8s_user_name: "k8s-homelab-admin"
+
+# Rook Ceph prod storage configuration (to be defined when disk layout is decided)
+rook_ceph_storage_node: "{{ (groups['control_plane'] | default(['k8s-cp-01']))[0] }}"
+rook_ceph_devices: []

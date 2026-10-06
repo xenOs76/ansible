@@ -1,0 +1,9 @@
+---
+- name: Deploy Rook-Ceph storage operator and dynamic block storage
+  hosts: control_plane
+  become: true
+  roles:
+    - role: rook_ceph
+  tags:
+    - ceph
+    - storage

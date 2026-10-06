@@ -139,10 +139,12 @@ echo "==> [4/6] Configuring kernel networking and sysctl..."
 cat <<EOF | sudo tee /etc/modules-load.d/k8s.conf >/dev/null
 overlay
 br_netfilter
+rbd
 EOF
 
 sudo modprobe overlay
 sudo modprobe br_netfilter
+sudo modprobe rbd
 
 cat <<EOF | sudo tee /etc/sysctl.d/k8s.conf >/dev/null
 net.bridge.bridge-nf-call-iptables  = 1

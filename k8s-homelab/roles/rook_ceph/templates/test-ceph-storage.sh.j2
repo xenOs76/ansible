@@ -1,0 +1,98 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# Script: test-ceph-storage.sh
+# Purpose: Verify dynamic Ceph/Rook block storage provisioning on worker nodes.
+# ==============================================================================
+set -euo pipefail
+
+STORAGE_CLASS="{{ rook_ceph_storage_class_name }}"
+NAMESPACE="${1:-default}"
+PVC_NAME="test-rook-ceph-pvc"
+POD_NAME="test-rook-ceph-worker-pod"
+
+# Detect KUBECONFIG if not set
+if [ -z "${KUBECONFIG:-}" ] && [ -f /etc/kubernetes/admin.conf ] && [ ! -f "${HOME}/.kube/config" ]; then
+  export KUBECONFIG=/etc/kubernetes/admin.conf
+fi
+
+echo "=== Testing Ceph Dynamic Block Storage Provisioning ==="
+echo "StorageClass: ${STORAGE_CLASS}"
+echo "Namespace:    ${NAMESPACE}"
+
+cleanup() {
+  echo "==> Cleaning up test resources..."
+  kubectl delete pod "${POD_NAME}" -n "${NAMESPACE}" --ignore-not-found=true --timeout=60s >/dev/null 2>&1 || true
+  kubectl delete pvc "${PVC_NAME}" -n "${NAMESPACE}" --ignore-not-found=true --timeout=60s >/dev/null 2>&1 || true
+}
+trap cleanup EXIT
+
+# 1. Verify StorageClass exists
+echo "==> [1/4] Verifying StorageClass '${STORAGE_CLASS}'..."
+if ! kubectl get storageclass "${STORAGE_CLASS}" >/dev/null 2>&1; then
+  echo "Error: StorageClass '${STORAGE_CLASS}' not found!" >&2
+  exit 1
+fi
+echo "✔ StorageClass '${STORAGE_CLASS}' is registered."
+
+# 2. Create PersistentVolumeClaim
+echo "==> [2/4] Creating test PersistentVolumeClaim '${PVC_NAME}'..."
+cat <<EOF | kubectl apply -n "${NAMESPACE}" -f -
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ${PVC_NAME}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: ${STORAGE_CLASS}
+  resources:
+    requests:
+      storage: 1Gi
+EOF
+
+# 3. Create consumer Pod on a worker node
+# Find first ready worker node
+WORKER_NODE=$(kubectl get nodes -l '!node-role.kubernetes.io/control-plane' -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
+if [ -z "${WORKER_NODE}" ]; then
+  WORKER_NODE="kube-worker-1"
+fi
+
+echo "==> [3/4] Scheduling consumer pod '${POD_NAME}' on worker node '${WORKER_NODE}'..."
+cat <<EOF | kubectl apply -n "${NAMESPACE}" -f -
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ${POD_NAME}
+spec:
+  nodeName: ${WORKER_NODE}
+  containers:
+    - name: writer
+      image: busybox:1.36
+      command: ["sh", "-c", "echo 'Ceph block storage successfully mounted on $(hostname) at $(date)' > /mnt/ceph/status.txt && sleep 300"]
+      volumeMounts:
+        - name: ceph-vol
+          mountPath: /mnt/ceph
+  volumes:
+    - name: ceph-vol
+      persistentVolumeClaim:
+        claimName: ${PVC_NAME}
+EOF
+
+echo "Waiting for pod '${POD_NAME}' to reach Running state..."
+kubectl wait pod "${POD_NAME}" -n "${NAMESPACE}" --for=condition=Ready --timeout=180s
+
+# 4. Verify volume write inside worker container
+echo "==> [4/4] Verifying volume write and read from worker pod..."
+WRITTEN_CONTENT=$(kubectl exec "${POD_NAME}" -n "${NAMESPACE}" -- cat /mnt/ceph/status.txt)
+echo "Volume content: ${WRITTEN_CONTENT}"
+
+if echo "${WRITTEN_CONTENT}" | grep -q "Ceph block storage successfully mounted"; then
+  echo "===================================================================="
+  echo "✔ SUCCESS: Ceph/Rook block volume dynamically mapped & verified!"
+  echo "  Provisioner: rook-ceph.rbd.csi.ceph.io"
+  echo "  Attached to: ${WORKER_NODE}"
+  echo "===================================================================="
+else
+  echo "Error: Unexpected content read from mounted Ceph volume." >&2
+  exit 1
+fi

@@ -13,6 +13,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `glow` markdown CLI viewer installation to the CKA lab provisioning phase (`roles/cka_lab/tasks/scenario_glow.yml`):
   - Configures Charmbracelet's official APT repository (`https://repo.charm.sh/apt/`) with GPG key validation (`ED927B38BE981E53CA09153D03BBF595D4DFD35C`) and dearmored keyring at `/etc/apt/keyrings/charm.gpg`.
   - Installs `glow` on the control plane node to enable terminal-based rendering and reading of CKA drill guides with rich formatting.
+- Implemented Rook-Ceph block storage orchestration (`roles/rook_ceph`):
+  - Added dedicated role `roles/rook_ceph` to deploy the official Rook-Ceph operator (pinned Helm chart `v1.15.5`) and configure a Ceph cluster where block storage is provided from a dedicated unformatted volume on the control plane node.
+  - Configured `CephCluster` with control plane placement and tolerations (`node-role.kubernetes.io/control-plane:NoSchedule`), single MON/MGR daemons, and target block devices (`rook_ceph_devices`).
+  - Configured `CephBlockPool` (`replicapool`) with `failureDomain: osd`, single replica (`replicated.size: 1`), and `requireSafeReplicaSize: false` for single-node OSD topology.
+  - Registered dynamic Kubernetes StorageClass `rook-ceph-block` backed by `rook-ceph.rbd.csi.ceph.io` with volume expansion enabled.
+  - Updated `Vagrantfile` allocating 4096MB RAM and attaching a dedicated 20GB secondary disk (`/dev/vdb`) to `kube-control-plane`.
+  - Added `rbd` kernel module persistence and initialization to `roles/common` (`k8s-modules.conf.j2`, `tasks/main.yml`) and `scripts/common.sh`.
+  - Added standalone deployment script `scripts/install-rook-ceph.sh` and end-to-end worker volume verification drill `test-ceph-storage.sh`.
+  - Added dedicated playbook `playbooks/ceph.yml`, integrated step into `playbooks/site.yml`, and added Makefile targets `preprod-ceph` and `prod-ceph`.
 
 ## [1.3.0] - 2026-10-02
 

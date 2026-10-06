@@ -1,0 +1,42 @@
+---
+# ==============================================================================
+# Rook-Ceph CephBlockPool & Kubernetes StorageClass
+# Provides dynamic Ceph block storage volumes (RBD) to Kubernetes nodes
+# ==============================================================================
+apiVersion: ceph.rook.io/v1
+kind: CephBlockPool
+metadata:
+  name: "{{ rook_ceph_pool_name }}"
+  namespace: "{{ rook_ceph_namespace }}"
+spec:
+  failureDomain: "{{ rook_ceph_failure_domain }}"
+  replicated:
+    size: {{ rook_ceph_pool_replicas }}
+    requireSafeReplicaSize: false
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: "{{ rook_ceph_storage_class_name }}"
+  annotations:
+{% if rook_ceph_is_default_sc %}
+    storageclass.kubernetes.io/is-default-class: "true"
+{% else %}
+    storageclass.kubernetes.io/is-default-class: "false"
+{% endif %}
+provisioner: "{{ rook_ceph_namespace }}.rbd.csi.ceph.io"
+parameters:
+  clusterID: "{{ rook_ceph_namespace }}"
+  pool: "{{ rook_ceph_pool_name }}"
+  imageFormat: "2"
+  imageFeatures: layering
+  csi.storage.k8s.io/provisioner-secret-name: rook-csi-rbd-provisioner
+  csi.storage.k8s.io/provisioner-secret-namespace: "{{ rook_ceph_namespace }}"
+  csi.storage.k8s.io/controller-expand-secret-name: rook-csi-rbd-provisioner
+  csi.storage.k8s.io/controller-expand-secret-namespace: "{{ rook_ceph_namespace }}"
+  csi.storage.k8s.io/node-stage-secret-name: rook-csi-rbd-node
+  csi.storage.k8s.io/node-stage-secret-namespace: "{{ rook_ceph_namespace }}"
+  csi.storage.k8s.io/fstype: "{{ rook_ceph_fs_type }}"
+allowVolumeExpansion: true
+reclaimPolicy: "{{ rook_ceph_reclaim_policy }}"
+volumeBindingMode: "{{ rook_ceph_volume_binding_mode }}"

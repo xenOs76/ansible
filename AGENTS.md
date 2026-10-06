@@ -1,16 +1,20 @@
 # AGENTS.md
 
-Context, architecture, workflows, and operational standards for AI coding agents operating on the `ansible` repository.
+Context, architecture, workflows, and operational standards for AI coding agents operating on the `os76-ansible` repository.
 
 ---
 
 ## 1. Repository Identity & Scope
 
-`ansible` is a public repository containing curated Ansible automation playbooks, roles, and lab environments.
+`os76-ansible` is a private infrastructure-as-code monorepo containing Ansible automation playbooks, roles, and lab environments for the OS76 infrastructure.
 
 ### Repository Layout
 
-- **`k8s-homelab/`** — Automated multi-node Kubernetes (`kubeadm`) cluster provisioning on Libvirt/KVM via Vagrant, CKA practice labs, rolling upgrades, and cluster maintenance.
+- **`k8s-homelab/`** — Primary active project: automated multi-node Kubernetes (`kubeadm`) cluster provisioning on Libvirt/KVM via Vagrant, CKA practice labs, rolling upgrades, and cluster maintenance.
+- **`os76_priv_lan_mgmt/`** — LAN network infrastructure automation (gateway routers, hostapd access points, dnsmasq/unbound DNS resolvers, node exporter metrics, and Let's Encrypt certificates).
+- **`os76_priv_ca/`** — Private Certificate Authority (PKI) management playbooks.
+- **`os76_k3s/` & `archived/`** — Historical and legacy K3s homelab playbooks and Helm charts.
+- **`docs/` & `Docs.md`** — Reference documentation, Ansible filter guides, and upstream bookmarks.
 
 ---
 
@@ -31,16 +35,18 @@ Multi-node Kubernetes 1.34+ cluster automated using `kubeadm`, `containerd`, and
 
 ### Roles Summary
 
-1. **`common`**: Pinned base packages (`socat`, `kubectl-netdrill`, `bash-completion`), sysctl network tuning, and kernel modules (`overlay`, `br_netfilter`).
-2. **`containerd`**: Container runtime installation, configuration (`SystemdCgroup = true`), and service health validation.
-3. **`kubernetes_packages`**: APT repository setup (`pkgs.k8s.io`), pinned binaries (`kubeadm`, `kubelet`, `kubectl`), and apt-mark hold.
-4. **`control_plane`**: `kubeadm init` automation, dynamic IP discovery for kube-apiserver TLS SANs, `~/.kube/config` distribution, user shell preferences (`alias k=kubectl`, `export koyaml="..."`, bash completion, and `~/.kube/kuberc`), and training MOTD cleanup.
-5. **`worker`**: Node registration via secure join tokens and discovery hashes.
-6. **`cilium`**: Helm-based Cilium CNI deployment with eBPF host routing and status health checks.
-7. **`control_plane_tools`**: Control plane utilities including `etcdctl`, `etcdutl` (pinned `v3.5.16` with system-wide `ETCDCTL_API=3`), `k9s` (pinned `v0.51.0` with transparent Nord skin), and diagnostics.
-8. **`cka_lab`**: Hands-on CKA exam practice scenarios deployed exclusively via `make preprod-cka-lab` (`playbooks/cka_lab.yml`), including initial steps reminder MOTD activation.
-9. **`upgrade`**: Rolling node upgrades (`kubeadm upgrade apply/node`, `kubelet`, `kubectl`).
-10. **`reset`**: Safe cluster teardown and node state reset (`kubeadm reset -f`, interface cleanups).
+1. **`common`**: Pinned base packages (`socat`, `kubectl-netdrill`, `bash-completion`), sysctl network tuning, and kernel modules (`overlay`, `br_netfilter`, `rbd`).
+1. **`containerd`**: Container runtime installation, configuration (`SystemdCgroup = true`), and service health validation.
+1. **`kubernetes_packages`**: APT repository setup (`pkgs.k8s.io`), pinned binaries (`kubeadm`, `kubelet`, `kubectl`), and apt-mark hold.
+1. **`control_plane`**: `kubeadm init` automation, dynamic IP discovery for kube-apiserver TLS SANs, `~/.kube/config` distribution, user shell preferences (`alias k=kubectl`, `export koyaml="..."`, bash completion, and `~/.kube/kuberc`), and training MOTD cleanup.
+1. **`worker`**: Node registration via secure join tokens and discovery hashes.
+1. **`cilium`**: Helm-based Cilium CNI deployment with eBPF host routing and status health checks.
+1. **`caddy`**: Ingress reverse proxy with PowerDNS DNS-01 ACME Let's Encrypt certificates.
+1. **`rook_ceph`**: Cloud-native block storage orchestration via Rook-Ceph operator, backed by a dedicated unformatted volume on the control plane node and dynamically provisioned to worker nodes via Ceph CSI.
+1. **`control_plane_tools`**: Control plane utilities including `etcdctl`, `etcdutl` (pinned `v3.5.16` with system-wide `ETCDCTL_API=3`), `k9s` (pinned `v0.51.0` with transparent Nord skin), and diagnostics.
+1. **`cka_lab`**: Hands-on CKA exam practice scenarios deployed exclusively via `make preprod-cka-lab` (`playbooks/cka_lab.yml`), including initial steps reminder MOTD activation.
+1. **`upgrade`**: Rolling node upgrades (`kubeadm upgrade apply/node`, `kubelet`, `kubectl`).
+1. **`reset`**: Safe cluster teardown and node state reset (`kubeadm reset -f`, interface cleanups).
 
 ---
 
@@ -56,7 +62,7 @@ Dedicated CKA certification scenarios provisioned on `kube-control-plane`:
 - **ConfigMaps & Kustomize (`configmaps`)**:
   - Sample ConfigMaps across namespaces at `/home/vagrant/cka/configmaps/sample-configmaps.yaml`.
   - Self-contained Kustomize lab at `/home/vagrant/cka/kustomize/` (`base/`, `overlays/development/`, `overlays/production/`).
-- **Helm & Addons (`helm`)**: Standalone installation scripts for Metrics Server (`install-kube-metrics.sh`) Prometheus Operator (`install-kube-prometheus.sh`), and NGINX Gateway Fabric (`install-nginx-gateway-fabric.sh`) at `/home/vagrant/cka/helm/`.
+- **Helm & Addons (`helm`)**: Standalone installation scripts for Metrics Server (`install-kube-metrics.sh`), Prometheus Operator (`install-kube-prometheus.sh`), NGINX Gateway Fabric (`install-nginx-gateway-fabric.sh`), and httpbin-go (`install-httpbin-go.sh`) at `/home/vagrant/cka/helm/`.
 
 ---
 
@@ -158,14 +164,17 @@ nix shell nixpkgs#ansible-lint --command bash -c \
 
 ---
 
-## 6. Git Conventions
+## 6. Git & Mirroring Conventions
 
 1. **Commit Messages**: Follow Conventional Commits format:
    - `feat(k8s-homelab): ...`
    - `fix(scripts): ...`
    - `refactor(common): ...`
    - `docs(cka_lab): ...`
-2. **Upstream Remote**:
-   - `origin` is `git@github.com:xenOs76/ansible.git` on branch `main`.
-3. **Changelog**:
+2. **Gitea Upstream Remote**:
+   - `origin` is `git@git.priv.os76.xyz:xeno/os76-ansible.git` on branch `master`.
+3. **Public GitHub Mirror**:
+   - The `k8s-homelab/` subproject is mirrored publicly at `/home/xeno/git/github/public/ansible/` (`git@github.com:xenOs76/ansible.git` on branch `main`).
+   - When modifying `k8s-homelab`, synchronize changed files to `/home/xeno/git/github/public/ansible/k8s-homelab/`, ensure clean git status, and push to GitHub `origin/main`.
+4. **Changelog**:
    - Every user-facing feature, fix, or scenario addition must be documented under `## [Unreleased]` in `k8s-homelab/CHANGELOG.md`.

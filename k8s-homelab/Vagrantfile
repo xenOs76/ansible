@@ -21,8 +21,9 @@ Vagrant.configure("2") do |config|
 
     node.vm.provider :libvirt do |lv|
       lv.driver = "kvm"
-      lv.memory = 2048
+      lv.memory = 4096
       lv.cpus = 2
+      lv.storage :file, size: '20G', type: 'qcow2', device: 'vdb'
     end
 
     node.vm.provision "file", source: "scripts/cni-install-cilium.sh", destination: "/home/vagrant/cni-install-cilium.sh"

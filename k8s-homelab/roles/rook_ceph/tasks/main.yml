@@ -1,0 +1,137 @@
+---
+- name: Ensure Rook-Ceph manifests directory exists on control plane
+  ansible.builtin.file:
+    path: "{{ rook_ceph_manifests_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  tags:
+    - ceph
+    - storage
+
+- name: Add Rook Helm repository
+  ansible.builtin.command: helm repo add rook-release {{ rook_ceph_helm_repo }} --force-update
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: rook_ceph_helm_repo_add
+  changed_when: "'has been added' in rook_ceph_helm_repo_add.stdout"
+  tags:
+    - ceph
+    - storage
+
+- name: Update Helm repository cache for Rook
+  ansible.builtin.command: helm repo update rook-release
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  changed_when: false
+  tags:
+    - ceph
+    - storage
+
+- name: Check Rook-Ceph operator Helm release status
+  ansible.builtin.command: helm status {{ rook_ceph_cluster_name }}-operator -n {{ rook_ceph_namespace }}
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: rook_ceph_operator_status
+  failed_when: false
+  changed_when: false
+  tags:
+    - ceph
+    - storage
+
+- name: Install Rook-Ceph operator Helm chart
+  ansible.builtin.command: >-
+    helm upgrade --install {{ rook_ceph_cluster_name }}-operator rook-release/rook-ceph
+    --namespace {{ rook_ceph_namespace }}
+    --create-namespace
+    --version {{ rook_ceph_version }}
+    --set csi.enableRbdDriver=true
+    --set csi.enableCephfsDriver=false
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  when: rook_ceph_operator_status.rc != 0
+  changed_when: true
+  tags:
+    - ceph
+    - storage
+
+- name: Wait for Rook-Ceph operator deployment rollout
+  ansible.builtin.command: >-
+    kubectl rollout status deployment/rook-ceph-operator
+    -n {{ rook_ceph_namespace }}
+    --timeout={{ rook_ceph_operator_wait_timeout }}s
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  changed_when: false
+  tags:
+    - ceph
+    - storage
+
+- name: Render CephCluster resource manifest
+  ansible.builtin.template:
+    src: ceph-cluster.yaml.j2
+    dest: "{{ rook_ceph_manifests_dir }}/ceph-cluster.yaml"
+    owner: root
+    group: root
+    mode: "0644"
+  when: rook_ceph_devices | length > 0
+  tags:
+    - ceph
+    - storage
+
+- name: Apply CephCluster resource
+  ansible.builtin.command: kubectl apply -f {{ rook_ceph_manifests_dir }}/ceph-cluster.yaml
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  when: rook_ceph_devices | length > 0
+  register: rook_ceph_cluster_apply
+  changed_when: "'created' in rook_ceph_cluster_apply.stdout or 'configured' in rook_ceph_cluster_apply.stdout"
+  tags:
+    - ceph
+    - storage
+
+- name: Render CephBlockPool and StorageClass manifests
+  ansible.builtin.template:
+    src: ceph-blockpool-sc.yaml.j2
+    dest: "{{ rook_ceph_manifests_dir }}/ceph-blockpool-sc.yaml"
+    owner: root
+    group: root
+    mode: "0644"
+  when: rook_ceph_devices | length > 0
+  tags:
+    - ceph
+    - storage
+
+- name: Apply CephBlockPool and StorageClass
+  ansible.builtin.command: kubectl apply -f {{ rook_ceph_manifests_dir }}/ceph-blockpool-sc.yaml
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  when: rook_ceph_devices | length > 0
+  register: rook_ceph_blockpool_sc_apply
+  changed_when: "'created' in rook_ceph_blockpool_sc_apply.stdout or 'configured' in rook_ceph_blockpool_sc_apply.stdout"
+  tags:
+    - ceph
+    - storage
+
+- name: Render test-ceph-storage.sh script into user home directory
+  ansible.builtin.template:
+    src: test-ceph-storage.sh.j2
+    dest: "/home/{{ ansible_user | default('vagrant') }}/test-ceph-storage.sh"
+    owner: "{{ ansible_user | default('vagrant') }}"
+    group: "{{ ansible_user | default('vagrant') }}"
+    mode: "0755"
+  tags:
+    - ceph
+    - storage
+
+- name: Report unconfigured storage devices
+  ansible.builtin.debug:
+    msg: >-
+      Notice: rook_ceph_devices is empty on {{ rook_ceph_storage_node }}.
+      Rook operator is ready, but CephCluster and StorageClass creation is deferred
+      until target block devices are configured in group_vars.
+  when: rook_ceph_devices | length == 0
+  tags:
+    - ceph
+    - storage

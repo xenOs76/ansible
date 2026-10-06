@@ -1,4 +1,4 @@
-.PHONY: all lint syntax inventory deps check-deps preprod-up preprod-destroy preprod-recreate preprod-status preprod-provision preprod-sync-kubeconfig prod-sync-kubeconfig preprod-deploy preprod-caddy preprod-cni preprod-upgrade preprod-reset preprod-cka-lab help
+.PHONY: all lint syntax inventory deps check-deps preprod-up preprod-destroy preprod-recreate preprod-status preprod-provision preprod-sync-kubeconfig prod-sync-kubeconfig preprod-deploy preprod-caddy preprod-cni preprod-ceph prod-ceph preprod-upgrade preprod-reset preprod-cka-lab help
 
 all: help
 
@@ -20,6 +20,8 @@ help:
 	@echo "make preprod-deploy    - Run full Ansible playbook deployment on preprod"
 	@echo "make preprod-caddy     - Deploy/configure Caddy ingress reverse proxy on preprod"
 	@echo "make preprod-cni       - Install/verify Cilium CNI on preprod"
+	@echo "make preprod-ceph      - Deploy/configure Rook-Ceph block storage on preprod"
+	@echo "make prod-ceph         - Deploy/configure Rook-Ceph block storage on prod"
 	@echo "make preprod-upgrade   - Run rolling upgrade on preprod"
 	@echo "make preprod-reset     - Teardown/reset cluster on preprod"
 	@echo "make preprod-cka-lab   - Deploy CKA training lab scenarios on preprod"
@@ -78,6 +80,12 @@ preprod-caddy:
 
 preprod-cni:
 	./scripts/run-playbook.sh -e preprod -p cni.yml
+
+preprod-ceph:
+	./scripts/run-playbook.sh -e preprod -p ceph.yml
+
+prod-ceph:
+	./scripts/run-playbook.sh -e prod -p ceph.yml
 
 preprod-upgrade:
 	./scripts/run-playbook.sh -e preprod -p upgrade.yml

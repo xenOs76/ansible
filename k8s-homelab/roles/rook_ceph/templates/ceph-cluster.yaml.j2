@@ -1,0 +1,57 @@
+---
+# ==============================================================================
+# Rook-Ceph CephCluster Resource Definition
+# Configured for single-node control-plane storage homelab topology
+# ==============================================================================
+apiVersion: ceph.rook.io/v1
+kind: CephCluster
+metadata:
+  name: "{{ rook_ceph_cluster_name }}"
+  namespace: "{{ rook_ceph_namespace }}"
+spec:
+  cephVersion:
+    image: quay.io/ceph/ceph:{{ rook_ceph_image_version }}
+    allowUnsupported: false
+  dataDirHostPath: /var/lib/rook
+  skipUpgradeChecks: false
+  continueUpgradeAfterChecksEvenIfNotHealthy: false
+  waitTimeoutForHealthyOSDInMinutes: 10
+  mon:
+    count: {{ rook_ceph_mon_count }}
+    allowMultiplePerNode: false
+  mgr:
+    count: {{ rook_ceph_mgr_count }}
+    allowMultiplePerNode: false
+    modules:
+      - name: pg_autoscaler
+        enabled: true
+  dashboard:
+    enabled: true
+    ssl: false
+  crashCollector:
+    disable: false
+  cleanupPolicy:
+    wipeStorage: false
+  placement:
+    all:
+      nodeAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          nodeSelectorTerms:
+            - matchExpressions:
+                - key: kubernetes.io/hostname
+                  operator: In
+                  values:
+                    - "{{ rook_ceph_storage_node }}"
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+  storage:
+    useAllNodes: false
+    useAllDevices: false
+    nodes:
+      - name: "{{ rook_ceph_storage_node }}"
+        devices:
+{% for dev in rook_ceph_devices %}
+          - name: "{{ dev.name | default(dev) }}"
+{% endfor %}

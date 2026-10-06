@@ -40,6 +40,14 @@
     - common
     - modules
 
+- name: Load rbd kernel module
+  ansible.builtin.command: modprobe rbd
+  changed_when: false
+  tags:
+    - common
+    - modules
+    - ceph
+
 - name: Configure sysctl parameters for Kubernetes
   ansible.builtin.template:
     src: k8s-sysctl.conf.j2

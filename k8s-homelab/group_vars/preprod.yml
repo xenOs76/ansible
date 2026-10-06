@@ -8,3 +8,8 @@ apiserver_bind_port: 6443
 cluster_name: "k8s-homelab-preprod"
 k8s_context_name: "k8s-homelab-preprod"
 k8s_user_name: "k8s-homelab-preprod-admin"
+
+# Rook Ceph preprod storage node and device configuration
+rook_ceph_storage_node: "kube-control-plane"
+rook_ceph_devices:
+  - name: "vdb"

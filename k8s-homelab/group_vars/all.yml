@@ -89,3 +89,19 @@ caddy_garage_secret_key: >-
     | default(lookup('ansible.builtin.env', 'GARAGE_SECRET_KEY') | default(lookup('ansible.builtin.env', 'AWS_SECRET_ACCESS_KEY') | default('', true)))
   }}
 caddy_build_dir: "/var/cache/caddy-build"
+
+# Rook-Ceph block storage configuration
+rook_ceph_enabled: true
+rook_ceph_version: "v1.15.5"
+rook_ceph_helm_repo: "https://charts.rook.io/release"
+rook_ceph_namespace: "rook-ceph"
+rook_ceph_cluster_name: "rook-ceph"
+rook_ceph_image_version: "v19.2.1"
+rook_ceph_storage_class_name: "rook-ceph-block"
+rook_ceph_is_default_sc: true
+rook_ceph_mon_count: 1
+rook_ceph_mgr_count: 1
+rook_ceph_pool_replicas: 1
+rook_ceph_pool_name: "replicapool"
+rook_ceph_failure_domain: "osd"
+rook_ceph_fs_type: "ext4"
