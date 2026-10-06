@@ -175,6 +175,7 @@ sudo apt-get -y install socat kubectl-netdrill bash-completion
 echo "==> [7/7] Upgrading system packages..."
 export DEBIAN_FRONTEND=noninteractive
 sudo apt-get upgrade -y
+sudo apt-get clean
 
 echo "==> [common.sh] Node prerequisites installed successfully."
 

@@ -10,7 +10,7 @@ This role deploys the official Rook-Ceph operator and provisions a Ceph cluster 
 
 - **Control Plane Node**: Hosts the Ceph MON, MGR, and OSD daemons, backed by a dedicated unformatted block device (`/dev/vdb` in preprod). Explicit tolerations are configured to schedule Ceph control and storage pods on the control plane despite the `node-role.kubernetes.io/control-plane:NoSchedule` taint.
 - **Worker Nodes**: Run the Ceph CSI node plugin (`rook-ceph-csi-rbd-node`) DaemonSet. Worker nodes do not host OSD storage; instead, pods on worker nodes consume dynamically provisioned Ceph block volumes (RBD) over the cluster network.
-- **Dynamic Provisioning**: A Kubernetes `StorageClass` (`rook-ceph-block`) is registered with provisioner `rook-ceph.rbd.csi.ceph.io` backed by a replicated `CephBlockPool`.
+- **Dynamic Provisioning**: A Kubernetes `StorageClass` (`rook-ceph-block`) is registered with provisioner `rook-ceph.rbd.csi.ceph.com` backed by a replicated `CephBlockPool`.
 
 ---
 
@@ -62,17 +62,33 @@ make preprod-ceph
 
 ---
 
-## 4. Verification & Testing
+## 4. Verification & Diagnostics
 
-Verify cluster health and storage class registration:
+### Diagnostic & Status Inspection Tool (`check-ceph-status.sh`)
+
+When troubleshooting stuck deployments, failing operators, or checking native Ceph health:
 
 ```bash
-kubectl get pods -n rook-ceph
-kubectl get cephcluster -n rook-ceph
-kubectl get storageclass rook-ceph-block
+# On the workstation:
+make preprod-ceph-status
+# Or with options:
+./scripts/check-ceph-status.sh --toolbox
+
+# On the control plane node:
+/home/vagrant/check-ceph-status.sh
 ```
 
-Run the end-to-end verification script from the control plane:
+The script inspects:
+
+1. **Operator Deployment**: Checks pod phase, reports termination reasons, exit codes, recent events, and crash logs when in `Error` or `CrashLoopBackOff`.
+1. **Helm Release**: Verifies chart release status.
+1. **CephCluster CR**: Evaluates CR phase (`Progressing`, `Ready`, `Error`), health conditions, and status messages.
+1. **Daemon Pods**: Summarizes MON, MGR, OSD, and CSI driver pods.
+1. **Native Ceph Status**: Runs `ceph status` and `ceph osd status` via running MONs or the Ceph Toolbox (`--toolbox`).
+
+### End-to-End Dynamic Storage Verification (`test-ceph-storage.sh`)
+
+Once the operator and cluster are healthy, run the dynamic storage verification script from the control plane:
 
 ```bash
 /home/vagrant/test-ceph-storage.sh

@@ -1,0 +1,71 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: static-ceph-rbd-pv
+  labels:
+    app.kubernetes.io/part-of: cka-lab
+    cka.practice/scenario: rbd-volumes
+spec:
+  capacity:
+    storage: 1Gi
+  accessModes:
+    - ReadWriteOnce
+  volumeMode: Filesystem
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  csi:
+    driver: {{ cka_lab_rbd_namespace }}.rbd.csi.ceph.com
+    volumeHandle: cka-lab-static-rbd-vol-01
+    fsType: ext4
+    volumeAttributes:
+      clusterID: {{ cka_lab_rbd_namespace }}
+      pool: {{ cka_lab_rbd_pool_name }}
+      imageFormat: "2"
+      imageFeatures: layering
+    nodeStageSecretRef:
+      name: rook-csi-rbd-node
+      namespace: {{ cka_lab_rbd_namespace }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: static-ceph-rbd-pvc
+  namespace: default
+  labels:
+    app.kubernetes.io/part-of: cka-lab
+    cka.practice/scenario: rbd-volumes
+spec:
+  accessModes:
+    - ReadWriteOnce
+  volumeMode: Filesystem
+  storageClassName: ""
+  volumeName: static-ceph-rbd-pv
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: static-ceph-rbd-consumer-pod
+  namespace: default
+  labels:
+    app: static-ceph-rbd-consumer
+    app.kubernetes.io/part-of: cka-lab
+spec:
+  containers:
+    - name: static-consumer
+      image: busybox:1.36
+      command:
+        - sh
+        - -c
+        - |
+          echo "Static Ceph CSI RBD volume mounted at $(date)" >> /mnt/static-data/init.log
+          sleep 3600
+      volumeMounts:
+        - name: static-storage
+          mountPath: /mnt/static-data
+  volumes:
+    - name: static-storage
+      persistentVolumeClaim:
+        claimName: static-ceph-rbd-pvc

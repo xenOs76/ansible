@@ -125,6 +125,17 @@
     - ceph
     - storage
 
+- name: Render check-ceph-status.sh diagnostic script into user home directory
+  ansible.builtin.template:
+    src: check-ceph-status.sh.j2
+    dest: "/home/{{ ansible_user | default('vagrant') }}/check-ceph-status.sh"
+    owner: "{{ ansible_user | default('vagrant') }}"
+    group: "{{ ansible_user | default('vagrant') }}"
+    mode: "0755"
+  tags:
+    - ceph
+    - storage
+
 - name: Report unconfigured storage devices
   ansible.builtin.debug:
     msg: >-

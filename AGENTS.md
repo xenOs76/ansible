@@ -171,10 +171,11 @@ nix shell nixpkgs#ansible-lint --command bash -c \
    - `fix(scripts): ...`
    - `refactor(common): ...`
    - `docs(cka_lab): ...`
-2. **Gitea Upstream Remote**:
+1. **Gitea Upstream Remote**:
    - `origin` is `git@git.priv.os76.xyz:xeno/os76-ansible.git` on branch `master`.
-3. **Public GitHub Mirror**:
+1. **Public GitHub Mirror**:
    - The `k8s-homelab/` subproject is mirrored publicly at `/home/xeno/git/github/public/ansible/` (`git@github.com:xenOs76/ansible.git` on branch `main`).
-   - When modifying `k8s-homelab`, synchronize changed files to `/home/xeno/git/github/public/ansible/k8s-homelab/`, ensure clean git status, and push to GitHub `origin/main`.
-4. **Changelog**:
+   - Only synchronize changed files to `/home/xeno/git/github/public/ansible/k8s-homelab/` and push to GitHub `origin/main` when explicitly requested by the user.
+1. **Changelog**:
    - Every user-facing feature, fix, or scenario addition must be documented under `## [Unreleased]` in `k8s-homelab/CHANGELOG.md`.
+   - Maintain a concise, high-level summary style: group related items by major feature area in bold, avoiding deeply nested sub-bullets or individual script/manifest file path clutter.

@@ -114,10 +114,16 @@ Dedicated Ansible role for provisioning isolated hands-on Certified Kubernetes A
      - Local manual PV binding with `Retain` reclaim policy (`01-local-pv-pvc.yaml`).
      - PVC online volume expansion drill (`02-pvc-expansion.yaml`).
      - Reclaim policy step-by-step drill guide (`03-reclaim-policy-drill.md`).
+  6. **Ceph RBD Block Storage (`06-rbd/`)**:
+     - Dynamic Ceph RBD PVC and consumer Pod with ext4 filesystem (`01-rbd-dynamic-filesystem.yaml`).
+     - Raw block volume with `volumeMode: Block` and `volumeDevices` (`02-rbd-raw-block.yaml`).
+     - Static Ceph CSI PV, PVC, and consumer Pod binding (`03-rbd-static-pv-pvc-pod.yaml`).
+     - Live online PVC volume expansion drill (`04-rbd-pvc-expansion.yaml`).
+     - Dedicated test suite: `test-rbd-volumes.sh`.
 - **Artifacts**:
   - Volume practice directory: `/home/vagrant/cka/volumes/`
-  - Automated verification test script: `/home/vagrant/cka/volumes/test-nfs-mounts.sh`
-  - Practice guide: `/home/vagrant/cka/volumes/README.md`
+  - Automated verification test scripts: `/home/vagrant/cka/volumes/test-nfs-mounts.sh` and `06-rbd/test-rbd-volumes.sh`
+  - Practice guide: `/home/vagrant/cka/volumes/README.md` and `/home/vagrant/cka/volumes/06-rbd/README.md`
 
 ### Scenario 6: Deployments, ReplicaSets & Rollouts Practice (`deployments`)
 

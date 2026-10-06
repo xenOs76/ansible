@@ -50,6 +50,13 @@ spec:
       storage: 1Gi
 EOF
 
+echo "Waiting for PVC '${PVC_NAME}' to be dynamically bound..."
+if ! kubectl wait pvc "${PVC_NAME}" -n "${NAMESPACE}" --for=jsonpath='{.status.phase}'=Bound --timeout=60s; then
+  echo "Error: PVC '${PVC_NAME}' failed to bind within 60s!" >&2
+  kubectl describe pvc "${PVC_NAME}" -n "${NAMESPACE}" >&2
+  exit 1
+fi
+
 # 3. Create consumer Pod on a worker node
 # Find first ready worker node
 WORKER_NODE=$(kubectl get nodes -l '!node-role.kubernetes.io/control-plane' -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
@@ -65,6 +72,7 @@ metadata:
   name: ${POD_NAME}
 spec:
   nodeName: ${WORKER_NODE}
+  terminationGracePeriodSeconds: 1
   containers:
     - name: writer
       image: busybox:1.36
@@ -89,7 +97,7 @@ echo "Volume content: ${WRITTEN_CONTENT}"
 if echo "${WRITTEN_CONTENT}" | grep -q "Ceph block storage successfully mounted"; then
   echo "===================================================================="
   echo "✔ SUCCESS: Ceph/Rook block volume dynamically mapped & verified!"
-  echo "  Provisioner: rook-ceph.rbd.csi.ceph.io"
+  echo "  Provisioner: rook-ceph.rbd.csi.ceph.com"
   echo "  Attached to: ${WORKER_NODE}"
   echo "===================================================================="
 else

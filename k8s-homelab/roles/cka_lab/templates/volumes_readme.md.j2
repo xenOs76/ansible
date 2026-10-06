@@ -31,10 +31,17 @@ All NFS examples connect to the control plane NFS export at:
 ├── 04-configmap-secret/
 │   ├── 01-configmap-volume-pod.yaml  # ConfigMap mounted as volume files with specific items
 │   └── 02-secret-volume-pod.yaml     # Secret mounted as volume files with defaultMode 0400
-└── 05-pv-pvc-lifecycle/
-    ├── 01-local-pv-pvc.yaml          # Local PV with storageClassName: manual & Retain policy
-    ├── 02-pvc-expansion.yaml         # StorageClass & PVC demonstrating volume expansion
-    └── 03-reclaim-policy-drill.md    # Reclaim policy lifecycle drill (Retain vs Delete)
+├── 05-pv-pvc-lifecycle/
+│   ├── 01-local-pv-pvc.yaml          # Local PV with storageClassName: manual & Retain policy
+│   ├── 02-pvc-expansion.yaml         # StorageClass & PVC demonstrating volume expansion
+│   └── 03-reclaim-policy-drill.md    # Reclaim policy lifecycle drill (Retain vs Delete)
+└── 06-rbd/
+    ├── README.md                     # Dedicated Ceph RBD drills guide
+    ├── test-rbd-volumes.sh           # Automated Ceph RBD test script
+    ├── 01-rbd-dynamic-filesystem.yaml # Dynamic PVC & consumer Pod (Filesystem mode)
+    ├── 02-rbd-raw-block.yaml         # Raw block PVC & consumer Pod (Block mode)
+    ├── 03-rbd-static-pv-pvc-pod.yaml # Static Ceph CSI PV, PVC, and consumer Pod
+    └── 04-rbd-pvc-expansion.yaml     # Online volume expansion drill
 ```
 
 ---
@@ -98,3 +105,23 @@ Run the test script to automatically validate all NFS mounts, DNS resolution, an
 ```bash
 ./test-nfs-mounts.sh
 ```
+
+### Drill 6: Ceph RBD Volume Operations & Modes
+
+Practice dynamic filesystem mounting, raw block device consumption (`volumeMode: Block`), and online PVC expansion:
+
+```bash
+# 1. Dynamic Filesystem Pod
+kubectl apply -f 06-rbd/01-rbd-dynamic-filesystem.yaml
+kubectl wait --for=condition=Ready pod/rbd-fs-consumer-pod --timeout=120s
+kubectl exec rbd-fs-consumer-pod -- cat /mnt/storage/data.txt
+
+# 2. Raw Block Device Pod
+kubectl apply -f 06-rbd/02-rbd-raw-block.yaml
+kubectl wait --for=condition=Ready pod/rbd-raw-block-consumer-pod --timeout=120s
+kubectl exec rbd-raw-block-consumer-pod -- test -b /dev/rbdblock && echo "Block device OK"
+
+# 3. Automated RBD Verification
+06-rbd/test-rbd-volumes.sh
+```
+

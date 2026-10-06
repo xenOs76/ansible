@@ -1,0 +1,45 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: rbd-claim-fs
+  namespace: default
+  labels:
+    app.kubernetes.io/part-of: cka-lab
+    cka.practice/scenario: rbd-volumes
+spec:
+  accessModes:
+    - ReadWriteOnce
+  volumeMode: Filesystem
+  storageClassName: {{ cka_lab_rbd_storage_class }}
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: rbd-fs-consumer-pod
+  namespace: default
+  labels:
+    app: rbd-fs-consumer
+    app.kubernetes.io/part-of: cka-lab
+spec:
+  containers:
+    - name: writer
+      image: busybox:1.36
+      command:
+        - sh
+        - -c
+        - |
+          echo "Ceph RBD filesystem mounted on $(hostname) at $(date)" >> /mnt/storage/data.txt
+          while true; do
+            date >> /mnt/storage/heartbeat.log
+            sleep 10
+          done
+      volumeMounts:
+        - name: rbd-storage
+          mountPath: /mnt/storage
+  volumes:
+    - name: rbd-storage
+      persistentVolumeClaim:
+        claimName: rbd-claim-fs

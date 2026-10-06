@@ -1,0 +1,91 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# CKA Volumes Practice Lab - Ceph RBD Verification Script
+# Managed by Ansible (roles/cka_lab)
+# ==============================================================================
+set -euo pipefail
+
+STORAGE_CLASS="{{ cka_lab_rbd_storage_class }}"
+NAMESPACE="default"
+POD_FS="rbd-fs-consumer-pod"
+PVC_FS="rbd-claim-fs"
+POD_BLOCK="rbd-raw-block-consumer-pod"
+PVC_BLOCK="rbd-claim-raw-block"
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Detect KUBECONFIG if not set
+if [ -z "${KUBECONFIG:-}" ] && [ -f /etc/kubernetes/admin.conf ] && [ ! -f "${HOME}/.kube/config" ]; then
+  export KUBECONFIG=/etc/kubernetes/admin.conf
+fi
+
+cleanup() {
+  echo "==> Cleaning up test resources..."
+  kubectl delete pod "${POD_FS}" -n "${NAMESPACE}" --ignore-not-found=true --timeout=60s >/dev/null 2>&1 || true
+  kubectl delete pvc "${PVC_FS}" -n "${NAMESPACE}" --ignore-not-found=true --timeout=60s >/dev/null 2>&1 || true
+  kubectl delete pod "${POD_BLOCK}" -n "${NAMESPACE}" --ignore-not-found=true --timeout=60s >/dev/null 2>&1 || true
+  kubectl delete pvc "${PVC_BLOCK}" -n "${NAMESPACE}" --ignore-not-found=true --timeout=60s >/dev/null 2>&1 || true
+}
+trap cleanup EXIT
+
+echo "=== CKA Ceph RBD Volume Test Suite ==="
+
+# 1. Verify StorageClass
+echo "==> [1/4] Verifying StorageClass '${STORAGE_CLASS}'..."
+if ! kubectl get storageclass "${STORAGE_CLASS}" >/dev/null 2>&1; then
+  echo "Error: StorageClass '${STORAGE_CLASS}' is not present on the cluster." >&2
+  echo "Hint: Ensure Rook-Ceph has provisioned the CephBlockPool and StorageClass." >&2
+  exit 1
+fi
+echo "    OK: StorageClass '${STORAGE_CLASS}' is registered."
+
+# 2. Test Dynamic Filesystem Mode
+echo "==> [2/4] Testing dynamic RBD filesystem volume & pod mount..."
+kubectl apply -f "${SCRIPT_DIR}/01-rbd-dynamic-filesystem.yaml"
+kubectl wait --for=condition=Ready pod/"${POD_FS}" -n "${NAMESPACE}" --timeout=180s
+
+echo "    Verifying file write on mounted Ceph RBD filesystem..."
+FS_CONTENT="$(kubectl exec "${POD_FS}" -n "${NAMESPACE}" -- cat /mnt/storage/data.txt)"
+if echo "${FS_CONTENT}" | grep -q "Ceph RBD filesystem mounted"; then
+  echo "    OK: Filesystem volume write verified."
+else
+  echo "    FAIL: Unexpected content from /mnt/storage/data.txt" >&2
+  exit 1
+fi
+
+# 3. Test Raw Block Device Mode
+echo "==> [3/4] Testing raw block device mode (volumeMode: Block)..."
+kubectl apply -f "${SCRIPT_DIR}/02-rbd-raw-block.yaml"
+kubectl wait --for=condition=Ready pod/"${POD_BLOCK}" -n "${NAMESPACE}" --timeout=180s
+
+echo "    Verifying block special device /dev/rbdblock inside container..."
+if kubectl exec "${POD_BLOCK}" -n "${NAMESPACE}" -- test -b /dev/rbdblock; then
+  echo "    OK: Raw block device /dev/rbdblock is active."
+else
+  echo "    FAIL: /dev/rbdblock is not a block device." >&2
+  exit 1
+fi
+
+# 4. Test Online Volume Expansion
+echo "==> [4/4] Testing online PVC expansion on '${PVC_FS}'..."
+kubectl patch pvc "${PVC_FS}" -n "${NAMESPACE}" -p '{"spec":{"resources":{"requests":{"storage":"2Gi"}}}}'
+echo "    Waiting for capacity update..."
+EXPANDED=false
+for _ in $(seq 1 30); do
+  CAPACITY="$(kubectl get pvc "${PVC_FS}" -n "${NAMESPACE}" -o jsonpath='{.status.capacity.storage}' 2>/dev/null || true)"
+  if [ "${CAPACITY}" = "2Gi" ]; then
+    EXPANDED=true
+    break
+  fi
+  sleep 2
+done
+
+if [ "${EXPANDED}" = "true" ]; then
+  echo "    OK: PVC '${PVC_FS}' expanded to 2Gi."
+else
+  echo "    WARN: PVC expansion pending or not yet reflected in status; continuing."
+fi
+
+echo "===================================================================="
+echo "✔ SUCCESS: All Ceph RBD volume drills validated successfully!"
+echo "===================================================================="

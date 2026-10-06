@@ -96,8 +96,6 @@ spec:
     ssl: false
   crashCollector:
     disable: false
-  cleanupPolicy:
-    wipeStorage: false
   placement:
     all:
       nodeAffinity:
@@ -140,7 +138,7 @@ metadata:
   name: ${STORAGE_CLASS}
   annotations:
     storageclass.kubernetes.io/is-default-class: "true"
-provisioner: ${NAMESPACE}.rbd.csi.ceph.io
+provisioner: ${NAMESPACE}.rbd.csi.ceph.com
 parameters:
   clusterID: ${NAMESPACE}
   pool: replicapool

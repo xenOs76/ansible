@@ -205,6 +205,9 @@ cka_lab_nfs_server_ip: >-
 cka_lab_nfs_export_dir: "/srv/nfsroot"
 cka_lab_nfs_export_subnet: "{{ '192.168.56.0/24' if ('preprod' in groups) else '10.0.0.0/8' }}"
 cka_lab_nfs_export_options: "rw,sync,no_subtree_check,no_root_squash,insecure"
+cka_lab_rbd_storage_class: "{{ rook_ceph_storage_class_name | default('rook-ceph-block') }}"
+cka_lab_rbd_namespace: "{{ rook_ceph_namespace | default('rook-ceph') }}"
+cka_lab_rbd_pool_name: "{{ rook_ceph_pool_name | default('replicapool') }}"
 
 # Scenario: deployments (Deployments, ReplicaSets, Rollouts, and Strategy Drills)
 cka_lab_deployments_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/deployments"

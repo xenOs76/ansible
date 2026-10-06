@@ -1,4 +1,4 @@
-.PHONY: all lint syntax inventory deps check-deps preprod-up preprod-destroy preprod-recreate preprod-status preprod-provision preprod-sync-kubeconfig prod-sync-kubeconfig preprod-deploy preprod-caddy preprod-cni preprod-ceph prod-ceph preprod-upgrade preprod-reset preprod-cka-lab help
+.PHONY: all lint syntax inventory deps check-deps preprod-up preprod-destroy preprod-recreate preprod-status preprod-provision preprod-sync-kubeconfig prod-sync-kubeconfig preprod-deploy preprod-caddy preprod-cni preprod-ceph prod-ceph preprod-ceph-status preprod-upgrade preprod-reset preprod-cka-lab help
 
 all: help
 
@@ -22,6 +22,7 @@ help:
 	@echo "make preprod-cni       - Install/verify Cilium CNI on preprod"
 	@echo "make preprod-ceph      - Deploy/configure Rook-Ceph block storage on preprod"
 	@echo "make prod-ceph         - Deploy/configure Rook-Ceph block storage on prod"
+	@echo "make preprod-ceph-status - Inspect Rook-Ceph operator, cluster, and Ceph status"
 	@echo "make preprod-upgrade   - Run rolling upgrade on preprod"
 	@echo "make preprod-reset     - Teardown/reset cluster on preprod"
 	@echo "make preprod-cka-lab   - Deploy CKA training lab scenarios on preprod"
@@ -56,6 +57,7 @@ preprod-up:
 
 preprod-destroy:
 	./scripts/shell.sh --run "vagrant destroy -f"
+	@virsh vol-delete --pool default k8s-homelab_kube-control-plane-vdb.qcow2 2>/dev/null || true
 	@rm -f admin.conf kubeconfig.preprod
 
 preprod-status:
@@ -86,6 +88,9 @@ preprod-ceph:
 
 prod-ceph:
 	./scripts/run-playbook.sh -e prod -p ceph.yml
+
+preprod-ceph-status:
+	@./scripts/check-ceph-status.sh
 
 preprod-upgrade:
 	./scripts/run-playbook.sh -e preprod -p upgrade.yml

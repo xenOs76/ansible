@@ -24,7 +24,7 @@ metadata:
 {% else %}
     storageclass.kubernetes.io/is-default-class: "false"
 {% endif %}
-provisioner: "{{ rook_ceph_namespace }}.rbd.csi.ceph.io"
+provisioner: "{{ rook_ceph_namespace }}.rbd.csi.ceph.com"
 parameters:
   clusterID: "{{ rook_ceph_namespace }}"
   pool: "{{ rook_ceph_pool_name }}"

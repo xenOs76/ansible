@@ -114,6 +114,7 @@
     - "{{ cka_lab_volumes_dir }}/03-hostpath"
     - "{{ cka_lab_volumes_dir }}/04-configmap-secret"
     - "{{ cka_lab_volumes_dir }}/05-pv-pvc-lifecycle"
+    - "{{ cka_lab_volumes_dir }}/06-rbd"
   tags:
     - cka_lab
     - volumes
@@ -142,6 +143,12 @@
     - {src: "volumes_05_local_pv_pvc.yaml.j2", dest: "05-pv-pvc-lifecycle/01-local-pv-pvc.yaml"}
     - {src: "volumes_05_pvc_expansion.yaml.j2", dest: "05-pv-pvc-lifecycle/02-pvc-expansion.yaml"}
     - {src: "volumes_05_reclaim_policy_drill.md.j2", dest: "05-pv-pvc-lifecycle/03-reclaim-policy-drill.md"}
+    - {src: "volumes_06_rbd_readme.md.j2", dest: "06-rbd/README.md", mode: "0644"}
+    - {src: "volumes_06_test_rbd_volumes.sh.j2", dest: "06-rbd/test-rbd-volumes.sh", mode: "0755"}
+    - {src: "volumes_06_rbd_dynamic_filesystem.yaml.j2", dest: "06-rbd/01-rbd-dynamic-filesystem.yaml"}
+    - {src: "volumes_06_rbd_raw_block.yaml.j2", dest: "06-rbd/02-rbd-raw-block.yaml"}
+    - {src: "volumes_06_rbd_static_pv_pvc_pod.yaml.j2", dest: "06-rbd/03-rbd-static-pv-pvc-pod.yaml"}
+    - {src: "volumes_06_rbd_pvc_expansion.yaml.j2", dest: "06-rbd/04-rbd-pvc-expansion.yaml"}
   loop_control:
     label: "volumes/{{ item.dest }}"
   tags:
