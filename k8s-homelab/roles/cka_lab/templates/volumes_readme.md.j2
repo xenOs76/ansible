@@ -35,13 +35,21 @@ All NFS examples connect to the control plane NFS export at:
 │   ├── 01-local-pv-pvc.yaml          # Local PV with storageClassName: manual & Retain policy
 │   ├── 02-pvc-expansion.yaml         # StorageClass & PVC demonstrating volume expansion
 │   └── 03-reclaim-policy-drill.md    # Reclaim policy lifecycle drill (Retain vs Delete)
-└── 06-rbd/
-    ├── README.md                     # Dedicated Ceph RBD drills guide
-    ├── test-rbd-volumes.sh           # Automated Ceph RBD test script
-    ├── 01-rbd-dynamic-filesystem.yaml # Dynamic PVC & consumer Pod (Filesystem mode)
-    ├── 02-rbd-raw-block.yaml         # Raw block PVC & consumer Pod (Block mode)
-    ├── 03-rbd-static-pv-pvc-pod.yaml # Static Ceph CSI PV, PVC, and consumer Pod
-    └── 04-rbd-pvc-expansion.yaml     # Online volume expansion drill
+├── 06-rbd/
+│   ├── README.md                     # Dedicated Ceph RBD drills guide
+│   ├── test-rbd-volumes.sh           # Automated Ceph RBD test script
+│   ├── 01-rbd-dynamic-filesystem.yaml # Dynamic PVC & consumer Pod (Filesystem mode)
+│   ├── 02-rbd-raw-block.yaml         # Raw block PVC & consumer Pod (Block mode)
+│   ├── 03-rbd-static-pv-pvc-pod.yaml # Static Ceph CSI PV, PVC, and consumer Pod
+│   └── 04-rbd-pvc-expansion.yaml     # Online volume expansion drill
+└── 07-iscsi/
+    ├── README.md                     # Dedicated iSCSI drills guide
+    ├── test-iscsi-volumes.sh         # Automated iSCSI test script
+    ├── 01-iscsi-direct-pod.yaml      # Direct pod with inline iscsi volume
+    ├── 02-iscsi-pv-pvc-pod.yaml      # Static PV, PVC (ReadWriteOnce), and Pod mount
+    ├── 03-iscsi-raw-block.yaml       # Raw block mode (volumeMode: Block) with volumeDevices
+    ├── 04-iscsi-two-nodes-rwo.yaml   # Multi-node RWO attach conflict demonstration
+    └── 05-iscsi-chap-secret.yaml     # Reference CHAP secret and authenticated PV
 ```
 
 ---
@@ -123,5 +131,29 @@ kubectl exec rbd-raw-block-consumer-pod -- test -b /dev/rbdblock && echo "Block 
 
 # 3. Automated RBD Verification
 06-rbd/test-rbd-volumes.sh
+```
+
+### Drill 7: iSCSI Volume Operations & Raw Block Devices
+
+Practice direct in-tree Pod volume mounting, static PersistentVolume binding, raw block mode, and multi-node fencing over iSCSI:
+
+```bash
+# 1. Direct In-tree Pod Mount
+kubectl apply -f 07-iscsi/01-iscsi-direct-pod.yaml
+kubectl wait --for=condition=Ready pod/iscsi-direct-pod --timeout=120s
+kubectl exec iscsi-direct-pod -- cat /mnt/storage/direct-test.txt
+
+# 2. Static PV & PVC Mount
+kubectl apply -f 07-iscsi/02-iscsi-pv-pvc-pod.yaml
+kubectl wait --for=condition=Ready pod/iscsi-pvc-consumer-pod --timeout=120s
+kubectl exec iscsi-pvc-consumer-pod -- df -h /usr/share/nginx/html
+
+# 3. Raw Block Mode (volumeMode: Block)
+kubectl apply -f 07-iscsi/03-iscsi-raw-block.yaml
+kubectl wait --for=condition=Ready pod/iscsi-raw-block-consumer-pod --timeout=120s
+kubectl exec iscsi-raw-block-consumer-pod -- ls -l /dev/iscsiblock
+
+# 4. Automated iSCSI Verification
+07-iscsi/test-iscsi-volumes.sh
 ```
 

@@ -262,5 +262,20 @@ export ETCDCTL_API=3
 EOF
 chmod 0644 /etc/profile.d/etcd.sh
 
+# ------------------------------------------------------------------------------
+# 4. Install glow Markdown CLI reader via official release .deb package
+# ------------------------------------------------------------------------------
+GLOW_VERSION="${GLOW_VERSION:-2.1.1}"
+if ! command -v glow >/dev/null 2>&1; then
+  ARCH=$(dpkg --print-architecture)
+  echo "Installing glow (${GLOW_VERSION}) via official release .deb package..."
+  TMP_GLOW_DEB="/tmp/glow_${ARCH}.deb"
+  curl -fsSL "https://github.com/charmbracelet/glow/releases/download/v${GLOW_VERSION}/glow_${GLOW_VERSION}_${ARCH}.deb" -o "$TMP_GLOW_DEB"
+  apt-get install -y "$TMP_GLOW_DEB"
+  rm -f "$TMP_GLOW_DEB"
+else
+  echo "glow is already installed."
+fi
+
 echo "=== Control Plane Tools Installed Successfully ==="
 

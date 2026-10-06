@@ -19,3 +19,10 @@
     - bootstrap
     - tools
     - etcd
+
+- name: Install glow Markdown CLI viewer
+  ansible.builtin.include_tasks: glow.yml
+  tags:
+    - bootstrap
+    - tools
+    - glow

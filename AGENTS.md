@@ -43,6 +43,8 @@ Multi-node Kubernetes 1.34+ cluster automated using `kubeadm`, `containerd`, and
 1. **`cilium`**: Helm-based Cilium CNI deployment with eBPF host routing and status health checks.
 1. **`caddy`**: Ingress reverse proxy with PowerDNS DNS-01 ACME Let's Encrypt certificates.
 1. **`rook_ceph`**: Cloud-native block storage orchestration via Rook-Ceph operator, backed by a dedicated unformatted volume on the control plane node and dynamically provisioned to worker nodes via Ceph CSI.
+1. **`nfs_server`**: Linux kernel NFS storage server on control plane exporting `/srv/nfsroot` to cluster worker nodes, provisioned automatically during `make preprod-up` and supported across preprod and prod.
+1. **`iscsi_target`**: Standalone Linux-IO (LIO) iSCSI target server on control plane with file-backed LUNs for raw block and PV/PVC testing (`make preprod-iscsi`).
 1. **`control_plane_tools`**: Control plane utilities including `etcdctl`, `etcdutl` (pinned `v3.5.16` with system-wide `ETCDCTL_API=3`), `k9s` (pinned `v0.51.0` with transparent Nord skin), and diagnostics.
 1. **`cka_lab`**: Hands-on CKA exam practice scenarios deployed exclusively via `make preprod-cka-lab` (`playbooks/cka_lab.yml`), including initial steps reminder MOTD activation.
 1. **`upgrade`**: Rolling node upgrades (`kubeadm upgrade apply/node`, `kubelet`, `kubectl`).

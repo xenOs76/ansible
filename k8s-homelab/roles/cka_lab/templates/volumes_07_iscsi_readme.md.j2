@@ -1,0 +1,145 @@
+# CKA Lab Exercise: iSCSI Storage Volume & Mount Drills
+
+Hands-on training scenarios for the Certified Kubernetes Administrator (CKA) exam covering iSCSI storage integration: direct in-tree Pod volume mounts, static PersistentVolumes and PersistentVolumeClaims with `ReadWriteOnce`, raw block volume mounts (`volumeMode: Block`), single-writer multi-attach fencing, and CHAP credentials.
+
+---
+
+## 1. Overview & Architecture
+
+The storage target is hosted on `kube-control-plane` via the Linux-IO (`LIO`) kernel target subsystem (`targetcli-fb`):
+
+- **Target Portal**: `{{ cka_lab_iscsi_portal }}`
+- **Target IQN**: `{{ cka_lab_iscsi_iqn }}`
+- **LUN 1**: 512 MiB sparse volume &rarr; Filesystem target (`ext4`)
+- **LUN 2**: 512 MiB sparse volume &rarr; Raw block target (`volumeMode: Block`)
+- **Access Policy**: Subnet-filtered (`192.168.56.0/24`) without mandatory CHAP authentication
+
+In Kubernetes, the in-tree `iscsi` volume plugin leverages host-level `open-iscsi` (`iscsiadm`) and `iscsid` on worker nodes to log in and attach block devices under `/dev/disk/by-path/`.
+
+---
+
+## 2. Directory Layout
+
+```text
+{{ cka_lab_volumes_dir }}/07-iscsi/
+├── README.md                     # This exercise guide
+├── test-iscsi-volumes.sh         # Non-interactive automated test suite
+├── 01-iscsi-direct-pod.yaml      # Direct pod spec with inline iscsi volume
+├── 02-iscsi-pv-pvc-pod.yaml      # Static PV, PVC (ReadWriteOnce), and Pod mount
+├── 03-iscsi-raw-block.yaml       # Raw block mode (volumeMode: Block) with volumeDevices
+├── 04-iscsi-two-nodes-rwo.yaml   # Multi-node RWO attach conflict demonstration
+└── 05-iscsi-chap-secret.yaml     # Reference CHAP secret and authenticated PV
+```
+
+---
+
+## 3. Host Discovery & Sanity Checks
+
+Before scheduling pods, trainees can test iSCSI portal visibility from any worker node (`kube-worker-1`):
+
+```bash
+# Discover available targets from worker
+sudo iscsiadm -m discovery -t sendtargets -p {{ cka_lab_iscsi_portal }}
+
+# Expected output:
+# {{ cka_lab_iscsi_portal }},1 {{ cka_lab_iscsi_iqn }}
+```
+
+---
+
+## 4. Hands-on Drills
+
+### Drill 1: Direct In-Tree Pod Volume Mount
+
+Mounts LUN 1 directly without an intermediary PersistentVolume:
+
+1. **Deploy the Pod**:
+
+   ```bash
+   kubectl apply -f 01-iscsi-direct-pod.yaml
+   kubectl wait --for=condition=Ready pod/iscsi-direct-pod --timeout=120s
+   ```
+
+2. **Verify Storage Attachment**:
+
+   ```bash
+   kubectl exec iscsi-direct-pod -- df -h /mnt/storage
+   kubectl exec iscsi-direct-pod -- cat /mnt/storage/direct-test.txt
+   ```
+
+3. **Cleanup**:
+
+   ```bash
+   kubectl delete -f 01-iscsi-direct-pod.yaml
+   ```
+
+### Drill 2: Static PersistentVolume & PersistentVolumeClaim
+
+Standard CKA exam pattern: declare an administrator-managed PV with `ReadWriteOnce` access mode, bind it with a PVC, and mount it inside a workload:
+
+1. **Deploy PV, PVC, and Consumer Pod**:
+
+   ```bash
+   kubectl apply -f 02-iscsi-pv-pvc-pod.yaml
+   kubectl wait --for=condition=Ready pod/iscsi-pvc-consumer-pod --timeout=120s
+   ```
+
+2. **Inspect Binding & Mount**:
+
+   ```bash
+   kubectl get pv iscsi-static-pv
+   kubectl get pvc iscsi-claim
+   kubectl exec iscsi-pvc-consumer-pod -- df -h /mnt/storage
+   ```
+
+3. **Cleanup**:
+
+   ```bash
+   kubectl delete -f 02-iscsi-pv-pvc-pod.yaml
+   ```
+
+### Drill 3: Raw Block Device Mode (`volumeMode: Block`)
+
+When workloads (such as raw databases or storage operators) bypass host filesystems and consume block devices directly:
+
+1. **Deploy Raw Block Definitions**:
+
+   ```bash
+   kubectl apply -f 03-iscsi-raw-block.yaml
+   kubectl wait --for=condition=Ready pod/iscsi-raw-block-consumer-pod --timeout=120s
+   ```
+
+2. **Verify Block Device Inside Container**:
+
+   ```bash
+   kubectl exec iscsi-raw-block-consumer-pod -- ls -l /dev/iscsiblock
+   kubectl exec iscsi-raw-block-consumer-pod -- dd if=/dev/urandom of=/dev/iscsiblock bs=1M count=5 conv=fsync
+   ```
+
+3. **Cleanup**:
+
+   ```bash
+   kubectl delete -f 03-iscsi-raw-block.yaml
+   ```
+
+### Drill 4: ReadWriteOnce Fencing & Multi-Node Conflicts
+
+Understand why `ReadWriteOnce` restricts read/write mounting to a single node:
+
+```bash
+kubectl apply -f 04-iscsi-two-nodes-rwo.yaml
+kubectl get pods -o wide -l app=iscsi-rwo-test
+# Inspect events to observe FailedAttachVolume / Multi-Attach errors:
+kubectl describe pod iscsi-rwo-pod-node2
+kubectl delete -f 04-iscsi-two-nodes-rwo.yaml
+```
+
+---
+
+## 5. Automated Verification
+
+Execute the complete end-to-end automated verification script:
+
+```bash
+./test-iscsi-volumes.sh
+```

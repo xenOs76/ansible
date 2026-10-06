@@ -1,7 +1,6 @@
 ---
 # Scenario toggles (organized by CKA exam domain)
 cka_lab_scenario_motd_enabled: true
-cka_lab_scenario_glow_enabled: true
 cka_lab_scenario_user_rbac_enabled: true
 cka_lab_scenario_secrets_enabled: true
 cka_lab_scenario_configmaps_enabled: true
@@ -16,13 +15,6 @@ cka_lab_scenario_storage_classes_enabled: true
 cka_lab_scenario_cluster_troubleshooting_enabled: true
 cka_lab_scenario_crds_enabled: true
 cka_lab_scenario_chaos_troubleshooting_enabled: false
-
-# Scenario: glow (Charm Glow Markdown CLI Viewer)
-# Reference: https://github.com/charmbracelet/glow#package-manager
-cka_lab_glow_apt_key_url: "https://repo.charm.sh/apt/gpg.key"
-cka_lab_glow_apt_key_fingerprint: "ED927B38BE981E53CA09153D03BBF595D4DFD35C"  # gitleaks:allow
-cka_lab_glow_apt_keyring: "/etc/apt/keyrings/charm.gpg"
-cka_lab_glow_apt_repo: "deb [signed-by=/etc/apt/keyrings/charm.gpg] https://repo.charm.sh/apt/ * *"
 
 # Scenario: motd (CKA Initial Steps Reminder Announcement)
 cka_lab_motd_user: "{{ ansible_user | default('vagrant') }}"
@@ -208,6 +200,10 @@ cka_lab_nfs_export_options: "rw,sync,no_subtree_check,no_root_squash,insecure"
 cka_lab_rbd_storage_class: "{{ rook_ceph_storage_class_name | default('rook-ceph-block') }}"
 cka_lab_rbd_namespace: "{{ rook_ceph_namespace | default('rook-ceph') }}"
 cka_lab_rbd_pool_name: "{{ rook_ceph_pool_name | default('replicapool') }}"
+cka_lab_iscsi_portal: "{{ cka_lab_nfs_server_ip }}:3260"
+cka_lab_iscsi_iqn: "iqn.2026-10.xyz.os76:storage.target01"
+cka_lab_iscsi_fs_lun: 1
+cka_lab_iscsi_block_lun: 2
 
 # Scenario: deployments (Deployments, ReplicaSets, Rollouts, and Strategy Drills)
 cka_lab_deployments_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/deployments"

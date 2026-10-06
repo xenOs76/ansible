@@ -48,6 +48,14 @@
     - modules
     - ceph
 
+- name: Load iscsi_tcp kernel module
+  ansible.builtin.command: modprobe iscsi_tcp
+  changed_when: false
+  tags:
+    - common
+    - modules
+    - iscsi
+
 - name: Configure sysctl parameters for Kubernetes
   ansible.builtin.template:
     src: k8s-sysctl.conf.j2
@@ -79,6 +87,19 @@
     - common
     - packages
 
+- name: Configure APT to tolerate repository date and clock drift
+  ansible.builtin.copy:
+    dest: /etc/apt/apt.conf.d/99clock-drift.conf
+    content: |
+      Acquire::Check-Valid-Until "false";
+      Acquire::Check-Date "false";
+    owner: root
+    group: root
+    mode: "0644"
+  tags:
+    - common
+    - packages
+
 - name: Add OS76 custom APT repository
   ansible.builtin.apt_repository:
     repo: "{{ os76_apt_repo }}"
@@ -103,11 +124,37 @@
       - tar
       - bash-completion
       - nfs-common
+      - open-iscsi
     state: present
     update_cache: true
   tags:
     - common
     - packages
+
+- name: Ensure iscsid service is enabled and started
+  ansible.builtin.systemd:
+    name: iscsid
+    enabled: true
+    state: started
+  tags:
+    - common
+    - packages
+    - iscsi
+
+- name: Ensure nfs-server.local DNS mapping exists in /etc/hosts
+  ansible.builtin.lineinfile:
+    path: /etc/hosts
+    regexp: '.*(\s+)nfs-server\.local(\s*)$'
+    line: >-
+      {{
+        hostvars[groups['control_plane'][0]]['node_ip']
+        | default(hostvars[groups['control_plane'][0]]['ansible_host']
+        | default('192.168.56.10'))
+      }} {{ nfs_server_hostname | default('nfs-server.local') }}
+    state: present
+  tags:
+    - common
+    - nfs
 
 - name: Install custom OS76 packages
   ansible.builtin.apt:

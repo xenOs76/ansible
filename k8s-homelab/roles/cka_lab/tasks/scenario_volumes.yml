@@ -1,30 +1,4 @@
 ---
-- name: Install NFS server and client packages on control plane
-  ansible.builtin.apt:
-    name:
-      - nfs-kernel-server
-      - nfs-common
-    state: present
-  tags:
-    - cka_lab
-    - volumes
-    - nfs
-
-- name: Ensure NFS export directories exist with write permissions
-  ansible.builtin.file:
-    path: "{{ item }}"
-    state: directory
-    owner: root
-    group: root
-    mode: "0777"
-  loop:
-    - "{{ cka_lab_nfs_export_dir }}"
-    - "{{ cka_lab_nfs_export_dir }}/data"
-    - "{{ cka_lab_nfs_export_dir }}/reports"
-  tags:
-    - cka_lab
-    - volumes
-    - nfs
 
 - name: Create sample shared files on NFS export directory
   ansible.builtin.copy:
@@ -67,38 +41,6 @@
     - volumes
     - nfs
 
-- name: Configure NFS export for worker subnet in /etc/exports
-  ansible.builtin.lineinfile:
-    path: /etc/exports
-    regexp: '^{{ cka_lab_nfs_export_dir | regex_escape }}\s+'
-    line: "{{ cka_lab_nfs_export_dir }} {{ cka_lab_nfs_export_subnet }}({{ cka_lab_nfs_export_options }})"
-    state: present
-  notify: Reload NFS exports
-  tags:
-    - cka_lab
-    - volumes
-    - nfs
-
-- name: Ensure nfs-server.local is mapped in /etc/hosts on control plane
-  ansible.builtin.lineinfile:
-    path: /etc/hosts
-    regexp: '.*(\s+)nfs-server\.local(\s*)$'
-    line: "{{ cka_lab_nfs_server_ip }} {{ cka_lab_nfs_server_hostname }}"
-    state: present
-  tags:
-    - cka_lab
-    - volumes
-    - nfs
-
-- name: Enable and start NFS server service
-  ansible.builtin.systemd:
-    name: nfs-kernel-server
-    enabled: true
-    state: started
-  tags:
-    - cka_lab
-    - volumes
-    - nfs
 
 - name: Ensure CKA lab volumes directories exist
   ansible.builtin.file:
@@ -115,6 +57,7 @@
     - "{{ cka_lab_volumes_dir }}/04-configmap-secret"
     - "{{ cka_lab_volumes_dir }}/05-pv-pvc-lifecycle"
     - "{{ cka_lab_volumes_dir }}/06-rbd"
+    - "{{ cka_lab_volumes_dir }}/07-iscsi"
   tags:
     - cka_lab
     - volumes
@@ -149,6 +92,13 @@
     - {src: "volumes_06_rbd_raw_block.yaml.j2", dest: "06-rbd/02-rbd-raw-block.yaml"}
     - {src: "volumes_06_rbd_static_pv_pvc_pod.yaml.j2", dest: "06-rbd/03-rbd-static-pv-pvc-pod.yaml"}
     - {src: "volumes_06_rbd_pvc_expansion.yaml.j2", dest: "06-rbd/04-rbd-pvc-expansion.yaml"}
+    - {src: "volumes_07_iscsi_readme.md.j2", dest: "07-iscsi/README.md", mode: "0644"}
+    - {src: "volumes_07_test_iscsi_volumes.sh.j2", dest: "07-iscsi/test-iscsi-volumes.sh", mode: "0755"}
+    - {src: "volumes_07_iscsi_01_direct_pod.yaml.j2", dest: "07-iscsi/01-iscsi-direct-pod.yaml"}
+    - {src: "volumes_07_iscsi_02_pv_pvc_pod.yaml.j2", dest: "07-iscsi/02-iscsi-pv-pvc-pod.yaml"}
+    - {src: "volumes_07_iscsi_03_raw_block.yaml.j2", dest: "07-iscsi/03-iscsi-raw-block.yaml"}
+    - {src: "volumes_07_iscsi_04_rwo_conflict.yaml.j2", dest: "07-iscsi/04-iscsi-two-nodes-rwo.yaml"}
+    - {src: "volumes_07_iscsi_05_chap_secret.yaml.j2", dest: "07-iscsi/05-iscsi-chap-secret.yaml"}
   loop_control:
     label: "volumes/{{ item.dest }}"
   tags:

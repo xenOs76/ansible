@@ -140,11 +140,13 @@ cat <<EOF | sudo tee /etc/modules-load.d/k8s.conf >/dev/null
 overlay
 br_netfilter
 rbd
+iscsi_tcp
 EOF
 
 sudo modprobe overlay
 sudo modprobe br_netfilter
 sudo modprobe rbd
+sudo modprobe iscsi_tcp
 
 cat <<EOF | sudo tee /etc/sysctl.d/k8s.conf >/dev/null
 net.bridge.bridge-nf-call-iptables  = 1
@@ -167,7 +169,8 @@ sudo sed -i '/\sswap\s/ s/^\(.*\)$/#\1/g' /etc/fstab
 echo "==> [6/7] Installing diagnostic tools..."
 echo "deb [trusted=yes] https://repo.os76.xyz/apt stable main" | sudo tee /etc/apt/sources.list.d/os76.list >/dev/null
 sudo apt-get update -y
-sudo apt-get -y install socat kubectl-netdrill bash-completion
+sudo apt-get -y install socat kubectl-netdrill bash-completion open-iscsi nfs-common
+sudo systemctl enable --now iscsid || true
 
 # ------------------------------------------------------------------------------
 # 7. System Package Upgrade

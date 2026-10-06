@@ -62,7 +62,17 @@
     - ceph
     - storage
 
-- name: 8. Display final cluster status
+- name: 8. Deploy NFS shared storage server
+  hosts: control_plane
+  become: true
+  roles:
+    - role: nfs_server
+      when: nfs_server_enabled | default(true)
+  tags:
+    - nfs
+    - storage
+
+- name: 9. Display final cluster status
   hosts: control_plane
   become: true
   tasks:

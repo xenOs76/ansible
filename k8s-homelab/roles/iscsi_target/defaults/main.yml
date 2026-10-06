@@ -1,0 +1,76 @@
+---
+# ==============================================================================
+# Role Defaults: iSCSI Target Server (LIO / targetcli)
+# ==============================================================================
+
+# Enable or disable iSCSI target provisioning
+iscsi_target_enabled: true
+
+# Target framework implementation: lio (Linux-IO kernel target subsystem)
+iscsi_target_framework: "lio"
+
+# Systemd service for LIO target restoration on boot
+iscsi_target_service: "rtslib-fb-targetctl"
+
+# Target IQN identifier (following standard iqn.yyyy-mm.reverse-domain:identifier)
+iscsi_target_iqn: "iqn.2026-10.xyz.os76:storage.target01"
+
+# Base directory for sparse file-backed LUNs
+iscsi_target_storage_dir: "/srv/iscsi"
+
+# Target Portal Group (TPG) tag
+iscsi_target_tpg_tag: 1
+
+# ------------------------------------------------------------------------------
+# LUN Definitions
+# ------------------------------------------------------------------------------
+# Default mode: tiny sparse image files (512 MiB each) in /srv/iscsi
+#
+# FUTURE REFACTORING OPTIONS:
+#
+# 1. LVM / Block Backstores (iblock / block plugin):
+#    If an LVM Volume Group (e.g., 'vg_storage') is provisioned on the host:
+#    iscsi_target_luns:
+#      - id: 1
+#        name: "lv_storage_lun1"
+#        type: "block"
+#        path: "/dev/vg_storage/lv_storage_lun1"
+#        description: "LVM-backed dynamic block LUN (iblock plugin)"
+#
+# 2. Raw Block / Dedicated Virtual Disk:
+#    If a second virtual disk (e.g., /dev/vdc) is added to Vagrantfile:
+#    iscsi_target_luns:
+#      - id: 1
+#        name: "vdc"
+#        type: "block"
+#        path: "/dev/vdc"
+#        description: "Direct raw block device (iblock plugin)"
+#
+# 3. CHAP Authentication:
+#    To enforce CHAP mutual or one-way authentication:
+#    iscsi_target_chap_enabled: false
+#    iscsi_target_incoming_user: "ckauser"
+#    iscsi_target_incoming_password: "CKAPassword2026!"
+# ------------------------------------------------------------------------------
+iscsi_target_luns:
+  - id: 1
+    name: "lun1.img"
+    type: "file"
+    size: "512M"
+    description: "Filesystem LUN (ext4) for Pod volume mounts"
+  - id: 2
+    name: "lun2.img"
+    type: "file"
+    size: "512M"
+    description: "Raw Block LUN for volumeMode: Block pod drills"
+
+# Permissive / demo access attributes (allows worker nodes without pre-registering IQNs)
+iscsi_target_generate_node_acls: 1
+iscsi_target_demo_mode_write_protect: 0
+iscsi_target_cache_dynamic_acls: 1
+iscsi_target_auth_enabled: 0
+
+# CHAP authentication toggle and credentials (disabled by default for lab ease)
+iscsi_target_chap_enabled: false
+iscsi_target_incoming_user: ""
+iscsi_target_incoming_password: ""

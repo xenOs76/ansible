@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# Managed by Ansible (roles/iscsi_target)
+# Purpose: Idempotently configure Linux-IO (LIO) target subsystem via targetcli
+# ==============================================================================
+set -euo pipefail
+
+TARGET_IQN="{{ iscsi_target_iqn }}"
+TPG_PATH="/iscsi/${TARGET_IQN}/tpg{{ iscsi_target_tpg_tag }}"
+STORAGE_DIR="{{ iscsi_target_storage_dir }}"
+
+# LUN definitions passed as JSON from Ansible
+LUNS_JSON='{{ iscsi_target_luns | to_json }}'
+
+echo "==> [LIO] Configuring iSCSI Backstores..."
+while IFS= read -r item; do
+  LUN_NAME="$(echo "${item}" | jq -r '.name')"
+  LUN_TYPE="$(echo "${item}" | jq -r '.type // "file"')"
+  LUN_PATH="$(echo "${item}" | jq -r '.path // empty')"
+
+  if [ "${LUN_TYPE}" = "file" ]; then
+    BACKSTORE_PATH="${STORAGE_DIR}/${LUN_NAME}"
+    if ! targetcli "ls /backstores/fileio/${LUN_NAME}" >/dev/null 2>&1; then
+      echo "    Creating FileIO backstore '${LUN_NAME}' (${BACKSTORE_PATH})..."
+      targetcli "/backstores/fileio create name=${LUN_NAME} file_or_dev=${BACKSTORE_PATH}"
+    else
+      echo "    FileIO backstore '${LUN_NAME}' already exists."
+    fi
+  else
+    if ! targetcli "ls /backstores/block/${LUN_NAME}" >/dev/null 2>&1; then
+      echo "    Creating Block backstore '${LUN_NAME}' (${LUN_PATH})..."
+      targetcli "/backstores/block create name=${LUN_NAME} dev=${LUN_PATH}"
+    else
+      echo "    Block backstore '${LUN_NAME}' already exists."
+    fi
+  fi
+done < <(echo "${LUNS_JSON}" | jq -c '.[]')
+
+echo "==> [LIO] Configuring iSCSI Target ${TARGET_IQN}..."
+if ! targetcli "ls /iscsi/${TARGET_IQN}" >/dev/null 2>&1; then
+  echo "    Creating target ${TARGET_IQN}..."
+  targetcli "/iscsi create ${TARGET_IQN}"
+else
+  echo "    Target ${TARGET_IQN} already exists."
+fi
+
+echo "==> [LIO] Configuring TPG attributes and permissive ACLs..."
+targetcli "${TPG_PATH} set attribute generate_node_acls={{ iscsi_target_generate_node_acls }} demo_mode_write_protect={{ iscsi_target_demo_mode_write_protect }} cache_dynamic_acls={{ iscsi_target_cache_dynamic_acls }} authentication={{ iscsi_target_auth_enabled }}"
+
+echo "==> [LIO] Configuring LUN Mappings..."
+while IFS= read -r item; do
+  LUN_ID="$(echo "${item}" | jq -r '.id')"
+  LUN_NAME="$(echo "${item}" | jq -r '.name')"
+  LUN_TYPE="$(echo "${item}" | jq -r '.type // "file"')"
+  BS_TYPE="fileio"
+  if [ "${LUN_TYPE}" != "file" ]; then
+    BS_TYPE="block"
+  fi
+
+  if ! targetcli "ls ${TPG_PATH}/luns/lun${LUN_ID}" >/dev/null 2>&1; then
+    echo "    Mapping LUN ${LUN_ID} -> /backstores/${BS_TYPE}/${LUN_NAME}..."
+    targetcli "${TPG_PATH}/luns create /backstores/${BS_TYPE}/${LUN_NAME} ${LUN_ID}"
+  else
+    echo "    LUN ${LUN_ID} mapping already exists."
+  fi
+done < <(echo "${LUNS_JSON}" | jq -c '.[]')
+
+echo "==> [LIO] Saving configuration to persistent storage..."
+targetcli saveconfig
+echo "==> [LIO] Target configuration successfully applied."

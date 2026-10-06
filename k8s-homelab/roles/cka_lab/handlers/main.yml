@@ -1,4 +1,2 @@
 ---
-- name: Reload NFS exports
-  ansible.builtin.command: exportfs -rav
-  changed_when: true
+# Handlers for cka_lab

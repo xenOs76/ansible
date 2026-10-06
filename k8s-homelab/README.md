@@ -364,7 +364,7 @@ make preprod-cka-chaos
    - `03-dns-chaos/`: Service discovery blackholing and CoreDNS resolver failure.
    - `04-node-pressure/`: Node memory saturation and QoS eviction prioritization.
 
-Trainees can also use the bundled `glow` CLI markdown reader (installed automatically from Charmbracelet's official Debian APT repository during the CKA lab phase) to view any exercise guide directly in the terminal with rich rendering (e.g. `glow ~/cka/scheduling/README.md`).
+Trainees can also use the bundled `glow` CLI markdown reader (installed automatically via `control_plane_tools`) to view any exercise guide directly in the terminal with rich rendering (e.g. `glow ~/cka/scheduling/README.md`).
 
 ### 5. Fast Cluster Reset & Repeatable Practice Loop
 
@@ -467,13 +467,15 @@ specific tasks:
 | `common` | Disable swap persistently, load `overlay`/`br_netfilter`, set sysctl, install utils | `common`, `swap`, `modules`, `sysctl`, `packages` |
 | `containerd` | Setup Docker repository, install `containerd.io`, configure `SystemdCgroup = true` | `cri`, `containerd` |
 | `kubernetes_packages` | Add `pkgs.k8s.io` repository, install `kubeadm`/`kubelet`/`kubectl`, hold | `k8s_packages`, `kubeadm`, `kubelet`, `kubectl` |
-| `control_plane_tools` | Install Helm via official APT repo, k9s via release .deb, etcdctl/etcdutl | `bootstrap`, `tools`, `helm`, `k9s`, `etcd` |
+| `control_plane_tools` | Install Helm via official APT repo, k9s and glow via release .deb, etcdctl/etcdutl | `bootstrap`, `tools`, `helm`, `k9s`, `etcd`, `glow` |
 | `control_plane` | Run `kubeadm init`, configure root/user kubeconfig, generate join token, shell preferences | `control_plane`, `init`, `kubeconfig`, `join_token`, `completion` |
 | `worker` | Execute `kubeadm join`, configure node IP in `/etc/default/kubelet` | `worker`, `join`, `kubelet` |
 | `cilium` | Download Cilium CLI, install Cilium daemonset, wait for status, verify nodes | `cni`, `cilium`, `verify` |
 | `caddy` | Build Caddy via xcaddy with PowerDNS plugin, reverse proxy 443 to NodePort 30443 | `caddy`, `ingress`, `caddy_install`, `caddy_config`, `caddy_service`, `caddy_version` |
 | `rook_ceph` | Deploy Rook-Ceph operator, CephCluster, CephBlockPool, and StorageClass | `ceph`, `storage` |
-| `cka_lab` | Deploy 15 hands-on CKA practice scenarios, guides, and dynamic chaos drills | `cka_lab`, `motd`, `glow`, `user_rbac`, `secrets`, `configmaps`, `helm`, `volumes`, `deployments`, `pods`, `networking`, `scheduling`, `workloads_advanced`, `storage_classes`, `cluster_troubleshooting`, `crds`, `chaos_troubleshooting` |
+| `nfs_server` | Deploy Linux kernel NFS storage server exporting `/srv/nfsroot` to cluster nodes | `nfs`, `nfs_server`, `storage` |
+| `iscsi_target` | Deploy Linux-IO (LIO) iSCSI target server with file-backed LUNs | `iscsi`, `iscsi_target`, `storage` |
+| `cka_lab` | Deploy 15 hands-on CKA practice scenarios, guides, and dynamic chaos drills | `cka_lab`, `motd`, `user_rbac`, `secrets`, `configmaps`, `helm`, `volumes`, `deployments`, `pods`, `networking`, `scheduling`, `workloads_advanced`, `storage_classes`, `cluster_troubleshooting`, `crds`, `chaos_troubleshooting` |
 | `upgrade` | Unhold, upgrade kubeadm, `kubeadm upgrade apply`, upgrade kubelet, hold | `upgrade`, `upgrade_control_plane`, `upgrade_worker` |
 | `reset` | `kubeadm reset -f`, flush iptables, clean CNI & `/var/lib/kubelet` | `reset` |
 

@@ -1,0 +1,9 @@
+---
+- name: Apply LIO configuration
+  ansible.builtin.command: /usr/local/sbin/configure-iscsi-lio.sh
+  changed_when: true
+
+- name: Restart LIO target service
+  ansible.builtin.systemd:
+    name: "{{ iscsi_target_service }}"
+    state: restarted

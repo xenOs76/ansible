@@ -1,0 +1,57 @@
+---
+# ==============================================================================
+# CKA Storage Drill: ReadWriteOnce (RWO) Multi-Node Access Fencing
+# ==============================================================================
+# This exercise demonstrates why ReadWriteOnce volumes cannot be simultaneously
+# mounted by pods scheduled on different worker nodes.
+#
+# Pod 1 is pinned to kube-worker-1.
+# Pod 2 is pinned to kube-worker-2.
+# Both pods attempt to mount 'iscsi-claim'.
+# Observe: Pod 2 will remain in ContainerCreating or fail with FailedAttachVolume.
+# ==============================================================================
+apiVersion: v1
+kind: Pod
+metadata:
+  name: iscsi-rwo-pod-worker1
+  namespace: default
+  labels:
+    app: iscsi-rwo-test
+    node: worker-1
+spec:
+  nodeSelector:
+    kubernetes.io/hostname: kube-worker-1
+  containers:
+    - name: reader1
+      image: alpine:latest
+      command: ["/bin/sh", "-c", "echo 'Node 1 mounting' > /mnt/storage/node1.txt; tail -f /dev/null"]
+      volumeMounts:
+        - name: storage
+          mountPath: /mnt/storage
+  volumes:
+    - name: storage
+      persistentVolumeClaim:
+        claimName: iscsi-claim
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: iscsi-rwo-pod-worker2
+  namespace: default
+  labels:
+    app: iscsi-rwo-test
+    node: worker-2
+spec:
+  nodeSelector:
+    kubernetes.io/hostname: kube-worker-2
+  containers:
+    - name: reader2
+      image: alpine:latest
+      command: ["/bin/sh", "-c", "echo 'Node 2 mounting' > /mnt/storage/node2.txt; tail -f /dev/null"]
+      volumeMounts:
+        - name: storage
+          mountPath: /mnt/storage
+  volumes:
+    - name: storage
+      persistentVolumeClaim:
+        claimName: iscsi-claim

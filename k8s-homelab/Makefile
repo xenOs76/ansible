@@ -1,4 +1,4 @@
-.PHONY: all lint syntax inventory deps check-deps preprod-up preprod-destroy preprod-recreate preprod-status preprod-provision preprod-sync-kubeconfig prod-sync-kubeconfig preprod-deploy preprod-caddy preprod-cni preprod-ceph prod-ceph preprod-ceph-status preprod-upgrade preprod-reset preprod-cka-lab help
+.PHONY: all lint syntax inventory deps check-deps preprod-up preprod-destroy preprod-recreate preprod-status preprod-provision preprod-sync-kubeconfig prod-sync-kubeconfig preprod-deploy preprod-caddy preprod-cni preprod-ceph prod-ceph preprod-ceph-status preprod-iscsi preprod-nfs prod-nfs preprod-upgrade preprod-reset preprod-cka-lab help
 
 all: help
 
@@ -10,7 +10,7 @@ help:
 	@echo "make lint              - Run yamllint, syntax check, inventory parse, and ansible-lint"
 	@echo "make syntax            - Run ansible-playbook --syntax-check on all playbooks"
 	@echo "make inventory         - Show inventory host graph"
-	@echo "make preprod-up        - Boot up Vagrant libvirt preprod VMs"
+	@echo "make preprod-up        - Boot up Vagrant libvirt preprod VMs and provision NFS server"
 	@echo "make preprod-destroy   - Destroy Vagrant libvirt preprod VMs"
 	@echo "make preprod-recreate  - Clean rebuild: destroy and boot fresh Vagrant VMs"
 	@echo "make preprod-status    - Check status of Vagrant VMs"
@@ -23,6 +23,9 @@ help:
 	@echo "make preprod-ceph      - Deploy/configure Rook-Ceph block storage on preprod"
 	@echo "make prod-ceph         - Deploy/configure Rook-Ceph block storage on prod"
 	@echo "make preprod-ceph-status - Inspect Rook-Ceph operator, cluster, and Ceph status"
+	@echo "make preprod-iscsi     - Deploy/configure standalone iSCSI storage target on preprod"
+	@echo "make preprod-nfs       - Deploy/configure NFS storage server on preprod"
+	@echo "make prod-nfs          - Deploy/configure NFS storage server on prod"
 	@echo "make preprod-upgrade   - Run rolling upgrade on preprod"
 	@echo "make preprod-reset     - Teardown/reset cluster on preprod"
 	@echo "make preprod-cka-lab   - Deploy CKA training lab scenarios on preprod"
@@ -53,6 +56,7 @@ inventory:
 
 preprod-up:
 	./scripts/shell.sh --run "vagrant up"
+	./scripts/run-playbook.sh -e preprod -p nfs.yml
 	@./scripts/sync-kubeconfig.sh --best-effort || true
 
 preprod-destroy:
@@ -91,6 +95,15 @@ prod-ceph:
 
 preprod-ceph-status:
 	@./scripts/check-ceph-status.sh
+
+preprod-iscsi:
+	./scripts/run-playbook.sh -e preprod -p iscsi.yml
+
+preprod-nfs:
+	./scripts/run-playbook.sh -e preprod -p nfs.yml
+
+prod-nfs:
+	./scripts/run-playbook.sh -e prod -p nfs.yml
 
 preprod-upgrade:
 	./scripts/run-playbook.sh -e preprod -p upgrade.yml

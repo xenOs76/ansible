@@ -96,7 +96,7 @@ Dedicated Ansible role for provisioning isolated hands-on Certified Kubernetes A
 ### Scenario 5: NFS Server & Storage Volumes Practice (`volumes`)
 
 - **Domain**: Storage & Volume Management.
-- **Objective**: Provision an NFS server on `kube-control-plane` exporting `/srv/nfsroot` to the worker node subnet, register `nfs-server.local` in `/etc/hosts` across all cluster nodes, and scaffold comprehensive CKA volume drills under `/home/vagrant/cka/volumes/`:
+- **Objective**: Leverage the cluster NFS server (provisioned by `roles/nfs_server` during `make preprod-up`, exporting `/srv/nfsroot` with `nfs-server.local` mapped across nodes) to scaffold comprehensive CKA volume drills and sample dataset files under `/home/vagrant/cka/volumes/`:
   1. **NFS Shared Storage (`01-nfs/`)**:
      - Direct inline NFS Pod volume mount (`01-nfs-direct-pod.yaml`) referencing `server: nfs-server.local`.
      - Multi-replica Deployment demonstrating shared read/write (`ReadWriteMany`) across worker nodes (`02-nfs-deployment-shared.yaml`).
@@ -120,10 +120,17 @@ Dedicated Ansible role for provisioning isolated hands-on Certified Kubernetes A
      - Static Ceph CSI PV, PVC, and consumer Pod binding (`03-rbd-static-pv-pvc-pod.yaml`).
      - Live online PVC volume expansion drill (`04-rbd-pvc-expansion.yaml`).
      - Dedicated test suite: `test-rbd-volumes.sh`.
+  7. **iSCSI Block Storage (`07-iscsi/`)**:
+     - Direct inline iSCSI Pod volume mount (`01-iscsi-direct-pod.yaml`).
+     - Static PersistentVolume and PersistentVolumeClaim binding with consumer Pod (`02-iscsi-pv-pvc-pod.yaml`).
+     - Raw block volume with `volumeMode: Block` and `volumeDevices` (`03-iscsi-raw-block.yaml`).
+     - ReadWriteOnce multi-node single-writer conflict demonstration (`04-iscsi-two-nodes-rwo.yaml`).
+     - Authenticated iSCSI with CHAP credentials Secret (`05-iscsi-chap-secret.yaml`).
+     - Dedicated test suite: `test-iscsi-volumes.sh`.
 - **Artifacts**:
   - Volume practice directory: `/home/vagrant/cka/volumes/`
-  - Automated verification test scripts: `/home/vagrant/cka/volumes/test-nfs-mounts.sh` and `06-rbd/test-rbd-volumes.sh`
-  - Practice guide: `/home/vagrant/cka/volumes/README.md` and `/home/vagrant/cka/volumes/06-rbd/README.md`
+  - Automated verification test scripts: `/home/vagrant/cka/volumes/test-nfs-mounts.sh`, `06-rbd/test-rbd-volumes.sh`, and `07-iscsi/test-iscsi-volumes.sh`
+  - Practice guide: `/home/vagrant/cka/volumes/README.md`, `06-rbd/README.md`, and `07-iscsi/README.md`
 
 ### Scenario 6: Deployments, ReplicaSets & Rollouts Practice (`deployments`)
 
@@ -449,6 +456,12 @@ kubectl apply -f 01-nfs/03-nfs-pv.yaml
 kubectl apply -f 01-nfs/04-nfs-pvc.yaml
 kubectl get pv nfs-storage-pv
 kubectl get pvc nfs-storage-pvc
+
+# Run automated Ceph RBD test suite
+06-rbd/test-rbd-volumes.sh
+
+# Run automated iSCSI test suite
+07-iscsi/test-iscsi-volumes.sh
 ```
 
 ### Verify Deployments Scenario

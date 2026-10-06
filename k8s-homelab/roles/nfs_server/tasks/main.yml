@@ -1,0 +1,60 @@
+---
+- name: Install NFS kernel server and client packages
+  ansible.builtin.apt:
+    name:
+      - nfs-kernel-server
+      - nfs-common
+    state: present
+  tags:
+    - nfs
+    - nfs_server
+    - storage
+
+- name: Ensure NFS export directories exist with write permissions
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0777"
+  loop:
+    - "{{ nfs_server_export_dir }}"
+    - "{{ nfs_server_export_dir }}/data"
+    - "{{ nfs_server_export_dir }}/reports"
+  tags:
+    - nfs
+    - nfs_server
+    - storage
+
+- name: Configure NFS export for cluster subnet in /etc/exports
+  ansible.builtin.lineinfile:
+    path: /etc/exports
+    regexp: '^{{ nfs_server_export_dir | regex_escape }}\s+'
+    line: "{{ nfs_server_export_dir }} {{ nfs_server_export_subnet }}({{ nfs_server_export_options }})"
+    state: present
+  notify: Reload NFS exports
+  tags:
+    - nfs
+    - nfs_server
+    - storage
+
+- name: Ensure nfs-server.local is mapped in /etc/hosts on control plane
+  ansible.builtin.lineinfile:
+    path: /etc/hosts
+    regexp: '.*(\s+)nfs-server\.local(\s*)$'
+    line: "{{ nfs_server_ip }} {{ nfs_server_hostname }}"
+    state: present
+  tags:
+    - nfs
+    - nfs_server
+    - storage
+
+- name: Ensure nfs-kernel-server service is enabled and started
+  ansible.builtin.systemd:
+    name: nfs-kernel-server
+    enabled: true
+    state: started
+  tags:
+    - nfs
+    - nfs_server
+    - storage

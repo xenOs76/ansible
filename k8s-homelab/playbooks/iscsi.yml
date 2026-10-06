@@ -1,0 +1,42 @@
+---
+- name: Deploy iSCSI target server on control plane
+  hosts: control_plane
+  become: true
+  roles:
+    - role: iscsi_target
+  tags:
+    - iscsi
+    - iscsi_target
+    - storage
+
+- name: Configure iSCSI initiator on worker nodes
+  hosts: workers
+  become: true
+  tasks:
+    - name: Load iscsi_tcp kernel module on worker nodes
+      ansible.builtin.command: modprobe iscsi_tcp
+      changed_when: false
+      tags:
+        - iscsi
+        - initiator
+
+    - name: Install open-iscsi initiator package on worker nodes
+      ansible.builtin.apt:
+        name: open-iscsi
+        state: present
+      tags:
+        - iscsi
+        - initiator
+
+    - name: Ensure iscsid service is enabled and started on worker nodes
+      ansible.builtin.systemd:
+        name: iscsid
+        enabled: true
+        state: started
+      tags:
+        - iscsi
+        - initiator
+  tags:
+    - iscsi
+    - iscsi_initiator
+    - storage

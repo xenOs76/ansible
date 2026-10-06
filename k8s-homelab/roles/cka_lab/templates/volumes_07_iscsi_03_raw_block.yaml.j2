@@ -1,0 +1,69 @@
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: iscsi-raw-block-pv
+  labels:
+    app.kubernetes.io/part-of: cka-lab
+    cka.practice/scenario: iscsi-volumes
+    storage-tier: iscsi-raw
+spec:
+  capacity:
+    storage: 500Mi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  volumeMode: Block
+  storageClassName: ""
+  iscsi:
+    targetPortal: "{{ cka_lab_iscsi_portal }}"
+    iqn: "{{ cka_lab_iscsi_iqn }}"
+    lun: {{ cka_lab_iscsi_block_lun | default(2) }}
+    readOnly: false
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: iscsi-raw-block-pvc
+  namespace: default
+  labels:
+    app.kubernetes.io/part-of: cka-lab
+    cka.practice/scenario: iscsi-volumes
+spec:
+  accessModes:
+    - ReadWriteOnce
+  volumeMode: Block
+  storageClassName: ""
+  resources:
+    requests:
+      storage: 500Mi
+  volumeName: iscsi-raw-block-pv
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: iscsi-raw-block-consumer-pod
+  namespace: default
+  labels:
+    app.kubernetes.io/part-of: cka-lab
+    cka.practice/scenario: iscsi-volumes
+spec:
+  containers:
+    - name: raw-block-worker
+      image: alpine:latest
+      command: ["/bin/sh", "-c"]
+      args:
+        - |
+          echo "Validating raw block device /dev/iscsiblock..."
+          ls -l /dev/iscsiblock
+          # Write raw test signature to beginning of block device
+          echo "RAW_ISCSI_SIGNATURE" | dd of=/dev/iscsiblock bs=1M count=1 conv=fsync
+          echo "Raw block signature written successfully."
+          tail -f /dev/null
+      volumeDevices:
+        - name: raw-volume
+          devicePath: /dev/iscsiblock
+  volumes:
+    - name: raw-volume
+      persistentVolumeClaim:
+        claimName: iscsi-raw-block-pvc

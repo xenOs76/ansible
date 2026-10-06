@@ -105,3 +105,10 @@ rook_ceph_pool_replicas: 1
 rook_ceph_pool_name: "replicapool"
 rook_ceph_failure_domain: "osd"
 rook_ceph_fs_type: "ext4"
+
+# NFS shared storage server configuration
+nfs_server_enabled: true
+nfs_server_hostname: "nfs-server.local"
+nfs_export_dir: "/srv/nfsroot"
+nfs_export_subnet: "{{ '192.168.56.0/24' if ('preprod' in groups) else (pod_network_cidr | default('10.0.0.0/8')) }}"
+nfs_export_options: "rw,sync,no_subtree_check,no_root_squash,insecure"

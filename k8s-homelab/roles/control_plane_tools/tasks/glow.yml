@@ -1,0 +1,18 @@
+---
+- name: Determine system architecture and package name for glow .deb
+  ansible.builtin.set_fact:
+    control_plane_tools_glow_deb_pkg: >-
+      glow_{{ control_plane_tools_glow_version }}_{{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}.deb
+  tags:
+    - bootstrap
+    - tools
+    - glow
+
+- name: Install glow from official release .deb package
+  ansible.builtin.apt:
+    deb: "https://github.com/charmbracelet/glow/releases/download/v{{ control_plane_tools_glow_version }}/{{ control_plane_tools_glow_deb_pkg }}"
+    state: present
+  tags:
+    - bootstrap
+    - tools
+    - glow

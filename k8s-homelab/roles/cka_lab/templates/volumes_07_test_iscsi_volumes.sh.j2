@@ -1,0 +1,111 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# CKA Volumes Practice Lab - iSCSI Verification Script
+# Managed by Ansible (roles/cka_lab)
+# ==============================================================================
+set -euo pipefail
+
+NAMESPACE="default"
+PORTAL="{{ cka_lab_iscsi_portal }}"
+PORTAL_HOST="${PORTAL%%:*}"
+PORTAL_PORT="${PORTAL##*:}"
+
+POD_DIRECT="iscsi-direct-pod"
+POD_PVC="iscsi-pvc-consumer-pod"
+PVC_NAME="iscsi-claim"
+PV_NAME="iscsi-static-pv"
+POD_BLOCK="iscsi-raw-block-consumer-pod"
+PVC_BLOCK="iscsi-raw-block-pvc"
+PV_BLOCK="iscsi-raw-block-pv"
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Detect KUBECONFIG if not set
+if [ -z "${KUBECONFIG:-}" ] && [ -f /etc/kubernetes/admin.conf ] && [ ! -f "${HOME}/.kube/config" ]; then
+  export KUBECONFIG=/etc/kubernetes/admin.conf
+fi
+
+cleanup() {
+  echo "==> Cleaning up iSCSI test resources..."
+  kubectl delete pod "${POD_DIRECT}" -n "${NAMESPACE}" --ignore-not-found=true --timeout=60s >/dev/null 2>&1 || true
+  kubectl delete pod "${POD_PVC}" -n "${NAMESPACE}" --ignore-not-found=true --timeout=60s >/dev/null 2>&1 || true
+  kubectl delete pvc "${PVC_NAME}" -n "${NAMESPACE}" --ignore-not-found=true --timeout=60s >/dev/null 2>&1 || true
+  kubectl delete pv "${PV_NAME}" --ignore-not-found=true --timeout=60s >/dev/null 2>&1 || true
+  kubectl delete pod "${POD_BLOCK}" -n "${NAMESPACE}" --ignore-not-found=true --timeout=60s >/dev/null 2>&1 || true
+  kubectl delete pvc "${PVC_BLOCK}" -n "${NAMESPACE}" --ignore-not-found=true --timeout=60s >/dev/null 2>&1 || true
+  kubectl delete pv "${PV_BLOCK}" --ignore-not-found=true --timeout=60s >/dev/null 2>&1 || true
+}
+trap cleanup EXIT
+
+echo "=== CKA iSCSI Volume Test Suite ==="
+
+# 1. Connectivity check to portal
+echo "==> [1/4] Checking connectivity to iSCSI portal ${PORTAL}..."
+if ! timeout 5 bash -c "</dev/tcp/${PORTAL_HOST}/${PORTAL_PORT}" 2>/dev/null; then
+  echo "Error: Cannot connect to iSCSI target portal ${PORTAL}." >&2
+  echo "Hint: Run 'make preprod-iscsi' to deploy and start the LIO target service." >&2
+  exit 1
+fi
+echo "    OK: iSCSI target portal ${PORTAL} is reachable."
+
+# 2. Test Direct Pod Mount
+echo "==> [2/4] Testing direct in-tree iSCSI pod mount..."
+kubectl delete pod "${POD_DIRECT}" -n "${NAMESPACE}" --ignore-not-found=true --timeout=30s >/dev/null 2>&1 || true
+kubectl apply -f "${SCRIPT_DIR}/01-iscsi-direct-pod.yaml"
+kubectl wait --for=condition=Ready pod/"${POD_DIRECT}" -n "${NAMESPACE}" --timeout=120s
+
+echo "    Verifying file write on mounted iSCSI filesystem..."
+DIRECT_CONTENT="$(kubectl exec "${POD_DIRECT}" -n "${NAMESPACE}" -- cat /mnt/storage/direct-test.txt)"
+if echo "${DIRECT_CONTENT}" | grep -q "iSCSI direct volume mounted"; then
+  echo "    OK: Direct volume mount and write verified."
+else
+  echo "    FAIL: Unexpected content in /mnt/storage/direct-test.txt: ${DIRECT_CONTENT}" >&2
+  exit 1
+fi
+kubectl delete pod "${POD_DIRECT}" -n "${NAMESPACE}" --timeout=60s
+
+# 3. Test Static PV + PVC + Consumer Pod
+echo "==> [3/4] Testing static PersistentVolume, PVC, and consumer Pod..."
+kubectl delete pod "${POD_PVC}" -n "${NAMESPACE}" --ignore-not-found=true --timeout=30s >/dev/null 2>&1 || true
+kubectl delete pvc "${PVC_NAME}" -n "${NAMESPACE}" --ignore-not-found=true --timeout=30s >/dev/null 2>&1 || true
+kubectl delete pv "${PV_NAME}" --ignore-not-found=true --timeout=30s >/dev/null 2>&1 || true
+kubectl apply -f "${SCRIPT_DIR}/02-iscsi-pv-pvc-pod.yaml"
+kubectl wait --for=condition=Ready pod/"${POD_PVC}" -n "${NAMESPACE}" --timeout=120s
+
+echo "    Verifying PVC volume status and mount..."
+PV_STATUS="$(kubectl get pv "${PV_NAME}" -o jsonpath='{.status.phase}')"
+if [ "${PV_STATUS}" != "Bound" ]; then
+  echo "    FAIL: PV '${PV_NAME}' phase is '${PV_STATUS}', expected Bound." >&2
+  exit 1
+fi
+echo "    OK: Static PV '${PV_NAME}' is Bound."
+PVC_CONTENT="$(kubectl exec "${POD_PVC}" -n "${NAMESPACE}" -- cat /mnt/storage/index.txt)"
+if echo "${PVC_CONTENT}" | grep -q "Serving from iSCSI volume"; then
+  echo "    OK: Static PVC volume mount and write verified."
+else
+  echo "    FAIL: Unexpected content in /mnt/storage/index.txt: ${PVC_CONTENT}" >&2
+  exit 1
+fi
+kubectl delete pod "${POD_PVC}" -n "${NAMESPACE}" --timeout=60s
+kubectl delete pvc "${PVC_NAME}" -n "${NAMESPACE}" --timeout=60s
+kubectl delete pv "${PV_NAME}" --timeout=60s
+
+# 4. Test Raw Block Device Mode
+echo "==> [4/4] Testing raw block device mode (volumeMode: Block)..."
+kubectl delete pod "${POD_BLOCK}" -n "${NAMESPACE}" --ignore-not-found=true --timeout=30s >/dev/null 2>&1 || true
+kubectl delete pvc "${PVC_BLOCK}" -n "${NAMESPACE}" --ignore-not-found=true --timeout=30s >/dev/null 2>&1 || true
+kubectl delete pv "${PV_BLOCK}" --ignore-not-found=true --timeout=30s >/dev/null 2>&1 || true
+kubectl apply -f "${SCRIPT_DIR}/03-iscsi-raw-block.yaml"
+kubectl wait --for=condition=Ready pod/"${POD_BLOCK}" -n "${NAMESPACE}" --timeout=120s
+
+echo "    Verifying raw block special device inside container..."
+if kubectl exec "${POD_BLOCK}" -n "${NAMESPACE}" -- test -b /dev/iscsiblock; then
+  echo "    OK: Raw block device /dev/iscsiblock exists and is recognized as block special."
+else
+  echo "    FAIL: /dev/iscsiblock is not a block device." >&2
+  exit 1
+fi
+
+echo "===================================================================="
+echo "✔ SUCCESS: All iSCSI volume drills validated successfully!"
+echo "===================================================================="

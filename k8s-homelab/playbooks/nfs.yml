@@ -1,0 +1,38 @@
+---
+- name: Prepare cluster nodes for NFS access
+  hosts: k8s_cluster
+  become: true
+  tasks:
+    - name: Ensure nfs-common package is installed on all cluster nodes
+      ansible.builtin.apt:
+        name: nfs-common
+        state: present
+      tags:
+        - nfs
+        - nfs_client
+
+    - name: Ensure nfs-server.local DNS mapping exists in /etc/hosts on all nodes
+      ansible.builtin.lineinfile:
+        path: /etc/hosts
+        regexp: '.*(\s+)nfs-server\.local(\s*)$'
+        line: >-
+          {{
+            hostvars[groups['control_plane'][0]]['node_ip']
+            | default(hostvars[groups['control_plane'][0]]['ansible_host']
+            | default('192.168.56.10'))
+          }} {{ nfs_server_hostname | default('nfs-server.local') }}
+        state: present
+      tags:
+        - nfs
+        - nfs_client
+
+- name: Deploy NFS storage server on control plane
+  hosts: control_plane
+  become: true
+  roles:
+    - role: nfs_server
+      when: nfs_server_enabled | default(true)
+  tags:
+    - nfs
+    - nfs_server
+    - storage
