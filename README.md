@@ -1,32 +1,48 @@
-# Ansible Automation
+# Kubernetes Ansible Homelab & Certification Labs
 
-A curated collection of production-grade Ansible automation playbooks, infrastructure-as-code configurations, and hands-on lab environments.
+Production-grade Ansible automation for multi-node Kubernetes 1.34+ (`kubeadm` + `containerd` + Cilium CNI) running on Libvirt/KVM via Vagrant or bare metal, featuring comprehensive **CKA** and **CKS** practice suites.
 
-## Repository Contents
+---
 
-### [k8s-homelab](./k8s-homelab)
+## Highlights
 
-Automated provisioning, configuration, and lifecycle management for multi-node Kubernetes clusters (`kubeadm`) on Libvirt/KVM via Vagrant and bare metal/preprod environments.
+| Component | Technology | Description |
+| :--- | :--- | :--- |
+| **Cluster Topology** | Kubernetes 1.34.1, Ubuntu 26.04 | 1 Control Plane + 2 Workers with automated bootstrapping |
+| **Networking & Ingress** | Cilium (eBPF) + Caddy Reverse Proxy | eBPF host routing and automated PowerDNS DNS-01 Let's Encrypt TLS |
+| **Storage Stack** | Rook-Ceph, NFS, iSCSI | Ceph block storage (`/dev/vdb`), kernel NFS exports, and LIO iSCSI target |
+| **Certification Labs** | CKA & CKS Training Suites | 15+ CKA drills (LitmusChaos, RBAC, static pods) and CKS hardening (AppArmor, Seccomp) |
 
-Key features include:
+---
 
-- **Automated Bootstrapping**: Modular Ansible roles for container runtime (`containerd`), Kubernetes packages (`kubeadm`, `kubelet`, `kubectl`), control plane initialization, and worker join automation.
-- **Networking & CNI**: Production-ready Cilium CNI deployment with eBPF host routing.
-- **Enterprise Storage**: Integrated Rook-Ceph block storage, kernel NFS exports, and standalone LIO iSCSI target server.
-- **CKA & CKS Certification Labs**: 15+ hands-on CKA practice scenarios with LitmusChaos drills, alongside CKS host hardening (AppArmor, Seccomp, and security toolchain).
-- **Fast Credential Sync**: Defensive Bash scripts (`scripts/sync-kubeconfig.sh`) for non-destructive synchronization of workstation `~/.kube/config` with strict TLS verification.
-- **Upgrades & Maintenance**: Automated rolling cluster upgrades and etcd snapshot/health verification tools (`etcdctl`, `etcdutl`).
+## Quickstart
 
-For detailed documentation, architecture diagrams, and quick-start instructions, refer to the [k8s-homelab README](./k8s-homelab/README.md).
+```bash
+cd k8s-homelab
 
-## Quality & Standards
+# 1. Boot preprod Libvirt VMs
+make preprod-up
 
-All playbooks and roles in this repository adhere to strict quality standards:
+# 2. Deploy full cluster & sync workstation credentials
+make preprod-deploy && make preprod-sync-kubeconfig
 
-- **Ansible Lint**: Validated against `ansible-lint` using the `production` profile with zero warnings or failures.
-- **YAML & Markdown**: Checked via `yamllint` and `markdownlint-cli2`.
-- **Reproducible Environments**: Managed with Nix flakes and `shell.nix` for deterministic development tooling.
+# 3. Deploy certification training labs
+make preprod-cka-lab    # CKA practice scenarios
+make preprod-cks-lab    # CKS security hardening scenarios
+```
+
+For full architecture details, topology diagrams, and scenario breakdowns, see [**`k8s-homelab/README.md`**](./k8s-homelab/README.md).
+
+---
+
+## Quality Gates
+
+- **Ansible Lint**: Zero warnings or failures on `production` profile.
+- **Linters**: Defensive Bash (`shellcheck`), `yamllint`, and `markdownlint-cli2`.
+- **Reproducibility**: Hermetic Nix development environment (`shell.nix`).
+
+---
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](./LICENSE) file for details.
+Licensed under the [MIT License](./LICENSE).
