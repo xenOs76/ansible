@@ -1,697 +1,167 @@
-# Kubernetes Homelab (kubeadm + Cilium) with Modular Ansible
+# Kubernetes Homelab & Certification Lab Suite (`k8s-homelab`)
 
-This repository provides a modular, production-grade Ansible automation suite
-to bootstrap, configure, manage, upgrade, and reset a functional
-Kubernetes cluster (1 control plane, 2 worker nodes by default, configurable)
-running Ubuntu.
+Modular, production-grade Ansible automation suite to bootstrap, configure, manage, and tear down a multi-node Kubernetes 1.34+ cluster (`kubeadm` + `containerd` + Cilium CNI) on Libvirt/KVM via Vagrant or bare metal.
 
-The implementation directly aligns with the official
-[Kubernetes Production Environment](https://kubernetes.io/docs/setup/production-environment/)
-documentation and the **Certified Kubernetes Administrator (CKA)** syllabus:
-
-- **Cluster Bootstrapping**: Official `kubeadm` initialization and joins.
-- **Container Runtime (CRI)**: `containerd.io` with `SystemdCgroup = true`.
-- **CNI**: [Cilium](https://cilium.io/) installed via official Cilium CLI.
-- **Node Topology**: 1 Control Plane and 2 Worker Nodes (scalable via `WORKER_COUNT`).
-- **Preprod Environment**: Integrated Vagrant + Libvirt lab.
-- **Code Quality**: Built-in support for `ansible-lint` and `yamllint`.
+The environment serves as both an enterprise-grade homelab foundation and a rapid-iteration training platform for the **Certified Kubernetes Administrator (CKA)** and **Certified Kubernetes Security Specialist (CKS)** certifications.
 
 ---
 
-## Table of Contents
+## Architecture & Topology
 
-- [CKA Training Workflows & Repeatable Practice](#cka-training-workflows--repeatable-practice)
-  - [1. Full Cluster Deployment Drill](#1-full-cluster-deployment-drill)
-  - [2. Component & Subsystem Isolation Drills](#2-component--subsystem-isolation-drills)
-  - [3. Automated Cluster Upgrade Playbook](#3-automated-cluster-upgrade-playbook)
-  - [4. Dedicated CKA Hands-on Lab Environment](#4-dedicated-cka-hands-on-lab-environment)
-  - [5. Fast Cluster Reset & Repeatable Practice Loop](#5-fast-cluster-reset--repeatable-practice-loop)
-- [Quickstart: Preprod Lab (Vagrant + Libvirt)](#quickstart-preprod-lab-vagrant--libvirt)
-  - [1. Boot the Virtual Machines](#1-boot-the-virtual-machines)
-  - [2. Deploy Kubernetes Cluster](#2-deploy-kubernetes-cluster)
-  - [3. Verify Cluster](#3-verify-cluster)
-  - [4. Edge Ingress & TLS Termination (Caddy Reverse Proxy)](#4-edge-ingress--tls-termination-caddy-reverse-proxy)
-- [Directory Layout](#directory-layout)
-- [Role & Tag Reference](#role--tag-reference)
-- [Prerequisites & Dependencies](#prerequisites--dependencies)
-- [Code Quality & Independent Linting](#code-quality--independent-linting)
-  - [.ansible-lint Configuration](#ansible-lint-configuration)
-- [References & Documentation](#references--documentation)
+### Virtual Machine Inventory (`inventory/preprod/hosts.ini`)
+
+| Node Name | IP Address | Roles | vCPU | RAM | Storage Disks |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| `kube-control-plane` | `192.168.56.10` | Control Plane, API Server, etcd, NFS, iSCSI | 2 | 4096 MB | 25GB root + 20GB Ceph volume (`/dev/vdb`) |
+| `kube-worker-1` | `192.168.56.21` | Worker Node | 2 | 2048 MB | 25GB root |
+| `kube-worker-2` | `192.168.56.22` | Worker Node | 2 | 2048 MB | 25GB root |
+
+- **Operating System**: Ubuntu 26.04 LTS
+- **Container Runtime**: `containerd` (`SystemdCgroup = true`)
+- **Networking & CNI**: Cilium with eBPF host routing (`pod_network_cidr: 10.1.0.0/16`, `service_cidr: 10.96.0.0/12`)
+- **Ingress**: Custom-compiled Caddy with PowerDNS DNS-01 ACME Let's Encrypt wildcard certificates
 
 ---
 
-## CKA Training Workflows & Repeatable Practice
+## Core Subsystems
 
-This homelab is engineered specifically to provide **reproducible,
-rapid-iteration training cycles** for the Certified Kubernetes Administrator
-(CKA) exam and production day-2 operations. You can rehearse every exam
-requirement repeatedly without rebuilding VMs.
+### 1. Storage Architecture
 
-### 1. Full Cluster Deployment Drill
+- **Rook-Ceph (`roles/rook_ceph`, `playbooks/ceph.yml`)**: Cloud-native Ceph orchestration backed by `/dev/vdb` on the control plane, dynamically provisioning block PVCs via `rook-ceph-block` StorageClass.
+- **NFS Shared Storage (`roles/nfs_server`, `playbooks/nfs.yml`)**: Linux kernel NFS server exporting `/srv/nfsroot` across cluster worker nodes.
+- **iSCSI Target Server (`roles/iscsi_target`, `playbooks/iscsi.yml`)**: Standalone Linux-IO (`LIO`) kernel target with file-backed LUNs for raw block and static PV testing.
 
-Bootstrap the complete cluster from scratch, including OS hardening, CRI setup,
-kubeadm initialization, worker join, and Cilium CNI verification:
+### 2. CKA Hands-on Lab Suite (`roles/cka_lab`)
 
-```bash
-# Automated deployment via Makefile
-make preprod-deploy
+Deployed to `/home/vagrant/cka/` on `kube-control-plane` (`make preprod-cka-lab`):
 
-# Or via parameterized wrapper
-./scripts/run-playbook.sh -e preprod -p site.yml
+- **Workloads & Pods**: Advanced scheduling (taints, tolerations, affinity), sidecar containers, jobs, cronjobs, and ephemeral debug containers.
+- **Networking**: ClusterIP, NodePort, Ingress prefix routing, Gateway API (`HTTPRoute`), and multi-tier NetworkPolicies.
+- **Storage Drills**: Static PV/PVC mounts across NFS, Ceph RBD, and iSCSI raw block devices.
+- **Cluster Maintenance**: Safe drain/cordon, etcd backup/restore drills (`etcdctl`/`etcdutl` v3.5.16), and rolling cluster upgrades.
+- **Dynamic Chaos Injection (`make preprod-cka-chaos`)**: Headless LitmusChaos drills (OOM kills, network latency, DNS blackholing, node memory pressure).
 
-# Or standard Ansible command
-ansible-playbook -i inventory/preprod/hosts.ini playbooks/site.yml
-```
+### 3. CKS Certification Lab Suite (`roles/cks_lab`)
 
-### 2. Component & Subsystem Isolation Drills
+Deployed to `/home/vagrant/cks/` on `kube-control-plane` (`make preprod-cks-lab`):
 
-Isolate and practice individual architectural subsystems for targeted debugging
-and verification:
+- **Security Toolchain**: Pinned binaries with dual `amd64`/`arm64` support (`kube-bench`, `trivy`, `hadolint`, `kubesec`, `cosign`, `falco`).
+- **AppArmor Kernel Hardening**: Multi-node profile distribution and kernel enforcement (`k8s-deny-write`, `k8s-deny-network`) with Pod drills and automated test scripts.
+- **Seccomp Syscall Filtering**: Multi-node Seccomp profile placement in kubelet root (`audit.json`, `fine-grained.json`) and native Kubernetes 1.30+ `securityContext` Pod drills.
+- **Host Attack Surface Auditing**: Native audit utilities (`audit-ports.sh`, `audit-services.sh`, `audit-file-perms.sh`).
 
-<!-- markdownlint-disable MD033 -->
-<details>
-<summary><b>Stage nodes right before <code>kubeadm init</code> &amp; CNI (Hands-on CKA Exam Drill)</b></summary>
+---
 
-Prepare the OS, disable swap, configure kernel networking parameters,
-install `containerd` with `SystemdCgroup = true`, and install pinned
-`kubeadm`, `kubelet`, and `kubectl` on all nodes. This stops immediately
-before cluster initialization, leaving `kubeadm init`, worker `kubeadm join`,
-and Cilium CNI for manual execution:
+## Quickstart & Workflow Commands
+
+Always execute commands inside the reproducible Nix environment via `./scripts/shell.sh` or through `Makefile` targets.
+
+### Cluster Lifecycle
 
 ```bash
-# In Preprod (Vagrant):
-# Booting fresh VMs automatically provisions them to this exact pre-init state:
+# 1. Boot preprod Libvirt VMs (creates VMs and provisions NFS server)
 make preprod-up
-# (Or if VMs already exist and need a clean slate: make preprod-recreate)
 
-# In Existing / Bare-Metal nodes (via Ansible):
-ansible-playbook -i inventory/preprod/hosts.ini playbooks/bootstrap.yml
-
-# Or run site.yml targeting prerequisite tags only:
-ansible-playbook -i inventory/preprod/hosts.ini playbooks/site.yml --tags "common,cri,k8s_packages"
-```
-
-Once completed, SSH to the nodes to practice the hands-on CKA exam sequence:
-
-```bash
-# 1. SSH into the control plane
-./scripts/shell.sh --run "vagrant ssh kube-control-plane"
-
-# 2. Run kubeadm init manually
-sudo kubeadm init \
-  --pod-network-cidr=10.1.0.0/16 \
-  --service-cidr=10.96.0.0/12 \
-  --apiserver-advertise-address=192.168.56.10 \
-  --apiserver-cert-extra-sans=192.168.56.10,kube-control-plane,127.0.0.1
-
-# 3. Configure ~/.kube/config for vagrant user
-mkdir -p $HOME/.kube
-sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
-sudo chown $(id -u):$(id -g) $HOME/.kube/config
-
-# 4. SSH to worker (vagrant ssh kube-worker-1) and run the printed join command:
-sudo kubeadm join 192.168.56.10:6443 \
-  --token <token> --discovery-token-ca-cert-hash sha256:<hash>
-
-# 5. Install Cilium CNI (manually via cilium-cli or via Ansible playbooks/cni.yml)
-cilium install --set cluster.name=homelab-k8s
-# Or from your host workstation:
-make preprod-cni
-```
-
-</details>
-
-<details>
-<summary><b>Stage cluster at pre-upgrade baseline (Hands-on CKA Upgrade &amp; ETCD Drills)</b></summary>
-
-To practice cluster maintenance, rolling upgrades, and ETCD operations, first
-bring the cluster to a healthy, operational baseline at version `1.34.1-1.1`:
-
-```bash
+# 2. Deploy complete Kubernetes cluster (control plane, workers, Cilium CNI)
 make preprod-deploy
+
+# 3. Synchronize credentials non-destructively to workstation ~/.kube/config
+make preprod-sync-kubeconfig
+
+# 4. Verify cluster connectivity directly from your host workstation
+kubectl --context=k8s-homelab-preprod get nodes -o wide
 ```
 
-Verify all nodes and Cilium pods are in `Ready` / `Running` state:
+### Certification Labs
 
 ```bash
-./scripts/shell.sh --run "vagrant ssh kube-control-plane"
-kubectl get nodes -o wide
-cilium status
-```
-
-#### Next Steps & References
-
-Once the cluster is running, practice the two highest-weighted maintenance
-topics from the CKA syllabus, following the official documentation and the
-Benjamin Muschko crash-course solutions:
-
-- **Official Kubernetes Documentation**:
-  - [Upgrading kubeadm clusters](https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-upgrade/)
-  - [Operating etcd clusters for Kubernetes (Backup & Restore)](https://kubernetes.io/docs/tasks/administer-cluster/configure-upgrade-etcd/)
-- **Reference Exercise Solutions**:
-  - [bmuschko/cka-crash-course Exercise 02: Cluster Version Upgrade](https://github.com/bmuschko/cka-crash-course/blob/master/exercises/02-cluster-version-upgrade/solution/solution.md)
-  - [bmuschko/cka-crash-course Exercise 03: ETCD Backup and Restore](https://github.com/bmuschko/cka-crash-course/blob/master/exercises/03-etcd-backup-restore/solution/solution.md)
-
-#### Hands-on Drill: ETCD Backup & Restore
-
-1. **Inspect etcd static pod and discover certificates**:
-   Examine `/etc/kubernetes/manifests/etcd.yaml` (or run `kubectl describe
-   pod etcd-kube-control-plane -n kube-system`) to find
-   `--listen-client-urls`, `--cert-file`, `--key-file`, and
-   `--trusted-ca-file`.
-
-2. **Install etcd-client & capture snapshot**:
-
-   ```bash
-   # Install client tools if needed
-   sudo apt-get update && sudo apt-get install -y etcd-client
-
-   # Save snapshot
-   sudo ETCDCTL_API=3 etcdctl \
-     --endpoints=https://127.0.0.1:2379 \
-     --cacert=/etc/kubernetes/pki/etcd/ca.crt \
-     --cert=/etc/kubernetes/pki/etcd/server.crt \
-     --key=/etc/kubernetes/pki/etcd/server.key \
-     snapshot save /opt/etcd-backup.db
-   ```
-
-3. **Verify snapshot integrity**:
-
-   ```bash
-   sudo ETCDCTL_API=3 etcdctl --write-out=table snapshot status /opt/etcd-backup.db
-   ```
-
-4. **Restore etcd data to a new directory (Exam Simulation)**:
-
-   ```bash
-   sudo ETCDCTL_API=3 etcdutl \
-     --data-dir=/var/lib/from-backup snapshot restore /opt/etcd-backup.db
-   ```
-
-5. **Update static pod manifest to point to restored data**:
-   Edit `/etc/kubernetes/manifests/etcd.yaml` and update the `etcd-data`
-   volume `hostPath`:
-
-   ```yaml
-   spec:
-     volumes:
-     - hostPath:
-         path: /var/lib/from-backup
-         type: DirectoryOrCreate
-       name: etcd-data
-   ```
-
-   Kubelet will automatically recreate the `etcd-kube-control-plane` static
-   pod using the restored data. Verify with `kubectl get pod
-   etcd-kube-control-plane -n kube-system`.
-
-#### Hands-on Drill: Cluster Version Upgrade (`1.34.1` → `1.34.2`)
-
-Follow the step-by-step rolling upgrade pattern without downtime:
-
-1. **Control Plane (`kube-control-plane`)**:
-
-   ```bash
-   # 1. Upgrade kubeadm
-   sudo apt-mark unhold kubeadm
-   sudo apt-get update && sudo apt-get install -y kubeadm=1.34.2-1.1
-   sudo apt-mark hold kubeadm
-
-   # 2. Check upgrade plan and apply
-   sudo kubeadm upgrade plan
-   sudo kubeadm upgrade apply v1.34.2 -y
-
-   # 3. Upgrade kubelet and kubectl
-   sudo apt-mark unhold kubelet kubectl
-   sudo apt-get install -y kubelet=1.34.2-1.1 kubectl=1.34.2-1.1
-   sudo apt-mark hold kubelet kubectl
-
-   # 4. Restart kubelet
-   sudo systemctl daemon-reload && sudo systemctl restart kubelet
-   ```
-
-2. **Worker Node (`kube-worker-1`)**:
-
-   ```bash
-   # From control plane: safely drain worker node
-   kubectl drain kube-worker-1 --ignore-daemonsets --delete-emptydir-data --force
-
-   # SSH into kube-worker-1:
-   ./scripts/shell.sh --run "vagrant ssh kube-worker-1"
-
-   # 1. Upgrade kubeadm
-   sudo apt-mark unhold kubeadm
-   sudo apt-get update && sudo apt-get install -y kubeadm=1.34.2-1.1
-   sudo apt-mark hold kubeadm
-
-   # 2. Upgrade node configuration
-   sudo kubeadm upgrade node
-
-   # 3. Upgrade kubelet and kubectl
-   sudo apt-mark unhold kubelet kubectl
-   sudo apt-get install -y kubelet=1.34.2-1.1 kubectl=1.34.2-1.1
-   sudo apt-mark hold kubelet kubectl
-
-   # 4. Restart kubelet
-   sudo systemctl daemon-reload && sudo systemctl restart kubelet
-
-   # From control plane: uncordon the worker node
-   kubectl uncordon kube-worker-1
-   ```
-
-3. **Verify cluster state**:
-
-   ```bash
-   kubectl get nodes -o wide
-   cilium status
-   ```
-
-</details>
-
-<details>
-<summary><b>OS preparation and container runtime (containerd) only</b></summary>
-
-```bash
-ansible-playbook -i inventory/preprod/hosts.ini playbooks/site.yml --tags "common,cri"
-```
-
-</details>
-
-<details>
-<summary><b>Kernel modules (<code>overlay</code>, <code>br_netfilter</code>) and sysctl network parameters</b></summary>
-
-```bash
-ansible-playbook -i inventory/preprod/hosts.ini playbooks/site.yml --tags "modules,sysctl"
-```
-
-</details>
-
-<details>
-<summary><b>Kubernetes Debian repository and package pinning</b></summary>
-
-```bash
-ansible-playbook -i inventory/preprod/hosts.ini playbooks/site.yml --tags "k8s_packages"
-```
-
-</details>
-
-<details>
-<summary><b>Deploy and test Cilium CNI independently</b></summary>
-
-```bash
-ansible-playbook -i inventory/preprod/hosts.ini playbooks/cni.yml
-```
-
-</details>
-<!-- markdownlint-enable MD033 -->
-
-### 3. Automated Cluster Upgrade Playbook
-
-To rehearse or validate cluster upgrades automatically, the `upgrade.yml`
-playbook automates the entire multi-node CKA sequence:
-
-```bash
-ansible-playbook -i inventory/preprod/hosts.ini playbooks/upgrade.yml \
-  -e "upgrade_target_k8s_version=1.34.2-1.1"
-```
-
-**Key automation guarantees**:
-
-- **Control plane first**: Automatically unholds `kubeadm`, runs
-  `kubeadm upgrade apply`, upgrades `kubelet`/`kubectl`, and restores
-  package holds.
-- **Sequential worker upgrades (`serial: 1`)**: Safely drains each worker,
-  executes `kubeadm upgrade node`, upgrades binaries, and uncordons the node
-  before advancing to the next host.
-- **Granular tag execution**: Use `--tags "upgrade_control_plane"` or
-  `--tags "upgrade_worker"` to test individual stages.
-
-### 4. Dedicated CKA Hands-on Lab Environment
-
-The `cka_lab` role packages 15 hands-on training scenarios, master guides, and non-interactive automated test suites deployed directly to `/home/vagrant/cka/` on `kube-control-plane`:
-
-```bash
-# Deploy all standard CKA scenarios (1-13)
+# Deploy hands-on CKA training scenarios
 make preprod-cka-lab
 
-# Deploy full suite including dynamic LitmusChaos troubleshooting drills
+# Deploy CKA lab with dynamic LitmusChaos troubleshooting drills
 make preprod-cka-chaos
 
-# Or run via playbook wrapper targeting specific scenarios:
-./scripts/run-playbook.sh -p playbooks/cka_lab.yml --tags "scheduling"
-./scripts/run-playbook.sh -p playbooks/cka_lab.yml --tags "networking"
-./scripts/run-playbook.sh -p playbooks/cka_lab.yml --tags "cluster_troubleshooting"
+# Deploy hands-on CKS security training scenarios
+make preprod-cks-lab
 ```
 
-#### Curriculum Scenario Index
-
-1. **User Authentication & RBAC (`~/cka/rbac/`)**: Trainee Linux user `anna` with dedicated `~/.kube/config`, CertificateSigningRequest (`/CN=anna/O=developers`), and `create-user-context.sh` for practicing restricted context configuration (`bmuschko/cka-crash-course` Exercise 04).
-1. **Secrets (`~/cka/secrets/`)**: Declarative Secrets across `default` and `development` namespaces (`Opaque`, `kubernetes.io/basic-auth`, `tls`, `ssh-auth`) with decoding drills.
-1. **ConfigMaps & Kustomize (`~/cka/configmaps/`, `~/cka/kustomize/`)**: Multi-namespace ConfigMap generation and self-contained Kustomize overlay structures (`base/`, `overlays/development/`, `overlays/production/`).
-1. **Helm & Addons (`~/cka/helm/`)**: Isolated deployment scripts for Metrics Server, Prometheus Operator, NGINX Gateway Fabric, and httpbin-go.
-1. **Storage Volumes & NFS (`~/cka/volumes/`)**: Control plane NFS server exporting `/srv/nfsroot` to worker nodes, static PV/PVC bindings, `emptyDir` tmpfs, `hostPath` inspection, and automated mount verifications (`test-nfs-mounts.sh`).
-1. **Deployments & ReplicaSets (`~/cka/deployments/`)**: Rollout history, revision rollback/undo, pause/resume update batches, zero-downtime RollingUpdate vs Recreate, and label selector immutability troubleshooting (`test-deployments-drills.sh`).
-1. **Pods & Namespaces (`~/cka/pods/`)**: Imperative vs declarative Pod generation, lifecycle phases, stdout/stderr diagnostics, ephemeral container probes (`kubectl debug`), and spec immutability replacement workflows (`test-pods-drills.sh`).
-1. **Services, Ingress & Gateway API (`~/cka/networking/`)**: Multi-port ClusterIP, NodePort services, prefix path Ingress routing, Gateway API (`GatewayClass`, `Gateway`, `HTTPRoute` integrated with Caddy port 443 reverse proxy), and multi-tier NetworkPolicies (`test-networking-drills.sh`).
-1. **Advanced Scheduling & Capacity (`~/cka/scheduling/`)**: Node taints (`NoSchedule`) and matching pod tolerations, nodeAffinity and podAntiAffinity spreading, HPA autoscaling (`autoscaling/v2`), and ResourceQuota/LimitRange capacity governance (`test-scheduling-drills.sh`).
-1. **Advanced Workloads (`~/cka/workloads-advanced/`)**: DaemonSets with host log inspection, parallel batch Jobs, CronJobs, initContainers, and Kubernetes native sidecar containers (`restartPolicy: Always`, `test-workloads-advanced-drills.sh`).
-1. **StorageClasses & Dynamic Provisioning (`~/cka/storage-classes/`)**: Dynamic local-path-provisioner deployment, `WaitForFirstConsumer` delayed binding, dynamic PVC claims, and live PVC volume expansion (`test-storage-classes-drills.sh`).
-1. **Cluster Maintenance & Static Pod Recovery (`~/cka/cluster-troubleshooting/`)**: Safe node drain/cordon/uncordon, control plane static pod break-fix (corrupted kube-apiserver manifests, broken etcd cert paths, scheduler failure), worker node `kubelet.service` break-fix, and resource monitoring (`test-cluster-troubleshooting.sh`).
-1. **Custom Resource Definitions (`~/cka/crds-operators/`)**: CRD schemas with OpenAPI v3 structural validation, custom printer columns, and declarative custom resource instances (`test-crds-drills.sh`).
-1. **Dynamic Chaos Engineering (`~/cka/chaos-troubleshooting/`)**: On-demand runtime failure injection via Headless LitmusChaos (`start-chaos-exercise.sh`, `verify-chaos-exercise.sh`, `stop-chaos-exercise.sh`):
-   - `01-memory-oom/`: Container memory starvation and cgroup OOMKilled diagnosis (ExitCode 137).
-   - `02-network-latency/`: Inter-pod packet loss and timeout degradation.
-   - `03-dns-chaos/`: Service discovery blackholing and CoreDNS resolver failure.
-   - `04-node-pressure/`: Node memory saturation and QoS eviction prioritization.
-
-Trainees can also use the bundled `glow` CLI markdown reader (installed automatically via `control_plane_tools`) to view any exercise guide directly in the terminal with rich rendering (e.g. `glow ~/cka/scheduling/README.md`).
-
-### 5. Fast Cluster Reset & Repeatable Practice Loop
-
-The key strength of this training lab is the ability to **wipe and reset
-within seconds** without destroying or re-downloading virtual machines:
+### Storage Provisioning
 
 ```bash
-# Clean reset back to bare OS state
-make preprod-reset
+# Deploy Rook-Ceph operator & CephCluster on preprod
+make preprod-ceph
 
-# Or directly via playbook
-ansible-playbook -i inventory/preprod/hosts.ini playbooks/reset.yml
+# Check Ceph cluster, pool, and operator status
+make preprod-ceph-status
+
+# Deploy standalone iSCSI target server
+make preprod-iscsi
+
+# Deploy NFS server
+make preprod-nfs
 ```
 
-**What this teardown executes**:
+### Teardown & Maintenance
 
-- Invokes `kubeadm reset -f` to clear cluster state.
-- Flushes `iptables` NAT/mangle tables and cleans IPVS rules.
-- Removes Cilium network interfaces (`cilium_host`, `cilium_net`, `cilium_vxlan`).
-- Cleans runtime directories (`/etc/cni/net.d`, `/var/lib/kubelet`,
-  `/var/lib/cni`, `/etc/kubernetes`).
-- Leaves containerd and kernel settings intact, ready for an immediate
-  new `make preprod-deploy` run.
+```bash
+# Fast cluster reset without destroying VMs (clears kubeadm, iptables, CNI interfaces)
+make preprod-reset
 
-[↑ Back to Table of Contents](#table-of-contents)
+# Perform rolling upgrade across control plane and workers
+./scripts/run-playbook.sh -e preprod -p upgrade.yml --extra-vars "k8s_version=1.34.2-1.1"
+
+# Destroy VMs and remove storage volumes
+make preprod-destroy
+```
 
 ---
 
-## Directory Layout
+## Directory Structure
 
 ```text
 k8s-homelab/
-├── .ansible-lint                  # Strict ansible-lint rules configuration
-├── ansible.cfg                   # Pipelining, role dirs, YAML output callback
-├── Makefile                      # Quick targets for lint, preprod, deploy, cka
-├── Vagrantfile                   # 1 CP (192.168.56.10) + 2 Workers (configurable)
-├── shell.nix                     # Nix environment with Ansible, Vagrant & libvirt
-├── .envrc                        # Direnv integration (use nix)
-├── scripts/                      # Helper & cluster lifecycle scripts
-│   ├── shell.sh                  # Nix-shell launcher
-│   ├── help.sh                   # Cluster operations & Vagrant cheatsheet
-│   ├── lint.sh                   # yamllint, syntax check, ansible-lint
-│   ├── run-playbook.sh           # Playbook execution wrapper
-│   ├── sync-kubeconfig.sh        # Fast credential synchronization to ~/.kube/config
-│   ├── common.sh                 # VM provisioning: containerd & k8s packages
-│   ├── control-plane.sh          # VM provisioning: kubeadm init helper
-│   ├── control-plane-tools.sh    # VM provisioning: Helm, k9s, etcdctl & etcdutl installer
-│   ├── worker.sh                 # VM provisioning: kubeadm join helper
-│   ├── cni-install-cilium.sh     # Cilium CLI installer
-│   └── cni-install-calico.sh     # Calico CNI installer
+├── Vagrantfile                   # 1 Control Plane + 2 Workers on Libvirt/KVM
+├── Makefile                      # Standardized automation targets
+├── ansible.cfg                   # Pipelining, roles path, YAML stdout callback
 ├── inventory/
-│   ├── preprod/
-│   │   └── hosts.ini             # Inventory for Vagrant libvirt VMs
-│   └── prod/
-│       └── hosts.ini             # Template for physical homelab nodes
+│   ├── preprod/hosts.ini         # Vagrant libvirt inventory with per-host keys
+│   └── prod/hosts.ini            # Bare-metal / physical cluster inventory
 ├── group_vars/
-│   ├── all.yml                   # Global variables (k8s version, CIDRs, suite version)
+│   ├── all.yml                   # Cluster version, CIDRs, suite version (1.4.0)
 │   ├── preprod.yml               # Preprod environment overrides
 │   ├── control_plane.yml         # Control plane settings
 │   └── workers.yml               # Worker node settings
 ├── roles/
-│   ├── common/                   # Swap off, kernel modules, sysctl
-│   ├── containerd/               # Docker apt repo, containerd.io
-│   ├── kubernetes_packages/      # pkgs.k8s.io repo, kubeadm, kubelet, kubectl
-│   ├── control_plane_tools/      # Helm (APT), k9s (.deb), etcdctl/etcdutl
-│   ├── control_plane/            # kubeadm init, kubeconfig, join token, shell preferences
-│   ├── worker/                   # kubeadm join execution, kubelet node-ip
-│   ├── cilium/                   # Cilium CLI download, deployment
-│   ├── caddy/                    # Caddy ingress reverse proxy (PowerDNS DNS-01 ACME)
-│   ├── rook_ceph/                # Rook-Ceph operator & dynamic block storage
-│   ├── cka_lab/                  # Hands-on CKA practice scenarios (RBAC, storage, chaos)
-│   ├── upgrade/                  # CKA-style rolling cluster upgrade
-│   └── reset/                    # kubeadm reset, iptables flush, cleanup
-├── playbooks/
-│   ├── site.yml                  # End-to-end master deployment
-│   ├── bootstrap.yml             # Common OS prep + CRI + k8s packages
-│   ├── init.yml                  # Control plane initialization
-│   ├── join.yml                  # Worker node join execution
-│   ├── cni.yml                   # Deploy & verify Cilium
-│   ├── caddy.yml                 # Deploy & configure Caddy ingress reverse proxy
-│   ├── ceph.yml                  # Deploy & configure Rook-Ceph dynamic block storage
-│   ├── cka_lab.yml               # Dedicated CKA practice lab orchestration
-│   ├── upgrade.yml               # Rolling upgrade for CP and workers
-│   └── reset.yml                 # Cluster teardown for repeat practice
-├── CHANGELOG.md                  # Release notes & version history (SemVer)
-└── README.md
+│   ├── common/                   # Kernel modules, sysctl network tuning, base packages
+│   ├── containerd/               # containerd runtime configuration (SystemdCgroup)
+│   ├── kubernetes_packages/      # pkgs.k8s.io repository and pinned k8s binaries
+│   ├── control_plane/            # kubeadm init, TLS SANs, shell preferences, credentials
+│   ├── worker/                   # kubeadm join token registration
+│   ├── control_plane_tools/      # Helm, k9s (Nord theme), glow, etcdctl/etcdutl
+│   ├── cilium/                   # Cilium CLI installation & eBPF CNI deployment
+│   ├── caddy/                    # Ingress proxy with PowerDNS DNS-01 ACME TLS
+│   ├── rook_ceph/                # Rook-Ceph operator & CephBlockPool storage
+│   ├── nfs_server/               # Linux kernel NFS shared storage export
+│   ├── iscsi_target/             # LIO iSCSI target server with file-backed LUNs
+│   ├── cka_lab/                  # 15 hands-on CKA practice scenarios & Litmus chaos
+│   ├── cks_lab/                  # Hands-on CKS security tools, AppArmor, and Seccomp
+│   ├── upgrade/                  # Zero-downtime rolling cluster upgrade playbook
+│   └── reset/                    # Fast cluster wipe (kubeadm reset, iptables flush)
+├── playbooks/                    # Orchestration playbooks (site, cka_lab, cks_lab, etc.)
+└── scripts/                      # Lifecycle wrappers, credential sync, and linters
 ```
 
-[↑ Back to Table of Contents](#table-of-contents)
-
 ---
 
-## Role & Tag Reference
+## Quality Gates & Linters
 
-The playbook is built with fine-grained tags allowing you to trigger only
-specific tasks:
-
-| Role | Responsibility | Tags |
-| :--- | :--- | :--- |
-| `common` | Disable swap persistently, load `overlay`/`br_netfilter`, set sysctl, install utils | `common`, `swap`, `modules`, `sysctl`, `packages` |
-| `containerd` | Setup Docker repository, install `containerd.io`, configure `SystemdCgroup = true` | `cri`, `containerd` |
-| `kubernetes_packages` | Add `pkgs.k8s.io` repository, install `kubeadm`/`kubelet`/`kubectl`, hold | `k8s_packages`, `kubeadm`, `kubelet`, `kubectl` |
-| `control_plane_tools` | Install Helm via official APT repo, k9s and glow via release .deb, etcdctl/etcdutl | `bootstrap`, `tools`, `helm`, `k9s`, `etcd`, `glow` |
-| `control_plane` | Run `kubeadm init`, configure root/user kubeconfig, generate join token, shell preferences | `control_plane`, `init`, `kubeconfig`, `join_token`, `completion` |
-| `worker` | Execute `kubeadm join`, configure node IP in `/etc/default/kubelet` | `worker`, `join`, `kubelet` |
-| `cilium` | Download Cilium CLI, install Cilium daemonset, wait for status, verify nodes | `cni`, `cilium`, `verify` |
-| `caddy` | Build Caddy via xcaddy with PowerDNS plugin, reverse proxy 443 to NodePort 30443 | `caddy`, `ingress`, `caddy_install`, `caddy_config`, `caddy_service`, `caddy_version` |
-| `rook_ceph` | Deploy Rook-Ceph operator, CephCluster, CephBlockPool, and StorageClass | `ceph`, `storage` |
-| `nfs_server` | Deploy Linux kernel NFS storage server exporting `/srv/nfsroot` to cluster nodes | `nfs`, `nfs_server`, `storage` |
-| `iscsi_target` | Deploy Linux-IO (LIO) iSCSI target server with file-backed LUNs | `iscsi`, `iscsi_target`, `storage` |
-| `cka_lab` | Deploy 15 hands-on CKA practice scenarios, guides, and dynamic chaos drills | `cka_lab`, `motd`, `user_rbac`, `secrets`, `configmaps`, `helm`, `volumes`, `deployments`, `pods`, `networking`, `scheduling`, `workloads_advanced`, `storage_classes`, `cluster_troubleshooting`, `crds`, `chaos_troubleshooting` |
-| `upgrade` | Unhold, upgrade kubeadm, `kubeadm upgrade apply`, upgrade kubelet, hold | `upgrade`, `upgrade_control_plane`, `upgrade_worker` |
-| `reset` | `kubeadm reset -f`, flush iptables, clean CNI & `/var/lib/kubelet` | `reset` |
-
-[↑ Back to Table of Contents](#table-of-contents)
-
----
-
-## Prerequisites & Dependencies
-
-Install or verify the required Ansible collections from `requirements.yml`:
+Every playbook and role adheres to strict production quality gates:
 
 ```bash
-# Verify required collections are installed:
-make check-deps
-
-# Install missing collections:
-make deps
-```
-
-[↑ Back to Table of Contents](#table-of-contents)
-
----
-
-## Code Quality & Independent Linting
-
-Validate playbook and role code independently using the provided tools:
-
-```bash
-# Run all quality checks (yamllint, syntax, inventory, ansible-lint):
+# Run complete test suite (yamllint, syntax check, inventory parse, ansible-lint)
 make lint
-# Or directly:
-./scripts/lint.sh
-
-# Run only playbook syntax validation:
-make syntax
 ```
 
-### `.ansible-lint` Configuration
-
-The included `.ansible-lint` config enforces:
-
-- Fully Qualified Collection Names (`ansible.builtin.*`).
-- Validated YAML schemas and line length constraints.
-- Safe file modes and idempotency checks.
-- Exclusion of Vagrant state directories (`.vagrant/`).
-
-[↑ Back to Table of Contents](#table-of-contents)
-
----
-
-## Quickstart: Preprod Lab (Vagrant + Libvirt)
-
-### 1. Boot the Virtual Machines
-
-Enter the nix-shell environment and launch the 2 Ubuntu VMs:
-
-```bash
-make preprod-up
-```
-
-or
-
-```bash
-make preprod-recreate
-```
-
-in case Vagrant VMs already exist and you want to start from scratch.
-
-Or even
-
-```bash
-make preprod-reset
-```
-
-in case you do not want to destroy the VMs but just reset the k8s cluster.
-
-The first two options will create:
-
-- `kube-control-plane`: `192.168.56.10`
-- `kube-worker-1`: `192.168.56.21`
-- `kube-worker-2`: `192.168.56.22`
-*(Worker count can be adjusted by setting `WORKER_COUNT` before `make preprod-up`)*
-
-### 2. Deploy Kubernetes Cluster
-
-Run the master orchestrator against the preprod inventory:
-
-```bash
-make preprod-deploy
-# Or via wrapper:
-./scripts/run-playbook.sh -e preprod -p site.yml
-# Or standard ansible-playbook:
-ansible-playbook -i inventory/preprod/hosts.ini playbooks/site.yml
-```
-
-### 3. Verify Cluster
-
-Once finished, the playbook outputs the cluster nodes and pod summary.
-
-#### Option A: Direct Host Access via Synced Credentials
-
-Cluster credentials are synchronized non-disruptively into your local
-`~/.kube/config` and written to standalone `kubeconfig.<env>`. Context names
-are configurable via Ansible `group_vars`:
-
-- **Preprod**: `k8s-homelab-preprod` (configured in `group_vars/preprod.yml`)
-- **Production**: `k8s-homelab` (configured in `group_vars/prod.yml`)
-
-```bash
-# Query the preprod cluster directly from host
-kubectl --context=k8s-homelab-preprod get nodes -o wide
-
-# Or switch active context
-kubectl config use-context k8s-homelab-preprod
-kubectl get pods -A
-
-# Or re-synchronize credentials manually at any time
-make preprod-sync-kubeconfig
-# For production: make prod-sync-kubeconfig
-```
-
-#### Option B: SSH to Control Plane
-
-You can also SSH into the control plane VM directly:
-
-```bash
-./scripts/shell.sh --run "vagrant ssh kube-control-plane"
-kubectl get nodes -o wide
-cilium status
-
-# CKA etcd health check and snapshot verification (ETCDCTL_API=3 is auto-configured):
-sudo etcdctl \
-  --endpoints=https://127.0.0.1:2379 \
-  --cacert=/etc/kubernetes/pki/etcd/ca.crt \
-  --cert=/etc/kubernetes/pki/etcd/healthcheck-client.crt \
-  --key=/etc/kubernetes/pki/etcd/healthcheck-client.key \
-  endpoint health
-
-# Save snapshot using dedicated client credentials:
-sudo etcdctl \
-  --endpoints=https://127.0.0.1:2379 \
-  --cacert=/etc/kubernetes/pki/etcd/ca.crt \
-  --cert=/etc/kubernetes/pki/etcd/healthcheck-client.crt \
-  --key=/etc/kubernetes/pki/etcd/healthcheck-client.key \
-  snapshot save /tmp/snapshot.db
-
-# Check snapshot status with etcdutl:
-sudo etcdutl snapshot status /tmp/snapshot.db
-```
-
-### 4. Edge Ingress & TLS Termination (Caddy Reverse Proxy)
-
-The `caddy` role deploys a lightweight, custom-built Caddy reverse proxy on the control plane node (`kube-control-plane`):
-
-- **Automated Compilation & Plugin Integration**: Compiled via `xcaddy` with the PowerDNS DNS-01 provider plugin (`github.com/caddy-dns/powerdns`), with compiled binaries cached to Garage S3 (`s3://os76-assets/caddy/...`) using SOPS encrypted credentials.
-- **Port 443 Ingress Routing**: Terminates wildcard TLS certificates (`*.k8s-pre.os76.xyz` or `*.k8s.os76.xyz`) and reverse proxies incoming HTTPS traffic to cluster workloads via NodePort `30443` (e.g. NGINX Gateway Fabric / Gateway API).
-- **Endpoint Health Probing**: Includes `/home/vagrant/check-caddy-status.sh` utilizing `https-wrench` to verify certificate validity, SNI negotiation, and upstream reachability.
-
-```bash
-# Deploy or re-configure Caddy ingress reverse proxy
-make preprod-caddy
-
-# Run live TLS probe on control plane VM
-./scripts/shell.sh --run "vagrant ssh kube-control-plane -c ./check-caddy-status.sh"
-```
-
-[↑ Back to Table of Contents](#table-of-contents)
-
----
-
-## References & Documentation
-
-### Official Kubernetes Documentation
-
-- [Kubernetes Production Environment](https://kubernetes.io/docs/setup/production-environment/)
-  – Guidelines and node setup requirements.
-- [Creating a Cluster with kubeadm](https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/create-cluster-kubeadm/)
-  – Initializing the control plane and joining nodes.
-- [Container Runtimes (containerd)](https://kubernetes.io/docs/setup/production-environment/container-runtimes/#containerd)
-  – Systemd cgroup driver configuration.
-- [Upgrading kubeadm Clusters](https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-upgrade/)
-  – Sequential rolling cluster version upgrades.
-- [Operating etcd Clusters for Kubernetes](https://kubernetes.io/docs/tasks/administer-cluster/configure-upgrade-etcd/)
-  – Built-in snapshot backup and disaster recovery.
-
-### CKA Curriculum & Exercise Repositories
-
-- [CNCF CKA Exam Curriculum](https://github.com/cncf/curriculum) – Official
-  Linux Foundation / CNCF certification domains.
-- [Benjamin Muschko CKA Crash Course](https://github.com/bmuschko/cka-crash-course)
-  – Hands-on CKA preparation repository.
-- [Sander van Vugt CKA Repository](https://github.com/sandervanvugt/cka)
-  – Certified Kubernetes Administrator course labs, exercises, and exam
-  preparation materials.
-
-### Networking & Container Ecosystem
-
-- [Cilium Documentation](https://docs.cilium.io/) – eBPF-powered CNI
-  networking, security, and observability.
-- [Cilium CLI GitHub Repository](https://github.com/cilium/cilium-cli)
-  – Command-line installer and cluster verification tooling.
-- [containerd Project](https://containerd.io/) – Industry-standard core
-  container runtime.
-
-### Infrastructure & Automation Tooling
-
-- [Ansible Documentation](https://docs.ansible.com/) – Playbooks, roles,
-  variable precedence, and automation best practices.
-- [cemakpolat/ansible-kubernetes](https://github.com/cemakpolat/ansible-kubernetes)
-  – Automated Kubernetes cluster installation and role architecture patterns
-  with Ansible.
-- [ansible-lint Rules & Schemas](https://ansible.readthedocs.io/projects/lint/)
-  – Code quality, syntax enforcement, and linting profiles.
-- [Vagrant Documentation](https://developer.hashicorp.com/vagrant/docs)
-  – Virtualized lab orchestration.
-- [vagrant-libvirt Provider](https://github.com/vagrant-libvirt/vagrant-libvirt)
-  – Vagrant provider for Linux KVM/QEMU libvirt hypervisors.
-
-[↑ Back to Table of Contents](#table-of-contents)
+- **Ansible Lint**: Validated against `production` profile with 0 failures and 0 warnings.
+- **YAML & Shell**: Enforced with `yamllint` and defensive `shellcheck` standards (`set -euo pipefail`).
+- **Markdown**: Formatted per `markdownlint-cli2` rules.

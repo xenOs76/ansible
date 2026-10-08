@@ -11,8 +11,9 @@ Automated provisioning, configuration, and lifecycle management for multi-node K
 Key features include:
 
 - **Automated Bootstrapping**: Modular Ansible roles for container runtime (`containerd`), Kubernetes packages (`kubeadm`, `kubelet`, `kubectl`), control plane initialization, and worker join automation.
-- **Networking & CNI**: Production-ready Cilium CNI deployment and connectivity verification.
-- **CKA Training Scenarios (`cka_lab`)**: Isolated hands-on exam scenarios (such as user provisioning, RBAC, and Kubernetes CertificateSigningRequest authorization flows).
+- **Networking & CNI**: Production-ready Cilium CNI deployment with eBPF host routing.
+- **Enterprise Storage**: Integrated Rook-Ceph block storage, kernel NFS exports, and standalone LIO iSCSI target server.
+- **CKA & CKS Certification Labs**: 15+ hands-on CKA practice scenarios with LitmusChaos drills, alongside CKS host hardening (AppArmor, Seccomp, and security toolchain).
 - **Fast Credential Sync**: Defensive Bash scripts (`scripts/sync-kubeconfig.sh`) for non-destructive synchronization of workstation `~/.kube/config` with strict TLS verification.
 - **Upgrades & Maintenance**: Automated rolling cluster upgrades and etcd snapshot/health verification tools (`etcdctl`, `etcdutl`).
 
