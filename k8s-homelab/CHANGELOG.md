@@ -8,20 +8,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-10-08
+
 ### Added
 
-- **NFS Server Role & Preprod Provisioning (`roles/nfs_server`, `playbooks/nfs.yml`)**: Extracted NFS kernel server installation and daemon management out of `roles/cka_lab` into dedicated `roles/nfs_server`, enabled for both preprod and prod environments, automated on `make preprod-up`, added `preprod-nfs` / `prod-nfs` targets, and retained sample volume drill files within the CKA lab phase.
-- **iSCSI Target Server & CKA Volume Drills (`roles/iscsi_target`, `roles/cka_lab`)**: Provisioned a standalone Linux-IO (`LIO`) kernel target subsystem role (`targetcli-fb`) with declarative file-backed LUNs (`lun1.img`, `lun2.img`), client initiator setup (`open-iscsi`, `iscsid`, `iscsi_tcp`), `playbooks/iscsi.yml`, `make preprod-iscsi` target, and hands-on CKA volume drills under `cka/volumes/07-iscsi/` (direct Pod mounts, static PV/PVC bindings, raw block devices, RWO single-writer fencing, CHAP secret references, and automated verification tests).
-- **Ceph RBD Volume Scenarios (`roles/cka_lab`)**: Added Ceph RADOS Block Device (RBD) practice drills under `cka/volumes/06-rbd/`, featuring dynamic ext4 filesystem mounts, raw block device consumption (`volumeMode: Block` with `volumeDevices`), static Ceph CSI PV/PVC bindings, live online volume expansion, and automated non-interactive verification.
-- **Glow Markdown CLI (`roles/control_plane_tools`)**: Consolidated `glow` CLI viewer installation into control plane bootstrap tools via official release `.deb` packages, eliminating custom APT repository setup and repeated package cache refreshes during CKA lab deployment.
-- **Rook-Ceph Storage (`roles/rook_ceph`)**: Integrated Rook-Ceph operator (pinned Helm chart `v1.15.5`) with single-node OSD backed by a 20GB secondary disk (`/dev/vdb`), dynamic `rook-ceph-block` StorageClass, kernel `rbd` module tuning, `playbooks/ceph.yml`, `scripts/check-ceph-status.sh` diagnostic tool, and `make preprod-ceph` / `make preprod-ceph-status` targets.
+- **CKS Certification Lab Suite (`roles/cks_lab`, `playbooks/cks_lab.yml`)**: Provisioned hands-on exam training environment on control plane with automated security tooling (`kube-bench`, `trivy`, `hadolint`, `kubesec`, `cosign`), multi-node AppArmor profiles and kernel enforcement (`k8s-deny-write`, `k8s-deny-network`), Seccomp profiles (`audit.json`, `fine-grained.json`), native K8s 1.30+ security context drills, and system footprint audit scripts.
+- **NFS Shared Storage (`roles/nfs_server`, `playbooks/nfs.yml`)**: Dedicated NFS kernel storage server role provisioned automatically during VM boot (`make preprod-up`) across preprod and prod environments.
+- **iSCSI Target & Storage Scenarios (`roles/iscsi_target`, `roles/cka_lab`)**: Standalone Linux-IO (LIO) target server with declarative file-backed LUNs, initiator tooling, and CKA volume drills for direct mounts, raw block devices, and static PV/PVC bindings.
+- **Ceph RBD Practice Drills (`roles/cka_lab`)**: Block storage practice scenarios covering ext4 dynamic volumes, raw block devices, Ceph CSI static bindings, and live online volume expansion.
+- **Rook-Ceph Block Storage (`roles/rook_ceph`)**: Cloud-native Ceph orchestration backed by dedicated virtual disk on the control plane with dynamic storage class provisioning.
+- **Control Plane Tooling (`roles/control_plane_tools`)**: Consolidated official `glow` CLI viewer package installation into control plane bootstrap tooling.
 
 ### Fixed
 
-- **iSCSI Static PV/PVC Binding (`roles/cka_lab`)**: Explicitly set `storageClassName: ""` across static iSCSI PersistentVolume and PersistentVolumeClaim manifests (`02-iscsi-pv-pvc-pod.yaml`, `03-iscsi-raw-block.yaml`) to prevent the default StorageClass admission plugin from mutating claims and causing PVC binding hangs (`FailedScheduling: pod has unbound immediate PersistentVolumeClaims`), and added idempotent pre-step resource cleanup in `test-iscsi-volumes.sh`.
-- **Ceph CSI Provisioner Domain (`roles/rook_ceph`, `roles/cka_lab`)**: Corrected CSI provisioner domain from `.csi.ceph.io` to `.csi.ceph.com` across StorageClass definitions, static PV manifests, and drill scripts to resolve PVC binding hangs and pod mount failures (`error processing PVC: PVC is not bound`).
-- **VM Root Disk Sizing & Disk Pressure (`Vagrantfile`, `scripts/common.sh`)**: Expanded default VM root disk virtual size to 25GB (`ROOT_DISK_SIZE`) via libvirt `machine_virtual_size` across all nodes to prevent Kubelet `DiskPressure` and ephemeral-storage evictions during container downloads, and added automatic `apt-get clean` to post-upgrade provisioning steps.
-- **Orphaned Storage Volume Cleanup (`Makefile`)**: Added automatic removal of secondary volume `k8s-homelab_kube-control-plane-vdb.qcow2` to `make preprod-destroy` to prevent `virStorageVolCreateXML` collisions during VM recreation.
+- **Cross-Node Task Delegation (`inventory/preprod/hosts.ini`)**: Configured per-host SSH private keys in preprod inventory to resolve authentication failures during delegated execution across cluster nodes.
+- **CKS Multi-Node Template Rendering (`roles/cks_lab`)**: Resolved list indexing in cartesian product loops for AppArmor and Seccomp profile distribution.
+- **Storage & CSI Configurations (`roles/cka_lab`, `roles/rook_ceph`)**: Corrected Ceph CSI driver domain to `.csi.ceph.com` and pinned static iSCSI claims to empty StorageClass to prevent admission binding deadlocks.
+- **VM Disk Provisioning & Cleanup (`Vagrantfile`, `Makefile`)**: Expanded base root disk sizing to 25GB to eliminate kubelet disk pressure, and automated secondary volume removal on destroy.
 
 ## [1.3.0] - 2026-10-02
 

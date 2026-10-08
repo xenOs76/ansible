@@ -1,0 +1,40 @@
+---
+- name: Ensure CKS lab workspace directory exists
+  ansible.builtin.file:
+    path: "{{ cks_lab_workspace_dir }}"
+    state: directory
+    owner: "{{ cks_lab_user }}"
+    group: "{{ cks_lab_user }}"
+    mode: "0755"
+  tags:
+    - cks_lab
+    - tools
+
+- name: Execute CKS Lab Scenario - Tooling Provisioning (tools)
+  ansible.builtin.include_tasks: scenario_tools.yml
+  when: cks_lab_scenario_tools_enabled | bool
+  tags:
+    - cks_lab
+    - tools
+
+- name: Execute CKS Lab Scenario - System Hardening (system)
+  ansible.builtin.include_tasks: scenario_system_hardening.yml
+  when: cks_lab_scenario_system_hardening_enabled | bool
+  tags:
+    - cks_lab
+    - system
+    - system_hardening
+
+- name: Execute CKS Lab Scenario - AppArmor Kernel Profiles (apparmor)
+  ansible.builtin.include_tasks: scenario_apparmor.yml
+  when: cks_lab_scenario_apparmor_enabled | bool
+  tags:
+    - cks_lab
+    - apparmor
+
+- name: Execute CKS Lab Scenario - Seccomp Syscall Filtering (seccomp)
+  ansible.builtin.include_tasks: scenario_seccomp.yml
+  when: cks_lab_scenario_seccomp_enabled | bool
+  tags:
+    - cks_lab
+    - seccomp

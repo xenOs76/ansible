@@ -1,0 +1,36 @@
+---
+# Scenario toggles (organized by CKS exam domain)
+cks_lab_scenario_motd_enabled: true
+cks_lab_scenario_tools_enabled: true
+cks_lab_scenario_system_hardening_enabled: true
+cks_lab_scenario_apparmor_enabled: true
+cks_lab_scenario_seccomp_enabled: true
+cks_lab_scenario_cis_bench_enabled: true
+cks_lab_scenario_audit_logs_enabled: true
+cks_lab_scenario_etcd_enc_enabled: true
+cks_lab_scenario_gvisor_enabled: true
+cks_lab_scenario_admission_enabled: true
+cks_lab_scenario_supply_chain_enabled: true
+cks_lab_scenario_falco_enabled: true
+
+# User and workspace settings
+cks_lab_user: "{{ ansible_user | default('vagrant') }}"
+cks_lab_workspace_dir: "/home/{{ cks_lab_user }}/cks"
+cks_lab_apparmor_workspace: "{{ cks_lab_workspace_dir }}/apparmor"
+cks_lab_seccomp_workspace: "{{ cks_lab_workspace_dir }}/seccomp"
+cks_lab_system_workspace: "{{ cks_lab_workspace_dir }}/system"
+
+# AppArmor and Seccomp host directories
+cks_lab_apparmor_profiles_dir: "/etc/apparmor.d"
+cks_lab_seccomp_profiles_dir: "/var/lib/kubelet/seccomp/profiles"
+
+# Tooling versions and download definitions
+cks_lab_kube_bench_version: "0.16.0"
+cks_lab_trivy_version: "0.75.0"
+cks_lab_hadolint_version: "2.12.0"
+cks_lab_kubesec_version: "2.14.2"
+cks_lab_cosign_version: "2.4.3"
+
+# MOTD configuration
+cks_lab_motd_file: "/home/{{ cks_lab_user }}/.motd"
+cks_lab_update_motd_hook: "/etc/update-motd.d/99-cks-training"

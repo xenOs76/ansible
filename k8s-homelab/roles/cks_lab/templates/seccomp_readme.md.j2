@@ -1,0 +1,53 @@
+# CKS Exam Drill: Seccomp System Call Filtering
+
+Seccomp (Secure Computing Mode) restricts the system calls (syscalls) a process running in a container can make to the Linux host kernel. In the CKS exam, you must be comfortable reading, creating, and applying seccomp profiles to Pods.
+
+---
+
+## 1. Kubelet Seccomp Architecture
+
+By default, the kubelet searches for custom profiles relative to its root seccomp directory:
+
+```text
+/var/lib/kubelet/seccomp/
+```
+
+When you define:
+
+```yaml
+securityContext:
+  seccompProfile:
+    type: Localhost
+    localhostProfile: profiles/fine-grained.json
+```
+
+The kubelet loads the file located at:
+
+```text
+/var/lib/kubelet/seccomp/profiles/fine-grained.json
+```
+
+---
+
+## 2. Common Seccomp Actions
+
+| Action | Behavior |
+| :--- | :--- |
+| **`SCMP_ACT_ERRNO`** | Fails the syscall immediately with an error (typically `EPERM` / Operation not permitted). |
+| **`SCMP_ACT_LOG`** | Allows the syscall, but writes an audit log to `/var/log/syslog` or `journalctl`. |
+| **`SCMP_ACT_ALLOW`** | Allows the syscall without logging or restrictions. |
+| **`SCMP_ACT_KILL`** | Immediately terminates the calling process. |
+
+---
+
+## 3. Practice Drills
+
+1. Inspect the profile `/var/lib/kubelet/seccomp/profiles/fine-grained.json`. Notice how `mkdir` and `chmod` syscalls return `SCMP_ACT_ERRNO`.
+2. Apply `01-pod-unconfined.yaml` and verify the directory `/tmp/seccomp-test-dir` is created.
+3. Apply `02-pod-runtime-default.yaml` and observe that common syscalls operate cleanly under the container runtime's default profile.
+4. Apply `03-pod-custom-profile.yaml` and observe that `mkdir` is blocked with `Operation not permitted`.
+5. Run the automated test script:
+
+```bash
+./test-seccomp-drills.sh
+```

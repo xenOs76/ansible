@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo "=== CKS System Hardening: Running Services Audit ==="
+echo ""
+echo "--- Active Systemd Services on $(hostname) ---"
+systemctl list-units --type=service --state=running --no-pager --no-legend | awk '{print $1}' | sort

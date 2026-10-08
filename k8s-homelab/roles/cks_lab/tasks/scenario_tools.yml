@@ -1,0 +1,124 @@
+---
+- name: Determine architecture mappings for CKS tools
+  ansible.builtin.set_fact:
+    cks_lab_deb_arch: "{{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}"
+    cks_lab_trivy_arch: "{{ 'ARM64' if ansible_architecture == 'aarch64' else '64bit' }}"
+    cks_lab_hadolint_arch: "{{ 'arm64' if ansible_architecture == 'aarch64' else 'x86_64' }}"
+    cks_lab_kubesec_arch: "{{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}"
+    cks_lab_cosign_arch: "{{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}"
+  tags:
+    - cks_lab
+    - tools
+
+- name: Check if kube-bench is installed
+  ansible.builtin.stat:
+    path: /usr/local/bin/kube-bench
+  register: cks_lab_kube_bench_stat
+  tags:
+    - cks_lab
+    - tools
+
+- name: Install kube-bench from official release deb package
+  ansible.builtin.apt:
+    deb: >-
+      {{
+        'https://github.com/aquasecurity/kube-bench/releases/download/v' ~ cks_lab_kube_bench_version ~
+        '/kube-bench_' ~ cks_lab_kube_bench_version ~ '_linux_' ~ cks_lab_deb_arch ~ '.deb'
+      }}
+    state: present
+  when: not cks_lab_kube_bench_stat.stat.exists
+  tags:
+    - cks_lab
+    - tools
+
+- name: Check if trivy is installed
+  ansible.builtin.stat:
+    path: /usr/local/bin/trivy
+  register: cks_lab_trivy_stat
+  tags:
+    - cks_lab
+    - tools
+
+- name: Install trivy from official release deb package
+  ansible.builtin.apt:
+    deb: >-
+      https://github.com/aquasecurity/trivy/releases/download/v{{ cks_lab_trivy_version }}/trivy_{{ cks_lab_trivy_version }}_Linux-{{ cks_lab_trivy_arch }}.deb
+    state: present
+  when: not cks_lab_trivy_stat.stat.exists
+  tags:
+    - cks_lab
+    - tools
+
+- name: Check if hadolint is installed
+  ansible.builtin.stat:
+    path: /usr/local/bin/hadolint
+  register: cks_lab_hadolint_stat
+  tags:
+    - cks_lab
+    - tools
+
+- name: Install hadolint CLI binary
+  ansible.builtin.get_url:
+    url: >-
+      https://github.com/hadolint/hadolint/releases/download/v{{ cks_lab_hadolint_version }}/hadolint-Linux-{{ cks_lab_hadolint_arch }}
+    dest: /usr/local/bin/hadolint
+    mode: "0755"
+  when: not cks_lab_hadolint_stat.stat.exists
+  tags:
+    - cks_lab
+    - tools
+
+- name: Check if kubesec is installed
+  ansible.builtin.stat:
+    path: /usr/local/bin/kubesec
+  register: cks_lab_kubesec_stat
+  tags:
+    - cks_lab
+    - tools
+
+- name: Install kubesec CLI binary
+  ansible.builtin.unarchive:
+    src: >-
+      https://github.com/controlplaneio/kubesec/releases/download/v{{ cks_lab_kubesec_version }}/kubesec_linux_{{ cks_lab_kubesec_arch }}.tar.gz
+    dest: /usr/local/bin
+    remote_src: true
+    mode: "0755"
+    creates: /usr/local/bin/kubesec
+  when: not cks_lab_kubesec_stat.stat.exists
+  tags:
+    - cks_lab
+    - tools
+
+- name: Check if cosign is installed
+  ansible.builtin.stat:
+    path: /usr/local/bin/cosign
+  register: cks_lab_cosign_stat
+  tags:
+    - cks_lab
+    - tools
+
+- name: Install cosign CLI binary
+  ansible.builtin.get_url:
+    url: >-
+      https://github.com/sigstore/cosign/releases/download/v{{ cks_lab_cosign_version }}/cosign-linux-{{ cks_lab_cosign_arch }}
+    dest: /usr/local/bin/cosign
+    mode: "0755"
+  when: not cks_lab_cosign_stat.stat.exists
+  tags:
+    - cks_lab
+    - tools
+
+- name: Verify installed CKS security tools
+  ansible.builtin.command: "{{ item.cmd }}"
+  register: cks_lab_tool_check
+  changed_when: false
+  loop:
+    - {name: "kube-bench", cmd: "kube-bench version"}
+    - {name: "trivy", cmd: "trivy --version"}
+    - {name: "hadolint", cmd: "hadolint --version"}
+    - {name: "kubesec", cmd: "kubesec version"}
+    - {name: "cosign", cmd: "cosign version"}
+  tags:
+    - cks_lab
+    - tools
+    - verify

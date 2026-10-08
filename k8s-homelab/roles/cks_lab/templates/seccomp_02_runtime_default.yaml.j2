@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: seccomp-runtime-default
+  namespace: default
+  labels:
+    app: seccomp-drill
+spec:
+  restartPolicy: Never
+  containers:
+    - name: test
+      image: busybox:1.36.1
+      command: ["sh", "-c", "echo 'Running under RuntimeDefault' && sleep 3600"]
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault

@@ -1,0 +1,9 @@
+---
+- name: Deploy CKS Training Lab Scenarios
+  hosts: control_plane
+  become: true
+  roles:
+    - role: cks_lab
+  tags:
+    - cks_lab
+    - training

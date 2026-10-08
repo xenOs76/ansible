@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo "=== CKS System Hardening: Kubernetes File Permission Audit ==="
+echo ""
+echo "--- Static Pod Manifests (/etc/kubernetes/manifests/) ---"
+ls -la /etc/kubernetes/manifests/ 2>/dev/null || true
+
+echo ""
+echo "--- Core Kubernetes Configurations (/etc/kubernetes/) ---"
+ls -la /etc/kubernetes/*.conf 2>/dev/null || true
+
+echo ""
+echo "--- PKI Certificates & Keys (/etc/kubernetes/pki/) ---"
+sudo ls -la /etc/kubernetes/pki/ 2>/dev/null | head -n 15 || true
+
+echo ""
+echo "--- Kubelet Configuration (/var/lib/kubelet/) ---"
+ls -la /var/lib/kubelet/config.yaml 2>/dev/null || true

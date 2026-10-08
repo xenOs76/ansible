@@ -1,0 +1,29 @@
+---
+- name: Ensure CKS system hardening workspace directory exists
+  ansible.builtin.file:
+    path: "{{ cks_lab_system_workspace }}"
+    state: directory
+    owner: "{{ cks_lab_user }}"
+    group: "{{ cks_lab_user }}"
+    mode: "0755"
+  tags:
+    - cks_lab
+    - system
+    - system_hardening
+
+- name: Deploy CKS system hardening drill scripts and guides
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "{{ cks_lab_system_workspace }}/{{ item.dest }}"
+    owner: "{{ cks_lab_user }}"
+    group: "{{ cks_lab_user }}"
+    mode: "{{ item.mode | default('0644') }}"
+  loop:
+    - {src: "system_audit_ports.sh.j2", dest: "audit-ports.sh", mode: "0755"}
+    - {src: "system_audit_services.sh.j2", dest: "audit-services.sh", mode: "0755"}
+    - {src: "system_audit_file_perms.sh.j2", dest: "audit-file-perms.sh", mode: "0755"}
+    - {src: "system_readme.md.j2", dest: "README.md"}
+  tags:
+    - cks_lab
+    - system
+    - system_hardening

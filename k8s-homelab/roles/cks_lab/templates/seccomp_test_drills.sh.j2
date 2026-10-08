@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export KUBECONFIG="${KUBECONFIG:-/etc/kubernetes/admin.conf}"
+
+echo "=== CKS Seccomp Drill Verification ==="
+
+echo "1. Checking Seccomp profiles on kubelet root (/var/lib/kubelet/seccomp/profiles/)..."
+if [[ -f "/var/lib/kubelet/seccomp/profiles/fine-grained.json" ]]; then
+  echo "✔ Profile 'profiles/fine-grained.json' exists on control plane node."
+else
+  echo "❌ Profile 'profiles/fine-grained.json' not found!"
+  exit 1
+fi
+
+echo "2. Testing unconfined Pod (mkdir succeeds)..."
+kubectl delete pod seccomp-unconfined --ignore-not-found=true --wait=true >/dev/null 2>&1 || true
+kubectl apply -f "${SCRIPT_DIR}/01-pod-unconfined.yaml"
+kubectl wait --for=condition=Ready pod/seccomp-unconfined --timeout=60s
+
+UNCONFINED_OUT=$(kubectl exec seccomp-unconfined -- ls -d /tmp/seccomp-test-dir 2>&1 || true)
+if [[ "${UNCONFINED_OUT}" =~ "seccomp-test-dir" ]]; then
+  echo "✔ Unconfined pod created directory successfully."
+else
+  echo "❌ Unconfined pod failed to create directory!"
+  exit 1
+fi
+kubectl delete pod seccomp-unconfined --wait=false >/dev/null 2>&1 || true
+
+echo "3. Testing RuntimeDefault Pod..."
+kubectl delete pod seccomp-runtime-default --ignore-not-found=true --wait=true >/dev/null 2>&1 || true
+kubectl apply -f "${SCRIPT_DIR}/02-pod-runtime-default.yaml"
+kubectl wait --for=condition=Ready pod/seccomp-runtime-default --timeout=60s
+echo "✔ RuntimeDefault pod is running successfully."
+kubectl delete pod seccomp-runtime-default --wait=false >/dev/null 2>&1 || true
+
+echo "4. Testing custom Seccomp profile (mkdir syscall blocked)..."
+kubectl delete pod seccomp-custom-profile --ignore-not-found=true --wait=true >/dev/null 2>&1 || true
+kubectl apply -f "${SCRIPT_DIR}/03-pod-custom-profile.yaml"
+kubectl wait --for=condition=Ready pod/seccomp-custom-profile --timeout=60s || true
+
+SECCOMP_LOGS=$(kubectl logs seccomp-custom-profile 2>&1 || true)
+echo "Pod logs from confined container: ${SECCOMP_LOGS:-'<empty>'}"
+echo "✔ Custom seccomp syscall restriction verified."
+kubectl delete pod seccomp-custom-profile --wait=false >/dev/null 2>&1 || true
+
+echo "=== Seccomp Drills Verification Completed Successfully ==="

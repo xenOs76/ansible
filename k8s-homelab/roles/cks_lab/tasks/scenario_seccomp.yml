@@ -1,0 +1,64 @@
+---
+- name: Ensure kubelet seccomp profiles directory exists on cluster nodes
+  ansible.builtin.file:
+    path: "{{ cks_lab_seccomp_profiles_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  delegate_to: "{{ item }}"
+  loop: "{{ groups['k8s_cluster'] }}"
+  tags:
+    - cks_lab
+    - seccomp
+
+- name: Deploy Seccomp profiles to all cluster nodes
+  ansible.builtin.template:
+    src: "{{ item[1].src }}"
+    dest: "{{ cks_lab_seccomp_profiles_dir }}/{{ item[1].dest }}"
+    owner: root
+    group: root
+    mode: "0644"
+  delegate_to: "{{ cks_lab_node }}"
+  loop: >-
+    {{
+      query('cartesian', groups['k8s_cluster'], [
+        {'src': 'seccomp_profile_audit.json.j2', 'dest': 'audit.json'},
+        {'src': 'seccomp_profile_fine_grained.json.j2', 'dest': 'fine-grained.json'}
+      ])
+    }}
+  vars:
+    cks_lab_node: "{{ item[0] }}"
+  loop_control:
+    label: "{{ item[0] }}: {{ item[1].dest }}"
+  tags:
+    - cks_lab
+    - seccomp
+
+- name: Ensure CKS Seccomp workspace directory exists
+  ansible.builtin.file:
+    path: "{{ cks_lab_seccomp_workspace }}"
+    state: directory
+    owner: "{{ cks_lab_user }}"
+    group: "{{ cks_lab_user }}"
+    mode: "0755"
+  tags:
+    - cks_lab
+    - seccomp
+
+- name: Deploy CKS Seccomp drill manifests and guides
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "{{ cks_lab_seccomp_workspace }}/{{ item.dest }}"
+    owner: "{{ cks_lab_user }}"
+    group: "{{ cks_lab_user }}"
+    mode: "{{ item.mode | default('0644') }}"
+  loop:
+    - {src: "seccomp_01_unconfined.yaml.j2", dest: "01-pod-unconfined.yaml"}
+    - {src: "seccomp_02_runtime_default.yaml.j2", dest: "02-pod-runtime-default.yaml"}
+    - {src: "seccomp_03_custom_profile.yaml.j2", dest: "03-pod-custom-profile.yaml"}
+    - {src: "seccomp_readme.md.j2", dest: "README.md"}
+    - {src: "seccomp_test_drills.sh.j2", dest: "test-seccomp-drills.sh", mode: "0755"}
+  tags:
+    - cks_lab
+    - seccomp

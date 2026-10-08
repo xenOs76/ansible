@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo "=== CKS System Hardening: Open Port Audit ==="
+echo ""
+echo "--- Listening TCP/UDP Ports on $(hostname) ---"
+sudo ss -tulpn
+
+echo ""
+echo "--- Kubernetes Expected Ports Quick Reference ---"
+cat << 'EOF'
+Control Plane:
+  - 6443       : Kubernetes API Server
+  - 2379-2380  : etcd server client API / peer communication
+  - 10250      : Kubelet API
+  - 10257      : kube-controller-manager
+  - 10259      : kube-scheduler
+
+Worker Nodes:
+  - 10250      : Kubelet API
+  - 30000-32767: NodePort Services range
+EOF

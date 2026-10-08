@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: seccomp-custom-profile
+  namespace: default
+  labels:
+    app: seccomp-drill
+spec:
+  restartPolicy: Never
+  containers:
+    - name: test
+      image: busybox:1.36.1
+      command: ["sh", "-c", "mkdir /tmp/blocked-dir || exit 0"]
+      securityContext:
+        seccompProfile:
+          type: Localhost
+          localhostProfile: profiles/fine-grained.json

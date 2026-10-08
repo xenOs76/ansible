@@ -1,0 +1,82 @@
+# CKS Exam Drill: AppArmor Kernel Hardening
+
+AppArmor is a Linux Security Module (LSM) that confines programs to a limited set of resources (files, capabilities, network). In the CKS exam, you are frequently asked to load an AppArmor profile on cluster nodes and apply it to a Pod.
+
+---
+
+## 1. Key Linux AppArmor Commands
+
+Check status of loaded profiles and enforcement modes:
+
+```bash
+sudo aa-status
+```
+
+Parse and reload an AppArmor profile into the Linux kernel:
+
+```bash
+sudo apparmor_parser -r /etc/apparmor.d/<profile-file>
+```
+
+Change enforcement modes:
+
+```bash
+sudo aa-enforce /etc/apparmor.d/<profile-file>   # Strict blocking
+sudo aa-complain /etc/apparmor.d/<profile-file>  # Log only, do not block
+sudo aa-disable /etc/apparmor.d/<profile-file>   # Disable profile
+```
+
+---
+
+## 2. Applying AppArmor to Kubernetes Pods
+
+### Native Syntax (Kubernetes 1.30+, GA in 1.34)
+
+In Kubernetes 1.30 and later, AppArmor is configured directly via `securityContext.appArmorProfile`:
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: secured-pod
+spec:
+  containers:
+    - name: app
+      image: busybox:1.36.1
+      command: ["sh", "-c", "echo 'test' > /tmp/out.txt"]
+      securityContext:
+        appArmorProfile:
+          type: Localhost
+          localhostProfile: k8s-deny-write
+```
+
+Supported `type` values:
+
+- `RuntimeDefault`: Use container runtime default AppArmor profile.
+- `Localhost`: Use profile loaded on the node specified by `localhostProfile`.
+- `Unconfined`: Disable AppArmor confinement for the container.
+
+### Legacy Syntax (Kubernetes < 1.30)
+
+> [!NOTE]
+> Deprecated in 1.30 and removed in 1.34. Shown for historical exam context:
+
+```yaml
+metadata:
+  annotations:
+    container.apparmor.security.beta.kubernetes.io/<container-name>: localhost/<profile-name>
+```
+
+---
+
+## 3. Practice Drills
+
+1. Inspect the loaded profile in `/etc/apparmor.d/k8s-deny-write`.
+2. Verify it is loaded in the kernel using `sudo aa-status | grep k8s-deny-write`.
+3. Apply `01-pod-unconfined.yaml` and verify it can write to `/tmp/write-test.txt`.
+4. Apply `02-pod-deny-write.yaml` and inspect pod logs to observe `Permission denied`.
+5. Run the automated test script:
+
+```bash
+./test-apparmor-drills.sh
+```

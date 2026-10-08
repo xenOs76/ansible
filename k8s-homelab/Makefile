@@ -1,4 +1,4 @@
-.PHONY: all lint syntax inventory deps check-deps preprod-up preprod-destroy preprod-recreate preprod-status preprod-provision preprod-sync-kubeconfig prod-sync-kubeconfig preprod-deploy preprod-caddy preprod-cni preprod-ceph prod-ceph preprod-ceph-status preprod-iscsi preprod-nfs prod-nfs preprod-upgrade preprod-reset preprod-cka-lab help
+.PHONY: all lint syntax inventory deps check-deps preprod-up preprod-destroy preprod-recreate preprod-status preprod-provision preprod-sync-kubeconfig prod-sync-kubeconfig preprod-deploy preprod-caddy preprod-cni preprod-ceph prod-ceph preprod-ceph-status preprod-iscsi preprod-nfs prod-nfs preprod-upgrade preprod-reset preprod-cka-lab preprod-cks-lab help
 
 all: help
 
@@ -30,6 +30,7 @@ help:
 	@echo "make preprod-reset     - Teardown/reset cluster on preprod"
 	@echo "make preprod-cka-lab   - Deploy CKA training lab scenarios on preprod"
 	@echo "make preprod-cka-chaos - Deploy CKA lab including Litmus dynamic chaos drills"
+	@echo "make preprod-cks-lab   - Deploy CKS training lab scenarios on preprod"
 
 deps:
 	ansible-galaxy collection install -r requirements.yml
@@ -116,3 +117,6 @@ preprod-cka-lab:
 
 preprod-cka-chaos:
 	./scripts/run-playbook.sh -e preprod -p cka_lab.yml --extra-vars "cka_lab_scenario_chaos_troubleshooting_enabled=true"
+
+preprod-cks-lab:
+	./scripts/run-playbook.sh -e preprod -p cks_lab.yml

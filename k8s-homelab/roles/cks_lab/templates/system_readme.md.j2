@@ -1,0 +1,83 @@
+# CKS Exam Drill: Host System Hardening & Footprint Reduction
+
+System hardening focuses on minimizing the host OS attack surface, restricting network exposure, securing permissions on critical Kubernetes files, and auditing running services.
+
+---
+
+## 1. Network & Port Hardening
+
+Identify open TCP and UDP listening sockets:
+
+```bash
+sudo ss -tulpn
+# or
+sudo lsof -i -P -n | grep LISTEN
+```
+
+Standard Kubernetes port assignments:
+
+| Port | Component | Host |
+| :--- | :--- | :--- |
+| **`6443`** | Kubernetes API Server | Control Plane |
+| **`2379–2380`** | etcd server client / peer API | Control Plane |
+| **`10250`** | Kubelet API | All Nodes |
+| **`10257`** | kube-controller-manager | Control Plane |
+| **`10259`** | kube-scheduler | Control Plane |
+| **`30000–32767`** | NodePort Services range | Worker Nodes |
+
+---
+
+## 2. Managing Services & Reducing OS Footprint
+
+Audit active services:
+
+```bash
+systemctl list-units --type=service --state=running
+```
+
+Disable unneeded or unauthorized services:
+
+```bash
+sudo systemctl stop <service-name>
+sudo systemctl disable <service-name>
+```
+
+Audit and remove unnecessary packages:
+
+```bash
+sudo apt purge -y <unneeded-package>
+sudo apt autoremove -y
+```
+
+---
+
+## 3. CIS Recommended Kubernetes File Permissions
+
+| Path | Recommended Permissions | Recommended Owner |
+| :--- | :---: | :---: |
+| `/etc/kubernetes/manifests/*.yaml` | `0600` or `0644` | `root:root` |
+| `/etc/kubernetes/*.conf` (`admin.conf`, etc.) | `0600` | `root:root` |
+| `/etc/kubernetes/pki/*.key` | `0600` | `root:root` |
+| `/etc/kubernetes/pki/*.crt` | `0644` | `root:root` |
+| `/var/lib/kubelet/config.yaml` | `0600` or `0644` | `root:root` |
+
+To fix permissions:
+
+```bash
+sudo chmod 600 /etc/kubernetes/admin.conf
+sudo chmod 600 /etc/kubernetes/pki/*.key
+sudo chmod 644 /etc/kubernetes/manifests/*.yaml
+sudo chown -R root:root /etc/kubernetes/
+```
+
+---
+
+## 4. Practice Drills
+
+Execute the provided audit tools:
+
+```bash
+./audit-ports.sh
+./audit-services.sh
+./audit-file-perms.sh
+```

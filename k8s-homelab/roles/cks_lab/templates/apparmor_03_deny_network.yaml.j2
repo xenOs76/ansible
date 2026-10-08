@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: apparmor-deny-network
+  namespace: default
+  labels:
+    app: apparmor-drill
+spec:
+  restartPolicy: Never
+  containers:
+    - name: test
+      image: busybox:1.36.1
+      command: ["sh", "-c", "ping -c 1 1.1.1.1 || exit 0"]
+      securityContext:
+        appArmorProfile:
+          type: Localhost
+          localhostProfile: k8s-deny-network

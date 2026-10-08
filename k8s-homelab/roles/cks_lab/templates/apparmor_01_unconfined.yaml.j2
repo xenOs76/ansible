@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: apparmor-unconfined
+  namespace: default
+  labels:
+    app: apparmor-drill
+spec:
+  restartPolicy: Never
+  containers:
+    - name: test
+      image: busybox:1.36.1
+      command: ["sh", "-c", "echo 'Hello from unconfined' > /tmp/write-test.txt && cat /tmp/write-test.txt && sleep 3600"]

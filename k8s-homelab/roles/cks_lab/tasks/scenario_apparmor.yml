@@ -1,0 +1,74 @@
+---
+- name: Ensure apparmor-utils is installed on cluster nodes
+  ansible.builtin.apt:
+    name:
+      - apparmor
+      - apparmor-utils
+    state: present
+  delegate_to: "{{ item }}"
+  loop: "{{ groups['k8s_cluster'] }}"
+  tags:
+    - cks_lab
+    - apparmor
+
+- name: Deploy CKS AppArmor profiles to all cluster nodes
+  ansible.builtin.template:
+    src: "{{ item[1].src }}"
+    dest: "{{ cks_lab_apparmor_profiles_dir }}/{{ item[1].dest }}"
+    owner: root
+    group: root
+    mode: "0644"
+  delegate_to: "{{ cks_lab_node }}"
+  loop: >-
+    {{
+      query('cartesian', groups['k8s_cluster'], [
+        {'src': 'apparmor_profile_deny_write.j2', 'dest': 'k8s-deny-write'},
+        {'src': 'apparmor_profile_deny_network.j2', 'dest': 'k8s-deny-network'}
+      ])
+    }}
+  vars:
+    cks_lab_node: "{{ item[0] }}"
+  loop_control:
+    label: "{{ item[0] }}: {{ item[1].dest }}"
+  tags:
+    - cks_lab
+    - apparmor
+
+- name: Load AppArmor profiles into Linux kernel on all nodes
+  ansible.builtin.command: "apparmor_parser -q -r {{ cks_lab_apparmor_profiles_dir }}/{{ item[1].dest }}"
+  delegate_to: "{{ item[0] }}"
+  changed_when: false
+  loop: "{{ query('cartesian', groups['k8s_cluster'], [{'dest': 'k8s-deny-write'}, {'dest': 'k8s-deny-network'}]) }}"
+  loop_control:
+    label: "{{ item[0] }}: {{ item[1].dest }}"
+  tags:
+    - cks_lab
+    - apparmor
+
+- name: Ensure CKS AppArmor workspace directory exists
+  ansible.builtin.file:
+    path: "{{ cks_lab_apparmor_workspace }}"
+    state: directory
+    owner: "{{ cks_lab_user }}"
+    group: "{{ cks_lab_user }}"
+    mode: "0755"
+  tags:
+    - cks_lab
+    - apparmor
+
+- name: Deploy CKS AppArmor drill manifests and guides
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "{{ cks_lab_apparmor_workspace }}/{{ item.dest }}"
+    owner: "{{ cks_lab_user }}"
+    group: "{{ cks_lab_user }}"
+    mode: "{{ item.mode | default('0644') }}"
+  loop:
+    - {src: "apparmor_01_unconfined.yaml.j2", dest: "01-pod-unconfined.yaml"}
+    - {src: "apparmor_02_deny_write.yaml.j2", dest: "02-pod-deny-write.yaml"}
+    - {src: "apparmor_03_deny_network.yaml.j2", dest: "03-pod-deny-network.yaml"}
+    - {src: "apparmor_readme.md.j2", dest: "README.md"}
+    - {src: "apparmor_test_drills.sh.j2", dest: "test-apparmor-drills.sh", mode: "0755"}
+  tags:
+    - cks_lab
+    - apparmor
