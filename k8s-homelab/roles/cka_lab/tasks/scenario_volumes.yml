@@ -1,4 +1,19 @@
 ---
+- name: Ensure NFS export directories exist for CKA volume drills
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0777"
+  loop:
+    - "{{ cka_lab_nfs_export_dir }}"
+    - "{{ cka_lab_nfs_export_dir }}/data"
+    - "{{ cka_lab_nfs_export_dir }}/reports"
+  tags:
+    - cka_lab
+    - volumes
+    - nfs
 
 - name: Create sample shared files on NFS export directory
   ansible.builtin.copy:
@@ -40,7 +55,6 @@
     - cka_lab
     - volumes
     - nfs
-
 
 - name: Ensure CKA lab volumes directories exist
   ansible.builtin.file:

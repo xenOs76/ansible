@@ -32,10 +32,24 @@ echo "--------------------------------------------------------------------"
 # Drill 2: StorageClasses & Dynamic PVCs
 # ------------------------------------------------------------------------------
 echo "--------------------------------------------------------------------"
-echo "  [2/2] Testing StorageClasses, Delayed Binding, and PVC Expansion  "
+echo "  [2/3] Testing StorageClasses, Delayed Binding, and PVC Expansion  "
 echo "--------------------------------------------------------------------"
 "${SCRIPT_DIR}/02-storage-classes/test-storage-classes.sh"
+
+# ------------------------------------------------------------------------------
+# Drill 3: Dynamic NFS CSI Provisioning & Multi-Replica RWX Storage
+# ------------------------------------------------------------------------------
+echo "--------------------------------------------------------------------"
+echo "  [3/3] Testing Dynamic NFS CSI Provisioning & ReadWriteMany Storage "
+echo "--------------------------------------------------------------------"
+if kubectl get csidriver nfs.csi.k8s.io >/dev/null 2>&1; then
+  "${SCRIPT_DIR}/02-storage-classes/test-nfs-csi-drills.sh"
+else
+  echo "    Skipping NFS CSI runtime test: nfs.csi.k8s.io driver not yet deployed."
+  echo "    (Deploy on-demand via: ${SCRIPT_DIR}/01-provisioners/install-nfs-csi-driver.sh)"
+fi
 
 echo "===================================================================="
 echo "  [SUCCESS] All CKA Dynamic Storage drills verified successfully!   "
 echo "===================================================================="
+

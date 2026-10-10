@@ -28,7 +28,7 @@ The environment serves as both an enterprise-grade homelab foundation and a rapi
 ### 1. Storage Architecture
 
 - **Rook-Ceph (`roles/rook_ceph`, `playbooks/ceph.yml`)**: Cloud-native Ceph orchestration backed by `/dev/vdb` on the control plane, dynamically provisioning block PVCs via `rook-ceph-block` StorageClass.
-- **NFS Shared Storage (`roles/nfs_server`, `playbooks/nfs.yml`)**: Linux kernel NFS server exporting `/srv/nfsroot` across cluster worker nodes.
+- **NFS Shared Storage (`roles/nfs_server`, `playbooks/nfs.yml`)**: Linux kernel NFS server exporting `/exports` across cluster worker nodes.
 - **iSCSI Target Server (`roles/iscsi_target`, `playbooks/iscsi.yml`)**: Standalone Linux-IO (`LIO`) kernel target with file-backed LUNs for raw block and static PV testing.
 
 ### 2. CKA Hands-on Lab Suite (`roles/cka_lab`)
@@ -127,7 +127,7 @@ k8s-homelab/
 │   ├── preprod/hosts.ini         # Vagrant libvirt inventory with per-host keys
 │   └── prod/hosts.ini            # Bare-metal / physical cluster inventory
 ├── group_vars/
-│   ├── all.yml                   # Cluster version, CIDRs, suite version (1.4.0)
+│   ├── all.yml                   # Cluster version, CIDRs, suite version (1.4.1)
 │   ├── preprod.yml               # Preprod environment overrides
 │   ├── control_plane.yml         # Control plane settings
 │   └── workers.yml               # Worker node settings

@@ -5,12 +5,20 @@
 set -euo pipefail
 
 NAMESPACE="{{ cka_lab_networking_namespace | default('default') }}"
+DOMAIN="{{ cka_lab_networking_gateway_domain | default('httpbin.example.local') }}"
+UNMATCHED_DOMAIN="{{ cka_lab_networking_gateway_unmatched_domain | default('unmatched.example.local') }}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+HTTP_PORT="{{ cka_lab_helm_ngf_http_port | default(30080) }}"
 
 echo "==> [Gateway API Drill] Verifying Gateway API prerequisites..."
 if ! kubectl get crd gateways.gateway.networking.k8s.io >/dev/null 2>&1; then
   echo "Installing Gateway API standard CRDs..."
-  kubectl apply -k "https://github.com/nginx/nginx-gateway-fabric/config/crd/gateway-api/standard"
+  kubectl kustomize "https://github.com/nginx/nginx-gateway-fabric/config/crd/gateway-api/standard?ref={{ cka_lab_helm_ngf_crd_version | default('v1.6.1') }}" | kubectl apply -f -
+fi
+
+if ! kubectl get crd nginxgateways.gateway.nginx.org >/dev/null 2>&1; then
+  echo "Installing NGINX Gateway Fabric CRDs..."
+  kubectl apply --server-side -f "https://raw.githubusercontent.com/nginx/nginx-gateway-fabric/{{ cka_lab_helm_ngf_crd_version | default('v1.6.1') }}/deploy/crds.yaml"
 fi
 
 echo "==> Applying Gateway and HTTPRoute manifests..."
@@ -31,14 +39,40 @@ kubectl get gateways,httproutes -n "${NAMESPACE}"
 
 NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
 
-echo "==> Testing HTTPRoute reachability on NodePort 30080..."
-HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -m 5 "http://${NODE_IP}:30080/api" || echo "000")
-echo "HTTP response status for /api: ${HTTP_STATUS}"
+# Detect dynamically allocated NodePort if service was patched or overridden
+if kubectl get svc -n "{{ cka_lab_helm_ngf_namespace | default('nginx-gateway') }}" -l app.kubernetes.io/name=nginx-gateway-fabric >/dev/null 2>&1; then
+  DETECTED_PORT=$(kubectl get svc -n "{{ cka_lab_helm_ngf_namespace | default('nginx-gateway') }}" -l app.kubernetes.io/name=nginx-gateway-fabric -o jsonpath='{.items[0].spec.ports[?(@.port==80)].nodePort}')
+  if [ -n "${DETECTED_PORT:-}" ] && [ "${DETECTED_PORT}" != "null" ]; then
+    HTTP_PORT="${DETECTED_PORT}"
+  fi
+fi
+
+echo "==> Testing Gateway API reachability on ${NODE_IP}:${HTTP_PORT}..."
+
+echo "==> [Test 1] Valid hostname routing (Host: ${DOMAIN})..."
+HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -m 5 -H "Host: ${DOMAIN}" "http://${NODE_IP}:${HTTP_PORT}/" || echo "000")
+echo "HTTP response status for Host: ${DOMAIN} on / : ${HTTP_STATUS}"
+if [ "${HTTP_STATUS}" != "200" ]; then
+  echo "Warning: Expected HTTP 200 for matching host ${DOMAIN}, got ${HTTP_STATUS}" >&2
+fi
+
+echo "==> [Test 2] Negative hostname filtering (Host: ${UNMATCHED_DOMAIN} -> Expect 404)..."
+UNMATCHED_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -m 5 -H "Host: ${UNMATCHED_DOMAIN}" "http://${NODE_IP}:${HTTP_PORT}/" || echo "000")
+echo "HTTP response status for unmatched host: ${UNMATCHED_STATUS}"
+if [ "${UNMATCHED_STATUS}" != "404" ]; then
+  echo "Warning: Expected HTTP 404 for unmatched host ${UNMATCHED_DOMAIN}, got ${UNMATCHED_STATUS}" >&2
+fi
 
 if kubectl get svc httpbingo -n "${NAMESPACE}" >/dev/null 2>&1; then
-  echo "==> Testing httpbin-go route on /httpbin/get..."
-  HTTPBIN_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -m 5 "http://${NODE_IP}:30080/httpbin/get" || echo "000")
-  echo "HTTP response status for /httpbin/get: ${HTTPBIN_STATUS}"
+  echo "==> [Test 3] Testing httpbin-go route on /get..."
+  HTTPBIN_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -m 5 -H "Host: ${DOMAIN}" "http://${NODE_IP}:${HTTP_PORT}/get" || echo "000")
+  echo "HTTP response status for /get: ${HTTPBIN_STATUS}"
+fi
+
+if kubectl get svc cka-lab-ingress-api-svc -n "${NAMESPACE}" >/dev/null 2>&1; then
+  echo "==> [Test 4] Testing API backend route on /api..."
+  API_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -m 5 -H "Host: ${DOMAIN}" "http://${NODE_IP}:${HTTP_PORT}/api" || echo "000")
+  echo "HTTP response status for /api: ${API_STATUS}"
 fi
 
 echo "==> Gateway API drill verification complete."

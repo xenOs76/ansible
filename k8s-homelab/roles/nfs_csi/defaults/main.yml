@@ -1,0 +1,15 @@
+---
+# NFS CSI Driver Helm & in-cluster dynamic provisioning configuration
+nfs_csi_enabled: true
+nfs_csi_helm_repo: "https://raw.githubusercontent.com/kubernetes-csi/csi-driver-nfs/master/charts"
+nfs_csi_release_name: "csi-driver-nfs"
+nfs_csi_namespace: "kube-system"
+nfs_csi_chart_version: "v4.9.0"
+nfs_csi_storage_class_name: "nfs-csi"
+nfs_csi_storage_class_default: false
+nfs_csi_server: "{{ nfs_server_hostname | default('nfs-server.local') }}"
+nfs_csi_share: "{{ nfs_export_dir | default('/exports') }}"
+nfs_csi_reclaim_policy: "Delete"
+nfs_csi_volume_binding_mode: "Immediate"
+nfs_csi_manifests_dir: "/etc/kubernetes/manifests/nfs-csi"
+nfs_csi_rollout_timeout: 180

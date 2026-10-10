@@ -1,0 +1,18 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: {{ cka_lab_nfs_csi_storage_class | default('nfs-csi') }}
+  labels:
+    app.kubernetes.io/part-of: cka-lab
+    cka.practice/scenario: storage-classes
+provisioner: nfs.csi.k8s.io
+parameters:
+  server: {{ cka_lab_nfs_server_hostname | default('nfs-server.local') }}
+  share: {{ cka_lab_nfs_export_dir }}
+reclaimPolicy: Delete
+volumeBindingMode: Immediate
+mountOptions:
+  - nfsvers=4.1
+  - hard
+  - noatime
+allowVolumeExpansion: true

@@ -6,7 +6,7 @@ nfs_server_ip: >-
   {{ hostvars[groups['control_plane'][0]]['node_ip']
      | default(hostvars[groups['control_plane'][0]]['ansible_host']
      | default('192.168.56.10')) }}
-nfs_server_export_dir: "{{ nfs_export_dir | default('/srv/nfsroot') }}"
+nfs_server_export_dir: "{{ nfs_export_dir | default('/exports') }}"
 nfs_server_export_subnet: >-
   {{ nfs_export_subnet | default('192.168.56.0/24' if ('preprod' in groups) else (pod_network_cidr | default('10.0.0.0/8'))) }}
 nfs_server_export_options: "{{ nfs_export_options | default('rw,sync,no_subtree_check,no_root_squash,insecure') }}"

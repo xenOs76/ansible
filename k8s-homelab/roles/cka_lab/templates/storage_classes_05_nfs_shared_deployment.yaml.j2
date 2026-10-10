@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nfs-shared-app
+  namespace: {{ cka_lab_storage_classes_namespace | default('default') }}
+  labels:
+    app.kubernetes.io/name: nfs-shared-app
+    app.kubernetes.io/part-of: cka-lab
+    cka.practice/scenario: storage-classes
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: nfs-shared-app
+  template:
+    metadata:
+      labels:
+        app: nfs-shared-app
+    spec:
+      containers:
+        - name: web
+          image: nginx:1.27-alpine
+          ports:
+            - containerPort: 80
+              name: http
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+          volumeMounts:
+            - name: shared-storage
+              mountPath: /usr/share/nginx/html
+          lifecycle:
+            postStart:
+              exec:
+                command:
+                  - /bin/sh
+                  - -c
+                  - echo "Served by $(hostname) at $(date)" >> /usr/share/nginx/html/index.html
+      volumes:
+        - name: shared-storage
+          persistentVolumeClaim:
+            claimName: nfs-dynamic-claim

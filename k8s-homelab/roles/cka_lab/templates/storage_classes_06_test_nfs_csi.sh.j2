@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# test-nfs-csi-drills.sh: Non-Interactive Verification of Dynamic NFS CSI Provisioning
+# ==============================================================================
+set -euo pipefail
+
+NAMESPACE="{{ cka_lab_storage_classes_namespace | default('default') }}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+echo "==> [NFS CSI Drill] Checking prerequisite NFS CSI Driver installation..."
+if ! kubectl get csidriver nfs.csi.k8s.io >/dev/null 2>&1; then
+  echo "    Notice: NFS CSI driver 'nfs.csi.k8s.io' is not registered."
+  echo "    Deploy the driver first using: ~/cka/helm/install-nfs-csi-driver.sh"
+  exit 1
+fi
+
+cleanup() {
+  echo "==> Cleaning up NFS CSI drill resources..."
+  kubectl delete deployment nfs-shared-app -n "${NAMESPACE}" --ignore-not-found=true --wait=true --now >/dev/null 2>&1 || true
+  kubectl delete pvc nfs-dynamic-claim -n "${NAMESPACE}" --ignore-not-found=true --wait=true --now >/dev/null 2>&1 || true
+  kubectl delete storageclass {{ cka_lab_nfs_csi_storage_class | default('nfs-csi') }} --ignore-not-found=true --wait=true --now >/dev/null 2>&1 || true
+}
+
+trap cleanup EXIT
+
+echo "1. Applying dynamic NFS StorageClass definition..."
+kubectl apply -f "${SCRIPT_DIR}/03-nfs-csi-sc.yaml"
+kubectl get storageclass {{ cka_lab_nfs_csi_storage_class | default('nfs-csi') }}
+
+echo "2. Applying dynamic ReadWriteMany PVC (nfs-dynamic-claim)..."
+kubectl apply -f "${SCRIPT_DIR}/04-nfs-dynamic-pvc.yaml" -n "${NAMESPACE}"
+
+echo "3. Waiting for dynamic PV creation and PVC binding..."
+BOUND=false
+for _ in {1..30}; do
+  PHASE=$(kubectl get pvc nfs-dynamic-claim -n "${NAMESPACE}" -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+  if [[ "${PHASE}" == "Bound" ]]; then
+    BOUND=true
+    break
+  fi
+  sleep 2
+done
+
+if [[ "${BOUND}" != "true" ]]; then
+  echo "    ERROR: PVC 'nfs-dynamic-claim' did not transition to Bound within timeout!"
+  kubectl describe pvc nfs-dynamic-claim -n "${NAMESPACE}"
+  exit 1
+fi
+
+BOUND_PV=$(kubectl get pvc nfs-dynamic-claim -n "${NAMESPACE}" -o jsonpath='{.spec.volumeName}')
+echo "    OK: Dynamically provisioned PV: ${BOUND_PV}"
+
+echo "4. Deploying multi-replica shared workload (nfs-shared-app)..."
+kubectl apply -f "${SCRIPT_DIR}/05-nfs-shared-deployment.yaml" -n "${NAMESPACE}"
+kubectl rollout status deployment/nfs-shared-app -n "${NAMESPACE}" --timeout=120s
+
+echo "5. Verifying shared ReadWriteMany filesystem across replicas..."
+PODS=$(kubectl get pods -n "${NAMESPACE}" -l app=nfs-shared-app -o jsonpath='{.items[*].metadata.name}')
+for POD in ${PODS}; do
+  echo "--- Output from pod ${POD} ---"
+  kubectl exec -n "${NAMESPACE}" "${POD}" -- cat /usr/share/nginx/html/index.html
+done
+
+echo "6. Testing dynamic volume expansion to 1Gi..."
+kubectl patch pvc nfs-dynamic-claim -n "${NAMESPACE}" -p '{"spec":{"resources":{"requests":{"storage":"1Gi"}}}}'
+EXPANDED_CAP=$(kubectl get pvc nfs-dynamic-claim -n "${NAMESPACE}" -o jsonpath='{.spec.resources.requests.storage}')
+echo "    Updated PVC requested capacity: ${EXPANDED_CAP}"
+
+echo "==> Dynamic NFS CSI storage drills validated successfully."

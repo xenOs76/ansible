@@ -6,7 +6,7 @@
   tasks:
     - name: Display playbook version
       ansible.builtin.debug:
-        msg: "=== k8s-homelab automation suite v{{ playbook_version | default('1.4.0') }} ==="
+        msg: "=== k8s-homelab automation suite v{{ playbook_version | default('1.4.1') }} ==="
 
 - name: 1. Bootstrap common prerequisites, containerd, and kubernetes packages
   hosts: k8s_cluster
@@ -72,7 +72,18 @@
     - nfs
     - storage
 
+- name: 8b. Deploy NFS CSI driver for dynamic storage provisioning
+  hosts: control_plane
+  become: true
+  roles:
+    - role: nfs_csi
+      when: nfs_csi_enabled | default(false)
+  tags:
+    - nfs_csi
+    - storage
+
 - name: 9. Display final cluster status
+
   hosts: control_plane
   become: true
   tasks:

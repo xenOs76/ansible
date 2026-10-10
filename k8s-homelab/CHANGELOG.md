@@ -8,6 +8,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-10-10
+
+### Added
+
+- **Dynamic NFS CSI Provisioning (`roles/nfs_csi`, `roles/cka_lab`, `playbooks/nfs_csi.yml`)**: Automated dynamic PV provisioning via the official Kubernetes SIG Storage NFS CSI Driver (`csi-driver-nfs`), supporting both production cluster rollouts (`playbooks/nfs_csi.yml`) and dedicated CKA hands-on drills (`~/cka/storage-classes/` and `~/cka/volumes/08-nfs-csi`) with ReadWriteMany shared workloads and automated test runners.
+- **NGINX Gateway Fabric & Ingress Scenarios (`roles/cka_lab`)**: Comprehensive Gateway API drills with version-pinned CRDs, NodePort routing, and hostname filtering via `httpbingo`, complemented by an Ingress-NGINX practice installer for CKA exam coverage.
+
+### Changed
+
+- **NFS Server Export Directory (`roles/nfs_server`, `group_vars/all.yml`)**: Standardized root NFS share directory to `/exports` across lab environments, volume templates, and dynamic storage configurations.
+
+### Fixed
+
+- **CKA Lab Volume Directory Initialization (`roles/cka_lab`)**: Automatically create export directory paths with write permissions prior to copying sample files, ensuring clean isolated execution of `cka_lab.yml`.
+
 ## [1.4.0] - 2026-10-08
 
 ### Added

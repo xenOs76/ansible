@@ -1,0 +1,105 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# Script: install-deprecated-nginx-ingress.sh
+# Purpose: Deploy or upgrade the final release of the deprecated community
+#          Ingress-NGINX Controller via Helm (ingress-nginx/ingress-nginx v4.15.1).
+#
+# Context:
+#   Can be executed directly on the control plane node or from the host machine
+#   when pointing to a valid kubeconfig. Requires 'helm' and 'kubectl'.
+#
+# Usage:
+#   ./install-deprecated-nginx-ingress.sh [CHART_VERSION] [SERVICE_TYPE] [HTTP_PORT] [HTTPS_PORT]
+#
+# Arguments:
+#   $1 - CHART_VERSION  (Optional) Pinned Helm chart version to install.
+#                       Default: 4.15.1 (final release before project retirement).
+#   $2 - SERVICE_TYPE   (Optional) Kubernetes service type (NodePort, LoadBalancer, ClusterIP).
+#                       Default: NodePort (suitable for Libvirt/bare-metal homelab).
+#   $3 - HTTP_PORT      (Optional) Host and NodePort for HTTP traffic. Default: 30080.
+#   $4 - HTTPS_PORT     (Optional) Host and NodePort for HTTPS traffic. Default: 30443.
+#
+# Environment Variables:
+#   KUBECONFIG          - Path to kubeconfig. Automatically defaults to
+#                         /etc/kubernetes/admin.conf if run inside the control plane VM.
+#   RELEASE_NAME        - Helm release name (Default: ingress-nginx).
+#   NAMESPACE           - Target namespace (Default: ingress-nginx).
+#   SERVICE_TYPE        - Service type override (Default: NodePort).
+#   HTTP_PORT           - NodePort for HTTP ingress (Default: 30080).
+#   HTTPS_PORT          - NodePort for HTTPS ingress (Default: 30443).
+#
+# Technical & Deprecation Notice:
+#   - The Kubernetes community 'ingress-nginx' project reached End-of-Life (EOL)
+#     and was retired in March 2026. Chart version 4.15.1 (controller v1.15.1)
+#     is the final published release.
+#   - This script is provided for CKA certification exam practice requiring
+#     classic 'Ingress' resources (networking.k8s.io/v1) and 'ingressClassName: nginx'.
+#   - For modern production deployments and Gateway API drills, use the companion
+#     script 'install-nginx-gateway-fabric.sh'.
+#
+# Manual Verification:
+#   kubectl rollout status deployment -n ingress-nginx -l app.kubernetes.io/name=ingress-nginx
+#   kubectl get pods,svc -n ingress-nginx
+#   kubectl get ingressclasses
+# ==============================================================================
+set -euo pipefail
+
+echo "=== Installing Deprecated Community Ingress-NGINX Controller via Helm ==="
+echo "Note: The community ingress-nginx project is retired. Installing final release (v4.15.1) for CKA training."
+
+# Validate prerequisite CLI tools
+if ! command -v helm >/dev/null 2>&1; then
+  echo "Error: helm is not installed or not in PATH." >&2
+  exit 1
+fi
+
+if ! command -v kubectl >/dev/null 2>&1; then
+  echo "Error: kubectl is not installed or not in PATH." >&2
+  exit 1
+fi
+
+# Detect KUBECONFIG if running as non-root without ~/.kube/config
+if [ -z "${KUBECONFIG:-}" ] && [ -f /etc/kubernetes/admin.conf ] && [ ! -f "${HOME}/.kube/config" ]; then
+  export KUBECONFIG=/etc/kubernetes/admin.conf
+fi
+
+RELEASE_NAME="${RELEASE_NAME:-{{ cka_lab_helm_deprecated_ingress_nginx_release_name }}}"
+TARGET_NAMESPACE="${NAMESPACE:-{{ cka_lab_helm_deprecated_ingress_nginx_namespace }}}"
+CHART_VERSION="${1:-{{ cka_lab_helm_deprecated_ingress_nginx_chart_version }}}"
+SERVICE_TYPE="${2:-${SERVICE_TYPE:-{{ cka_lab_helm_deprecated_ingress_nginx_service_type }}}}"
+HTTP_PORT="${3:-${HTTP_PORT:-{{ cka_lab_helm_deprecated_ingress_nginx_http_port }}}}"
+HTTPS_PORT="${4:-${HTTPS_PORT:-{{ cka_lab_helm_deprecated_ingress_nginx_https_port }}}}"
+
+EXTRA_ARGS=()
+if [ -n "${CHART_VERSION}" ]; then
+  EXTRA_ARGS+=(--version "${CHART_VERSION}")
+fi
+
+echo "Adding and updating ingress-nginx Helm repository..."
+helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx >/dev/null 2>&1 || true
+helm repo update ingress-nginx
+
+echo "Installing/upgrading Ingress-NGINX release '${RELEASE_NAME}' in namespace '${TARGET_NAMESPACE}'..."
+helm upgrade --install "${RELEASE_NAME}" ingress-nginx/ingress-nginx \
+  --namespace "${TARGET_NAMESPACE}" \
+  --create-namespace \
+  --set controller.service.type="${SERVICE_TYPE}" \
+  --set "controller.service.nodePorts.http=${HTTP_PORT}" \
+  --set "controller.service.nodePorts.https=${HTTPS_PORT}" \
+  --set controller.ingressClassResource.name="nginx" \
+  --set controller.ingressClassResource.default=true \
+  "${EXTRA_ARGS[@]}"
+
+echo "Waiting for Ingress-NGINX controller deployment rollout..."
+kubectl rollout status deployment -n "${TARGET_NAMESPACE}" -l app.kubernetes.io/name=ingress-nginx --timeout=180s
+
+echo "=== Deprecated Ingress-NGINX Controller installed successfully ==="
+echo ""
+echo "Active workloads and service resources in '${TARGET_NAMESPACE}':"
+kubectl get pods,svc -n "${TARGET_NAMESPACE}"
+echo ""
+echo "Registered IngressClasses:"
+kubectl get ingressclasses
+echo ""
+echo "To test Ingress routing with ingressClassName: nginx, run:"
+echo "  /home/{{ ansible_user | default('vagrant') }}/cka/networking/test-ingress.sh"

@@ -9,10 +9,14 @@ This directory contains standalone Helm automation scripts designed for hands-on
 ```text
 /home/vagrant/cka/helm/
 ├── README.md                      # This guide
+├── install-deprecated-ingress-nginx.sh -> install-deprecated-nginx-ingress.sh # Convenience alias symlink
+├── install-deprecated-nginx-ingress.sh # Final release of deprecated Ingress-NGINX (v4.15.1)
 ├── install-httpbin-go.sh          # Lightweight httpbin-go installer (mccutchen/go-httpbin)
 ├── install-httpbingo.sh -> install-httpbin-go.sh # Convenience alias symlink
 ├── install-kube-metrics.sh        # Metrics Server Helm installer (--kubelet-insecure-tls)
 ├── install-kube-prometheus.sh     # Lightweight Prometheus Operator installer (Prometheus only)
+├── install-nfs-csi-driver.sh      # Kubernetes NFS CSI Driver installer for dynamic PVs
+├── install-csi-driver-nfs.sh -> install-nfs-csi-driver.sh # Convenience alias symlink
 └── install-nginx-gateway-fabric.sh # NGINX Gateway Fabric installer (Gateway API)
 ```
 
@@ -26,6 +30,8 @@ This directory contains standalone Helm automation scripts designed for hands-on
 | `install-kube-metrics.sh` | `metrics-server/metrics-server` | `kube-system` | Enables `kubectl top nodes` and `kubectl top pods`. Configured with `--kubelet-insecure-tls` for homelab kubelet scraping. |
 | `install-kube-prometheus.sh` | `prometheus-community/kube-prometheus-stack` | `monitoring` | Deploys Prometheus Operator and a single-replica Prometheus instance. Grafana, Alertmanager, node-exporter, and kube-state-metrics are disabled for a minimal footprint on lab VMs. |
 | `install-nginx-gateway-fabric.sh` | `oci://ghcr.io/nginx/charts/nginx-gateway-fabric` | `nginx-gateway` | Deploys NGINX Gateway Fabric and standard Kubernetes Gateway API CRDs (`gatewayclasses`, `gateways`, `httproutes`). Configured with `NodePort` service type for lab VM accessibility. |
+| `install-deprecated-nginx-ingress.sh` | `ingress-nginx/ingress-nginx` | `ingress-nginx` | Deploys final release (`4.15.1`) of the retired community Ingress-NGINX controller. Configured with `NodePort` (`30080`/`30443`) and `ingressClassName: nginx` for classic CKA Ingress drills. |
+| `install-nfs-csi-driver.sh` | `csi-driver-nfs/csi-driver-nfs` | `kube-system` | Deploys the Kubernetes SIG Storage NFS CSI Driver (controller + node daemonset) for automated dynamic PersistentVolume creation backed by `nfs-server.local:{{ cka_lab_nfs_export_dir }}`. |
 
 ---
 
@@ -172,6 +178,77 @@ helm uninstall httpbingo -n default
 
 ---
 
+### Script 5: Install Deprecated Ingress-NGINX Controller
+
+Deploy the final release (`4.15.1`) of the retired community Ingress-NGINX Controller:
+
+```bash
+cd /home/vagrant/cka/helm
+./install-deprecated-nginx-ingress.sh
+```
+
+*(Note: `install-deprecated-ingress-nginx.sh` is provided as a convenience symlink).*
+
+#### Verification
+
+```bash
+# Verify Ingress controller deployment rollout
+kubectl rollout status deployment -n ingress-nginx -l app.kubernetes.io/name=ingress-nginx
+
+# Inspect controller pods and NodePort service
+kubectl get pods,svc -n ingress-nginx
+
+# Verify registered IngressClasses
+kubectl get ingressclasses
+
+# Test classic Ingress routing (drills under ~/cka/networking/)
+/home/vagrant/cka/networking/test-ingress.sh
+```
+
+#### Uninstallation
+
+```bash
+helm uninstall ingress-nginx -n ingress-nginx
+kubectl delete namespace ingress-nginx
+```
+
+---
+
+### Script 6: Install Kubernetes NFS CSI Driver
+
+Deploy the Kubernetes SIG Storage NFS CSI Driver to enable automated dynamic PV provisioning:
+
+```bash
+cd /home/vagrant/cka/helm
+./install-nfs-csi-driver.sh
+```
+
+*(Note: `install-csi-driver-nfs.sh` is provided as a convenience symlink).*
+
+#### Verification
+
+```bash
+# Verify NFS CSI controller rollout
+kubectl rollout status deployment -n kube-system -l app.kubernetes.io/name=csi-driver-nfs
+
+# Verify NFS CSI node plugin daemonset
+kubectl rollout status daemonset -n kube-system -l app.kubernetes.io/name=csi-driver-nfs
+
+# Verify registered CSI drivers
+kubectl get csidrivers
+
+# Test dynamic PV provisioning (drills under ~/cka/storage-classes/)
+/home/vagrant/cka/storage-classes/02-storage-classes/test-nfs-csi-drills.sh
+```
+
+#### Uninstallation
+
+```bash
+helm uninstall csi-driver-nfs -n kube-system
+```
+
+---
+
 ## 4. Hands-on CKA Exam Practice Drills
 
 ### Drill 1: Inspect and Add Helm Repositories
@@ -192,14 +269,28 @@ helm uninstall httpbingo -n default
 1. Create a ServiceMonitor to scrape a target application in the `default` namespace.
 1. Verify Prometheus discovers the new target via the Prometheus web UI (`Status -> Targets`).
 
-### Drill 4: Inspect GatewayClass and Create a Gateway
+### Drill 4: Inspect GatewayClass, Service Patching, and Gateway Creation
 
-1. Verify the `nginx` GatewayClass is accepted:
+1. Verify the `nginx` GatewayClass is accepted by the controller:
    `kubectl get gatewayclass nginx -o yaml`
-1. Inspect the Gateway API HTTPRoute specification and create a route pointing to a test service.
+1. Practice imperative service patching (useful if controller service defaults to `LoadBalancer` with pending external IP):
+   `kubectl patch service/ngf-nginx-gateway-fabric -n nginx-gateway -p '{"spec": {"type": "NodePort"}}'`
+   Inspect the assigned NodePorts:
+   `kubectl get svc -n nginx-gateway`
+1. Deploy the Gateway resource (`cka-lab-gateway` on port 80 HTTP) from `~/cka/networking/03-gateway-api/`:
+   `kubectl apply -f ~/cka/networking/03-gateway-api/cka-lab-gateway.yaml`
+1. Verify the Gateway resource is accepted and programmed:
+   `kubectl get gateway cka-lab-gateway`
 
-### Drill 5: Connect Gateway API HTTPRoute to httpbin-go
+### Drill 5: Connect Gateway API HTTPRoute to httpbin-go & Test Host Isolation
 
-1. Deploy httpbin-go via `./install-httpbin-go.sh`.
-1. Create an `HTTPRoute` in namespace `default` matching `/headers` and forwarding traffic to `httpbingo:80`.
-1. Curl the NodePort endpoint (e.g. `http://192.168.56.20:30080/headers`) and verify request headers are reflected in JSON.
+1. Deploy the lightweight httpbin-go backend (if not already running):
+   `./install-httpbin-go.sh`
+1. Apply the HTTPRoute matching hostname `httpbin.example.local` forwarding to `httpbingo:80`:
+   `kubectl apply -f ~/cka/networking/03-gateway-api/cka-lab-httproute.yaml`
+1. Verify the HTTPRoute is bound to the gateway:
+   `kubectl get httproute cka-lab-httproute`
+1. Test positive hostname routing (returns HTTP 200 from `httpbingo`):
+   `curl -i -H "Host: httpbin.example.local" http://192.168.56.20:30080/`
+1. Test negative hostname filtering (returns HTTP 404 Not Found from NGINX Gateway Fabric data plane):
+   `curl -i -H "Host: unmatched.example.local" http://192.168.56.20:30080/`

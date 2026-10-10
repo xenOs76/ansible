@@ -111,6 +111,18 @@ Networking constitutes a major domain of the CKA exam curriculum. This lab bring
    kubectl get gateways,httproutes
    ```
 
+1. **Test Hostname-Based Routing & Negative Filtering**:
+
+   ```bash
+   NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
+
+   # Positive match: routes to httpbingo backend (HTTP 200)
+   curl -i -H "Host: httpbin.example.local" "http://${NODE_IP}:30080/"
+
+   # Negative match: unmatched host header is rejected (HTTP 404)
+   curl -i -H "Host: unmatched.example.local" "http://${NODE_IP}:30080/"
+   ```
+
 1. **Edge TLS & Caddy Forwarding**:
 
    Read the architecture guide at `{{ cka_lab_networking_dir }}/03-gateway-api/cka-lab-caddy-integration.md` explaining how external port 443 requests arriving at Caddy are forwarded to NodePort 30443 on worker nodes and routed via HTTPRoute.

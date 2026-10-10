@@ -1,0 +1,10 @@
+---
+- name: Deploy NFS CSI driver for dynamic storage provisioning
+  hosts: control_plane
+  become: true
+  roles:
+    - role: nfs_csi
+      when: nfs_csi_enabled | default(true)
+  tags:
+    - nfs_csi
+    - storage

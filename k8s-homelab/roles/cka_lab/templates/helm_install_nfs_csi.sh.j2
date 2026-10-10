@@ -1,0 +1,98 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# Script: install-nfs-csi-driver.sh
+# Purpose: Deploy or upgrade the Kubernetes NFS CSI Driver via Helm
+#          (csi-driver-nfs/csi-driver-nfs) for automated dynamic PV provisioning.
+#
+# Context:
+#   Can be executed directly on the control plane node or from the host machine
+#   when pointing to a valid kubeconfig. Requires 'helm' and 'kubectl'.
+#
+# Usage:
+#   ./install-nfs-csi-driver.sh [CHART_VERSION] [NAMESPACE] [RELEASE_NAME] [CHART_REPO]
+#
+# Arguments:
+#   $1 - CHART_VERSION  (Optional) Pinned Helm chart version to install.
+#                       Default: {{ cka_lab_helm_nfs_csi_chart_version | default('v4.9.0') }}.
+#   $2 - NAMESPACE      (Optional) Target Kubernetes namespace.
+#                       Default: {{ cka_lab_helm_nfs_csi_namespace | default('kube-system') }}.
+#   $3 - RELEASE_NAME   (Optional) Helm release name.
+#                       Default: {{ cka_lab_helm_nfs_csi_release_name | default('csi-driver-nfs') }}.
+#   $4 - CHART_REPO     (Optional) Helm chart repository URL.
+#                       Default: {{ cka_lab_helm_nfs_csi_chart_repo | default('https://raw.githubusercontent.com/kubernetes-csi/csi-driver-nfs/master/charts') }}.
+#
+# Environment Variables:
+#   KUBECONFIG          - Path to kubeconfig. Automatically defaults to
+#                         /etc/kubernetes/admin.conf if run inside the control plane VM.
+#   RELEASE_NAME        - Helm release name override.
+#   NAMESPACE           - Target namespace override.
+#   CHART_VERSION       - Helm chart version override.
+#
+# Technical Notice & Architecture:
+#   - This script deploys the official Kubernetes SIG Storage CSI Driver for NFS.
+#   - The driver deploys a Controller Deployment ('csi-nfs-controller') containing
+#     the 'csi-provisioner' sidecar for automated dynamic volume provisioning,
+#     and a Node DaemonSet ('csi-nfs-node') for volume mounting on cluster nodes.
+#   - StorageClasses referencing 'provisioner: nfs.csi.k8s.io' automatically
+#     provision subdirectories on the NFS server (nfs-server.local:{{ cka_lab_nfs_export_dir }})
+#     upon PVC creation.
+#
+# Manual Verification:
+#   kubectl rollout status deployment -n kube-system -l app.kubernetes.io/name=csi-driver-nfs
+#   kubectl rollout status daemonset -n kube-system -l app.kubernetes.io/name=csi-driver-nfs
+#   kubectl get csidrivers
+# ==============================================================================
+set -euo pipefail
+
+echo "=== Installing Kubernetes NFS CSI Driver via Helm ==="
+
+# Validate prerequisite CLI tools
+if ! command -v helm >/dev/null 2>&1; then
+  echo "Error: helm is not installed or not in PATH." >&2
+  exit 1
+fi
+
+if ! command -v kubectl >/dev/null 2>&1; then
+  echo "Error: kubectl is not installed or not in PATH." >&2
+  exit 1
+fi
+
+# Detect KUBECONFIG if running as non-root without ~/.kube/config
+if [ -z "${KUBECONFIG:-}" ] && [ -f /etc/kubernetes/admin.conf ] && [ ! -f "${HOME}/.kube/config" ]; then
+  export KUBECONFIG=/etc/kubernetes/admin.conf
+fi
+
+RELEASE_NAME="${RELEASE_NAME:-${3:-{{ cka_lab_helm_nfs_csi_release_name }}}}"
+TARGET_NAMESPACE="${NAMESPACE:-${2:-{{ cka_lab_helm_nfs_csi_namespace }}}}"
+CHART_VERSION="${CHART_VERSION:-${1:-{{ cka_lab_helm_nfs_csi_chart_version }}}}"
+CHART_REPO="${4:-{{ cka_lab_helm_nfs_csi_chart_repo }}}"
+
+EXTRA_ARGS=()
+if [ -n "${CHART_VERSION}" ]; then
+  EXTRA_ARGS+=(--version "${CHART_VERSION}")
+fi
+
+echo "Adding and updating NFS CSI driver Helm repository (${CHART_REPO})..."
+helm repo add csi-driver-nfs "${CHART_REPO}" >/dev/null 2>&1 || true
+helm repo update csi-driver-nfs
+
+echo "Installing/upgrading NFS CSI Driver release '${RELEASE_NAME}' in namespace '${TARGET_NAMESPACE}'..."
+helm upgrade --install "${RELEASE_NAME}" csi-driver-nfs/csi-driver-nfs \
+  --namespace "${TARGET_NAMESPACE}" \
+  --create-namespace \
+  "${EXTRA_ARGS[@]}"
+
+echo "Waiting for NFS CSI controller deployment rollout..."
+kubectl rollout status deployment -n "${TARGET_NAMESPACE}" -l app.kubernetes.io/name=csi-driver-nfs --timeout=180s
+
+echo "Waiting for NFS CSI node plugin daemonset rollout..."
+kubectl rollout status daemonset -n "${TARGET_NAMESPACE}" -l app.kubernetes.io/name=csi-driver-nfs --timeout=180s
+
+echo "=== Kubernetes NFS CSI Driver installed successfully ==="
+echo ""
+echo "Registered CSI Drivers in cluster:"
+kubectl get csidrivers
+echo ""
+echo "Active NFS CSI pods in '${TARGET_NAMESPACE}':"
+kubectl get pods -n "${TARGET_NAMESPACE}" -l app.kubernetes.io/name=csi-driver-nfs -o wide
+echo ""

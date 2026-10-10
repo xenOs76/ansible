@@ -172,6 +172,7 @@ cka_lab_helm_kube_prometheus_chart_version: ""
 cka_lab_helm_ngf_release_name: "ngf"
 cka_lab_helm_ngf_namespace: "nginx-gateway"
 cka_lab_helm_ngf_chart_version: ""
+cka_lab_helm_ngf_crd_version: "v1.6.1"
 cka_lab_helm_ngf_service_type: "NodePort"
 cka_lab_helm_ngf_http_port: 30080
 cka_lab_helm_ngf_https_port: 30443
@@ -183,6 +184,16 @@ cka_lab_helm_httpbingo_cpu_request: "10m"
 cka_lab_helm_httpbingo_memory_request: "16Mi"
 cka_lab_helm_httpbingo_cpu_limit: "100m"
 cka_lab_helm_httpbingo_memory_limit: "64Mi"
+cka_lab_helm_deprecated_ingress_nginx_release_name: "ingress-nginx"
+cka_lab_helm_deprecated_ingress_nginx_namespace: "ingress-nginx"
+cka_lab_helm_deprecated_ingress_nginx_chart_version: "4.15.1"
+cka_lab_helm_deprecated_ingress_nginx_service_type: "NodePort"
+cka_lab_helm_deprecated_ingress_nginx_http_port: 30080
+cka_lab_helm_deprecated_ingress_nginx_https_port: 30443
+cka_lab_helm_nfs_csi_release_name: "csi-driver-nfs"
+cka_lab_helm_nfs_csi_namespace: "kube-system"
+cka_lab_helm_nfs_csi_chart_repo: "https://raw.githubusercontent.com/kubernetes-csi/csi-driver-nfs/master/charts"
+cka_lab_helm_nfs_csi_chart_version: "v4.9.0"
 
 # Scenario: volumes (NFS Server & CKA Volume Drills)
 # Reference: https://kubernetes.io/docs/concepts/storage/
@@ -194,7 +205,7 @@ cka_lab_nfs_server_ip: >-
     | default(hostvars[groups['control_plane'][0]]['ansible_host']
     | default('192.168.56.10'))
   }}
-cka_lab_nfs_export_dir: "/srv/nfsroot"
+cka_lab_nfs_export_dir: "{{ nfs_export_dir | default('/exports') }}"
 cka_lab_nfs_export_subnet: "{{ '192.168.56.0/24' if ('preprod' in groups) else '10.0.0.0/8' }}"
 cka_lab_nfs_export_options: "rw,sync,no_subtree_check,no_root_squash,insecure"
 cka_lab_rbd_storage_class: "{{ rook_ceph_storage_class_name | default('rook-ceph-block') }}"
@@ -223,6 +234,8 @@ cka_lab_networking_gateway_namespace: "nginx-gateway"
 cka_lab_networking_client_namespace: "cka-lab-net-client"
 cka_lab_networking_backend_namespace: "cka-lab-net-backend"
 cka_lab_networking_domain: "cka-lab.example.local"
+cka_lab_networking_gateway_domain: "httpbin.example.local"
+cka_lab_networking_gateway_unmatched_domain: "unmatched.example.local"
 
 # Scenario: scheduling (Taints, Tolerations, Affinities, HPA, and Resource Quotas)
 cka_lab_scheduling_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/scheduling"
@@ -236,6 +249,7 @@ cka_lab_workloads_advanced_namespace: "default"
 # Scenario: storage_classes (Dynamic StorageClasses, Binding Modes, and PVC Expansion)
 cka_lab_storage_classes_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/storage-classes"
 cka_lab_storage_classes_namespace: "default"
+cka_lab_nfs_csi_storage_class: "nfs-csi"
 
 # Scenario: cluster_troubleshooting (Cordon/Drain, Static Pod Recovery, Kubelet Diagnostics)
 cka_lab_cluster_troubleshooting_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/cluster-troubleshooting"

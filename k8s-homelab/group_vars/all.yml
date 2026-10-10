@@ -1,6 +1,6 @@
 ---
 # Playbook suite version
-playbook_version: "1.4.0"
+playbook_version: "1.4.1"
 
 # Kubernetes versions and repositories
 k8s_version: "1.34.1-1.1"
@@ -109,6 +109,17 @@ rook_ceph_fs_type: "ext4"
 # NFS shared storage server configuration
 nfs_server_enabled: true
 nfs_server_hostname: "nfs-server.local"
-nfs_export_dir: "/srv/nfsroot"
+nfs_export_dir: "/exports"
 nfs_export_subnet: "{{ '192.168.56.0/24' if ('preprod' in groups) else (pod_network_cidr | default('10.0.0.0/8')) }}"
 nfs_export_options: "rw,sync,no_subtree_check,no_root_squash,insecure"
+
+# NFS CSI Driver Helm & in-cluster dynamic storage provisioning
+nfs_csi_enabled: false
+nfs_csi_helm_repo: "https://raw.githubusercontent.com/kubernetes-csi/csi-driver-nfs/master/charts"
+nfs_csi_chart_version: "v4.9.0"
+nfs_csi_namespace: "kube-system"
+nfs_csi_storage_class_name: "nfs-csi"
+nfs_csi_storage_class_default: false
+nfs_csi_server: "{{ nfs_server_hostname | default('nfs-server.local') }}"
+nfs_csi_share: "{{ nfs_export_dir | default('/exports') }}"
+nfs_csi_reclaim_policy: "Delete"

@@ -1,0 +1,20 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: {{ nfs_csi_storage_class_name }}
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "{{ 'true' if (nfs_csi_storage_class_default | default(false)) else 'false' }}"
+  labels:
+    app.kubernetes.io/part-of: k8s-homelab
+    app.kubernetes.io/component: storage
+provisioner: nfs.csi.k8s.io
+parameters:
+  server: {{ nfs_csi_server }}
+  share: {{ nfs_csi_share }}
+reclaimPolicy: {{ nfs_csi_reclaim_policy }}
+volumeBindingMode: {{ nfs_csi_volume_binding_mode }}
+mountOptions:
+  - nfsvers=4.1
+  - hard
+  - noatime
+allowVolumeExpansion: true

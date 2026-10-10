@@ -42,14 +42,15 @@ All NFS examples connect to the control plane NFS export at:
 │   ├── 02-rbd-raw-block.yaml         # Raw block PVC & consumer Pod (Block mode)
 │   ├── 03-rbd-static-pv-pvc-pod.yaml # Static Ceph CSI PV, PVC, and consumer Pod
 │   └── 04-rbd-pvc-expansion.yaml     # Online volume expansion drill
-└── 07-iscsi/
-    ├── README.md                     # Dedicated iSCSI drills guide
-    ├── test-iscsi-volumes.sh         # Automated iSCSI test script
-    ├── 01-iscsi-direct-pod.yaml      # Direct pod with inline iscsi volume
-    ├── 02-iscsi-pv-pvc-pod.yaml      # Static PV, PVC (ReadWriteOnce), and Pod mount
-    ├── 03-iscsi-raw-block.yaml       # Raw block mode (volumeMode: Block) with volumeDevices
-    ├── 04-iscsi-two-nodes-rwo.yaml   # Multi-node RWO attach conflict demonstration
-    └── 05-iscsi-chap-secret.yaml     # Reference CHAP secret and authenticated PV
+├── 07-iscsi/
+│   ├── README.md                     # Dedicated iSCSI drills guide
+│   ├── test-iscsi-volumes.sh         # Automated iSCSI test script
+│   ├── 01-iscsi-direct-pod.yaml      # Direct pod with inline iscsi volume
+│   ├── 02-iscsi-pv-pvc-pod.yaml      # Static PV, PVC (ReadWriteOnce), and Pod mount
+│   ├── 03-iscsi-raw-block.yaml       # Raw block mode (volumeMode: Block) with volumeDevices
+│   ├── 04-iscsi-two-nodes-rwo.yaml   # Multi-node RWO attach conflict demonstration
+│   └── 05-iscsi-chap-secret.yaml     # Reference CHAP secret and authenticated PV
+└── 08-nfs-csi -> ../storage-classes/02-storage-classes # Dynamic NFS CSI StorageClass & RWX drills
 ```
 
 ---
@@ -157,3 +158,25 @@ kubectl exec iscsi-raw-block-consumer-pod -- ls -l /dev/iscsiblock
 07-iscsi/test-iscsi-volumes.sh
 ```
 
+### Drill 8: Dynamic NFS CSI Driver & ReadWriteMany StorageClasses
+
+For automated, dynamic PersistentVolume provisioning over NFS (without manually pre-creating static PVs):
+
+```bash
+# 1. Deploy the Kubernetes NFS CSI Driver (if not already deployed)
+~/cka/helm/install-nfs-csi-driver.sh
+
+# 2. Deploy Dynamic NFS StorageClass & ReadWriteMany PVC
+kubectl apply -f 08-nfs-csi/03-nfs-csi-sc.yaml
+kubectl apply -f 08-nfs-csi/04-nfs-dynamic-pvc.yaml
+kubectl get sc {{ cka_lab_nfs_csi_storage_class | default('nfs-csi') }}
+kubectl get pvc nfs-dynamic-claim
+
+# 3. Mount in Multi-Replica Workload & Verify Shared Data
+kubectl apply -f 08-nfs-csi/05-nfs-shared-deployment.yaml
+kubectl rollout status deployment/nfs-shared-app --timeout=60s
+kubectl get pods -l app=nfs-shared-app -o wide
+
+# 4. Automated Verification
+08-nfs-csi/test-nfs-csi-drills.sh
+```

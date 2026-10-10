@@ -96,7 +96,7 @@ Dedicated Ansible role for provisioning isolated hands-on Certified Kubernetes A
 ### Scenario 5: NFS Server & Storage Volumes Practice (`volumes`)
 
 - **Domain**: Storage & Volume Management.
-- **Objective**: Leverage the cluster NFS server (provisioned by `roles/nfs_server` during `make preprod-up`, exporting `/srv/nfsroot` with `nfs-server.local` mapped across nodes) to scaffold comprehensive CKA volume drills and sample dataset files under `/home/vagrant/cka/volumes/`:
+- **Objective**: Leverage the cluster NFS server (provisioned by `roles/nfs_server` during `make preprod-up`, exporting `/exports` with `nfs-server.local` mapped across nodes) to scaffold comprehensive CKA volume drills and sample dataset files under `/home/vagrant/cka/volumes/`:
   1. **NFS Shared Storage (`01-nfs/`)**:
      - Direct inline NFS Pod volume mount (`01-nfs-direct-pod.yaml`) referencing `server: nfs-server.local`.
      - Multi-replica Deployment demonstrating shared read/write (`ReadWriteMany`) across worker nodes (`02-nfs-deployment-shared.yaml`).

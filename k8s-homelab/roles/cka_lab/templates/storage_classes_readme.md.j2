@@ -19,13 +19,18 @@ In production Kubernetes clusters, administrators avoid manually provisioning st
 ├── README.md                                  # This master guide
 ├── test-storage-classes-drills.sh             # Non-interactive automated test suite
 ├── 01-provisioners/                           # Section 1: Provisioner Installation
-│   └── install-local-path-provisioner.sh      # Rancher local-path-provisioner deployment
+│   ├── install-local-path-provisioner.sh      # Rancher local-path-provisioner deployment
+│   └── install-nfs-csi-driver.sh -> ../../helm/install-nfs-csi-driver.sh # NFS CSI driver installer
 └── 02-storage-classes/                        # Section 2: StorageClasses & Dynamic PVCs
     ├── cka-lab-sc-retain.yaml                 # ReclaimPolicy Retain, Immediate
     ├── cka-lab-sc-delete-wait.yaml            # ReclaimPolicy Delete, WaitForFirstConsumer
-    ├── cka-lab-dynamic-pvc.yaml               # Dynamic volume claim
+    ├── cka-lab-dynamic-pvc.yaml               # Dynamic volume claim (local-path)
     ├── cka-lab-consumer-pod.yaml              # Pod mounting dynamically bound PVC
-    └── test-storage-classes.sh                # Non-interactive verification script
+    ├── test-storage-classes.sh                # Non-interactive verification script (local-path)
+    ├── 03-nfs-csi-sc.yaml                     # Dynamic NFS CSI StorageClass (nfs.csi.k8s.io)
+    ├── 04-nfs-dynamic-pvc.yaml                # Dynamic ReadWriteMany PVC (500Mi)
+    ├── 05-nfs-shared-deployment.yaml          # Multi-replica shared workload (NGINX RWX)
+    └── test-nfs-csi-drills.sh                 # Non-interactive automated test suite (NFS CSI)
 ```
 
 ---
@@ -73,12 +78,55 @@ In production Kubernetes clusters, administrators avoid manually provisioning st
    kubectl get pvc cka-lab-dynamic-pvc
    ```
 
+### Drill 3: Dynamic NFS CSI Driver & Shared ReadWriteMany Storage
+
+1. **Deploy Kubernetes NFS CSI Driver**:
+
+   ```bash
+   {{ cka_lab_storage_classes_dir }}/01-provisioners/install-nfs-csi-driver.sh
+   kubectl get csidrivers
+   ```
+
+1. **Apply Dynamic NFS StorageClass**:
+
+   ```bash
+   kubectl apply -f {{ cka_lab_storage_classes_dir }}/02-storage-classes/03-nfs-csi-sc.yaml
+   kubectl get storageclass {{ cka_lab_nfs_csi_storage_class | default('nfs-csi') }}
+   ```
+
+1. **Create Dynamic ReadWriteMany PVC & Verify Immediate Binding**:
+
+   ```bash
+   kubectl apply -f {{ cka_lab_storage_classes_dir }}/02-storage-classes/04-nfs-dynamic-pvc.yaml
+   kubectl get pvc nfs-dynamic-claim
+   ```
+
+1. **Deploy Multi-Replica Workload & Verify Shared Data**:
+
+   ```bash
+   kubectl apply -f {{ cka_lab_storage_classes_dir }}/02-storage-classes/05-nfs-shared-deployment.yaml
+   kubectl rollout status deployment/nfs-shared-app --timeout=60s
+   kubectl get pods -l app=nfs-shared-app -o wide
+   ```
+
+1. **Test Online PVC Expansion (500Mi -> 1Gi)**:
+
+   ```bash
+   kubectl patch pvc nfs-dynamic-claim -p '{"spec":{"resources":{"requests":{"storage":"1Gi"}}}}'
+   kubectl get pvc nfs-dynamic-claim
+   ```
+
 ---
 
 ## 3. Automated Validation
 
-Execute the automated non-interactive verification suite:
+Execute the automated non-interactive verification suites:
 
 ```bash
+# Full dynamic storage verification suite (local-path & NFS CSI):
 {{ cka_lab_storage_classes_dir }}/test-storage-classes-drills.sh
+
+# Dedicated standalone NFS CSI dynamic storage test:
+{{ cka_lab_storage_classes_dir }}/02-storage-classes/test-nfs-csi-drills.sh
 ```
+

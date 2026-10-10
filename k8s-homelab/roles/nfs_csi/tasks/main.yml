@@ -1,0 +1,100 @@
+---
+- name: Ensure NFS CSI manifests directory exists on control plane
+  ansible.builtin.file:
+    path: "{{ nfs_csi_manifests_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  tags:
+    - nfs_csi
+    - storage
+
+- name: Add NFS CSI Helm repository
+  ansible.builtin.command: helm repo add csi-driver-nfs {{ nfs_csi_helm_repo }} --force-update
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: nfs_csi_helm_repo_add
+  changed_when: "'has been added' in nfs_csi_helm_repo_add.stdout"
+  tags:
+    - nfs_csi
+    - storage
+
+- name: Update Helm repository cache for NFS CSI
+  ansible.builtin.command: helm repo update csi-driver-nfs
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  changed_when: false
+  tags:
+    - nfs_csi
+    - storage
+
+- name: Check NFS CSI driver Helm release status
+  ansible.builtin.command: helm status {{ nfs_csi_release_name }} -n {{ nfs_csi_namespace }}
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: nfs_csi_release_status
+  failed_when: false
+  changed_when: false
+  tags:
+    - nfs_csi
+    - storage
+
+- name: Install or upgrade NFS CSI driver Helm chart
+  ansible.builtin.command: >-
+    helm upgrade --install {{ nfs_csi_release_name }} csi-driver-nfs/csi-driver-nfs
+    --namespace {{ nfs_csi_namespace }}
+    --create-namespace
+    --version {{ nfs_csi_chart_version }}
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  when: nfs_csi_release_status.rc != 0
+  changed_when: true
+  tags:
+    - nfs_csi
+    - storage
+
+- name: Wait for NFS CSI controller deployment rollout
+  ansible.builtin.command: >-
+    kubectl rollout status deployment/csi-nfs-controller
+    -n {{ nfs_csi_namespace }}
+    --timeout={{ nfs_csi_rollout_timeout }}s
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  changed_when: false
+  tags:
+    - nfs_csi
+    - storage
+
+- name: Wait for NFS CSI node plugin daemonset rollout
+  ansible.builtin.command: >-
+    kubectl rollout status daemonset/csi-nfs-node
+    -n {{ nfs_csi_namespace }}
+    --timeout={{ nfs_csi_rollout_timeout }}s
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  changed_when: false
+  tags:
+    - nfs_csi
+    - storage
+
+- name: Render NFS CSI StorageClass manifest
+  ansible.builtin.template:
+    src: nfs-storageclass.yaml.j2
+    dest: "{{ nfs_csi_manifests_dir }}/nfs-storageclass.yaml"
+    owner: root
+    group: root
+    mode: "0644"
+  tags:
+    - nfs_csi
+    - storage
+
+- name: Apply NFS CSI StorageClass resource
+  ansible.builtin.command: kubectl apply -f {{ nfs_csi_manifests_dir }}/nfs-storageclass.yaml
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: nfs_csi_sc_apply
+  changed_when: "'created' in nfs_csi_sc_apply.stdout or 'configured' in nfs_csi_sc_apply.stdout"
+  tags:
+    - nfs_csi
+    - storage

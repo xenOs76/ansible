@@ -1,4 +1,4 @@
-.PHONY: all lint syntax inventory deps check-deps preprod-up preprod-destroy preprod-recreate preprod-status preprod-provision preprod-sync-kubeconfig prod-sync-kubeconfig preprod-deploy preprod-caddy preprod-cni preprod-ceph prod-ceph preprod-ceph-status preprod-iscsi preprod-nfs prod-nfs preprod-upgrade preprod-reset preprod-cka-lab preprod-cks-lab help
+.PHONY: all lint syntax inventory deps check-deps preprod-up preprod-destroy preprod-recreate preprod-status preprod-provision preprod-sync-kubeconfig prod-sync-kubeconfig preprod-deploy preprod-caddy preprod-cni preprod-ceph prod-ceph preprod-ceph-status preprod-iscsi preprod-nfs prod-nfs preprod-nfs-csi prod-nfs-csi preprod-upgrade preprod-reset preprod-cka-lab preprod-cks-lab help
 
 all: help
 
@@ -26,6 +26,8 @@ help:
 	@echo "make preprod-iscsi     - Deploy/configure standalone iSCSI storage target on preprod"
 	@echo "make preprod-nfs       - Deploy/configure NFS storage server on preprod"
 	@echo "make prod-nfs          - Deploy/configure NFS storage server on prod"
+	@echo "make preprod-nfs-csi   - Deploy/configure NFS CSI dynamic storage driver on preprod"
+	@echo "make prod-nfs-csi      - Deploy/configure NFS CSI dynamic storage driver on prod"
 	@echo "make preprod-upgrade   - Run rolling upgrade on preprod"
 	@echo "make preprod-reset     - Teardown/reset cluster on preprod"
 	@echo "make preprod-cka-lab   - Deploy CKA training lab scenarios on preprod"
@@ -105,6 +107,12 @@ preprod-nfs:
 
 prod-nfs:
 	./scripts/run-playbook.sh -e prod -p nfs.yml
+
+preprod-nfs-csi:
+	./scripts/run-playbook.sh -e preprod -p nfs_csi.yml
+
+prod-nfs-csi:
+	./scripts/run-playbook.sh -e prod -p nfs_csi.yml
 
 preprod-upgrade:
 	./scripts/run-playbook.sh -e preprod -p upgrade.yml

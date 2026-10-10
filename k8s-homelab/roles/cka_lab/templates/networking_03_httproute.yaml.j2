@@ -10,6 +10,8 @@ metadata:
 spec:
   parentRefs:
     - name: cka-lab-gateway
+  hostnames:
+    - "{{ cka_lab_networking_gateway_domain | default('httpbin.example.local') }}"
   rules:
     - matches:
         - path:
@@ -28,6 +30,13 @@ spec:
             path:
               type: ReplacePrefixMatch
               replacePrefixMatch: /
+      backendRefs:
+        - name: httpbingo
+          port: 80
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
       backendRefs:
         - name: httpbingo
           port: 80
