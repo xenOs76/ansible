@@ -127,7 +127,7 @@ k8s-homelab/
 │   ├── preprod/hosts.ini         # Vagrant libvirt inventory with per-host keys
 │   └── prod/hosts.ini            # Bare-metal / physical cluster inventory
 ├── group_vars/
-│   ├── all.yml                   # Cluster version, CIDRs, suite version (1.4.1)
+│   ├── all.yml                   # Cluster version, CIDRs, suite version (1.4.2)
 │   ├── preprod.yml               # Preprod environment overrides
 │   ├── control_plane.yml         # Control plane settings
 │   └── workers.yml               # Worker node settings

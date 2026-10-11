@@ -25,6 +25,9 @@
 (tls_powerdns) {
 	tls {
 		dns powerdns {env.POWERDNS_SERVER_URL} {env.POWERDNS_API_TOKEN}
+{% if caddy_resolvers | default('') | length > 0 %}
+		resolvers {env.POWERDNS_RESOLVERS}
+{% endif %}
 {% if caddy_acme_ca | default('') | length > 0 %}
 		ca {{ caddy_acme_ca }}
 {% endif %}

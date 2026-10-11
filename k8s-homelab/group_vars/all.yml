@@ -1,6 +1,6 @@
 ---
 # Playbook suite version
-playbook_version: "1.4.1"
+playbook_version: "1.4.2"
 
 # Kubernetes versions and repositories
 k8s_version: "1.34.1-1.1"
@@ -41,10 +41,10 @@ k9s_version: "v0.51.0"
 k9s_skin: "nord"
 helm_apt_repo: "deb [signed-by=/etc/apt/keyrings/helm.gpg] https://packages.buildkite.com/helm-linux/helm-debian/any/ any main"
 helm_apt_key_url: "https://packages.buildkite.com/helm-linux/helm-debian/gpgkey"
-helm_apt_key_fingerprint: "DDF78C3E6EBB2D2CC223C95C62BA89D07698DBC6"  # gitleaks:allow
+helm_apt_key_fingerprint: "DDF78C3E6EBB2D2CC223C95C62BA89D07698DBC6" # gitleaks:allow
 
 # Caddy ingress reverse proxy and DNS-01 ACME
-caddy_version: "v2.11.4"
+caddy_version: "v2.11.7"
 caddy_xcaddy_version: "v0.4.4"
 caddy_dns_plugin: "github.com/caddy-dns/powerdns@v1.0.2"
 caddy_check_upstream_release: true
@@ -70,6 +70,11 @@ caddy_powerdns_api_token: >-
   }}
 caddy_acme_email: ""
 caddy_acme_ca: ""
+caddy_resolvers: >-
+  {{
+    (lookup('community.sops.sops', caddy_sops_secrets_file, errors='ignore') | default('{}', true) | from_yaml).caddy_resolvers
+    | default(lookup('ansible.builtin.env', 'POWERDNS_RESOLVERS') | default('', true))
+  }}
 
 # Caddy Garage S3 binary cache settings (retrieves prebuilt binary if present, saves if built)
 caddy_s3_cache_enabled: true
@@ -89,7 +94,6 @@ caddy_garage_secret_key: >-
     | default(lookup('ansible.builtin.env', 'GARAGE_SECRET_KEY') | default(lookup('ansible.builtin.env', 'AWS_SECRET_ACCESS_KEY') | default('', true)))
   }}
 caddy_build_dir: "/var/cache/caddy-build"
-
 # Rook-Ceph block storage configuration
 rook_ceph_enabled: true
 rook_ceph_version: "v1.15.5"

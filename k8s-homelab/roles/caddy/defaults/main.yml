@@ -58,6 +58,11 @@ caddy_garage_secret_key: >-
 # Let's Encrypt / ACME settings
 caddy_acme_email: ""
 caddy_acme_ca: ""  # Set e.g. to https://acme-staging-v02.api.letsencrypt.org/directory for staging
+caddy_resolvers: >-
+  {{
+    (lookup('community.sops.sops', caddy_sops_secrets_file, errors='ignore') | default('{}', true) | from_yaml).caddy_resolvers
+    | default(lookup('ansible.builtin.env', 'POWERDNS_RESOLVERS') | default('', true))
+  }}
 
 # User and paths
 caddy_user: "caddy"

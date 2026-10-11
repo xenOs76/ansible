@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.2] - 2026-10-11
+
+### Added
+
+- **Confidential PowerDNS Resolvers for ACME (`roles/caddy`, `group_vars/all.yml`)**: Configured SOPS-encrypted DNS resolver settings (`caddy_resolvers` / `POWERDNS_RESOLVERS`) for Caddy's PowerDNS DNS-01 ACME challenge propagation, resolving DNS propagation timeouts in split-horizon and local LAN environments with secure file injection (`0600 root:caddy`) and `no_log: true` masking.
+
+### Changed
+
+- **Caddy Ingress Reverse Proxy (`group_vars/all.yml`)**: Updated default upstream Caddy version to `v2.11.7`.
+
 ## [1.4.1] - 2026-10-10
 
 ### Added

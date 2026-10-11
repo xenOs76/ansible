@@ -50,6 +50,7 @@ To print only a specific key (e.g. for scripting or verification):
 # Extract PowerDNS credentials:
 sops -d --extract '["caddy_powerdns_api_token"]' secrets.sops.yaml
 sops -d --extract '["caddy_powerdns_server_url"]' secrets.sops.yaml
+sops -d --extract '["caddy_resolvers"]' secrets.sops.yaml
 
 # Extract Garage S3 binary cache credentials:
 sops -d --extract '["caddy_garage_access_key"]' secrets.sops.yaml
