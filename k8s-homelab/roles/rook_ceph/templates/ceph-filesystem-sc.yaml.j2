@@ -1,0 +1,55 @@
+---
+# ==============================================================================
+# Rook-Ceph CephFilesystem & CephFS StorageClass
+# Provides shared distributed filesystem (CephFS) and dynamic RWX volumes
+# ==============================================================================
+apiVersion: ceph.rook.io/v1
+kind: CephFilesystem
+metadata:
+  name: "{{ rook_ceph_fs_name }}"
+  namespace: "{{ rook_ceph_namespace }}"
+spec:
+  metadataPool:
+    replicated:
+      size: {{ rook_ceph_fs_pool_replicas }}
+      requireSafeReplicaSize: false
+  dataPools:
+    - name: data0
+      failureDomain: "{{ rook_ceph_failure_domain }}"
+      replicated:
+        size: {{ rook_ceph_fs_pool_replicas }}
+        requireSafeReplicaSize: false
+  metadataServer:
+    activeCount: {{ rook_ceph_mds_count }}
+    activeStandby: false
+    placement:
+      nodeAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          nodeSelectorTerms:
+            - matchExpressions:
+                - key: kubernetes.io/hostname
+                  operator: In
+                  values:
+                    - "{{ rook_ceph_storage_node }}"
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: "{{ rook_ceph_fs_storage_class_name }}"
+provisioner: "{{ rook_ceph_namespace }}.cephfs.csi.ceph.com"
+parameters:
+  clusterID: "{{ rook_ceph_namespace }}"
+  fsName: "{{ rook_ceph_fs_name }}"
+  pool: "{{ rook_ceph_fs_name }}-data0"
+  csi.storage.k8s.io/provisioner-secret-name: rook-csi-cephfs-provisioner
+  csi.storage.k8s.io/provisioner-secret-namespace: "{{ rook_ceph_namespace }}"
+  csi.storage.k8s.io/controller-expand-secret-name: rook-csi-cephfs-provisioner
+  csi.storage.k8s.io/controller-expand-secret-namespace: "{{ rook_ceph_namespace }}"
+  csi.storage.k8s.io/node-stage-secret-name: rook-csi-cephfs-node
+  csi.storage.k8s.io/node-stage-secret-namespace: "{{ rook_ceph_namespace }}"
+reclaimPolicy: "{{ rook_ceph_reclaim_policy }}"
+allowVolumeExpansion: true

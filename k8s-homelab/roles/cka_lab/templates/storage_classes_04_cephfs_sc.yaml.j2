@@ -1,0 +1,20 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: {{ cka_lab_cephfs_storage_class | default('rook-cephfs') }}
+  labels:
+    app.kubernetes.io/part-of: cka-lab
+    cka.practice/scenario: storage-classes
+provisioner: {{ rook_ceph_namespace | default('rook-ceph') }}.cephfs.csi.ceph.com
+parameters:
+  clusterID: {{ rook_ceph_namespace | default('rook-ceph') }}
+  fsName: {{ rook_ceph_fs_name | default('cephfs') }}
+  pool: {{ rook_ceph_fs_name | default('cephfs') }}-data0
+  csi.storage.k8s.io/provisioner-secret-name: rook-csi-cephfs-provisioner
+  csi.storage.k8s.io/provisioner-secret-namespace: {{ rook_ceph_namespace | default('rook-ceph') }}
+  csi.storage.k8s.io/controller-expand-secret-name: rook-csi-cephfs-provisioner
+  csi.storage.k8s.io/controller-expand-secret-namespace: {{ rook_ceph_namespace | default('rook-ceph') }}
+  csi.storage.k8s.io/node-stage-secret-name: rook-csi-cephfs-node
+  csi.storage.k8s.io/node-stage-secret-namespace: {{ rook_ceph_namespace | default('rook-ceph') }}
+reclaimPolicy: Delete
+allowVolumeExpansion: true

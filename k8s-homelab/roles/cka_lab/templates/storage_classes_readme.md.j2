@@ -30,7 +30,12 @@ In production Kubernetes clusters, administrators avoid manually provisioning st
     ├── 03-nfs-csi-sc.yaml                     # Dynamic NFS CSI StorageClass (nfs.csi.k8s.io)
     ├── 04-nfs-dynamic-pvc.yaml                # Dynamic ReadWriteMany PVC (500Mi)
     ├── 05-nfs-shared-deployment.yaml          # Multi-replica shared workload (NGINX RWX)
-    └── test-nfs-csi-drills.sh                 # Non-interactive automated test suite (NFS CSI)
+    ├── test-nfs-csi-drills.sh                 # Non-interactive automated test suite (NFS CSI)
+    ├── 03-ceph-nfs-sc.yaml                    # Alternative: Ceph NFS StorageClass (nfs.csi.k8s.io)
+    ├── 03-cephfs-sc.yaml                      # Alternative: Native CephFS StorageClass (cephfs.csi.ceph.com)
+    ├── 04-ceph-dynamic-pvc.yaml               # Dynamic ReadWriteMany PVC (Ceph NFS)
+    ├── 05-ceph-shared-deployment.yaml         # Multi-replica shared workload (Ceph NFS)
+    └── test-ceph-nfs-drills.sh                # Non-interactive automated test suite (Ceph NFS)
 ```
 
 ---
@@ -146,6 +151,40 @@ kubectl explain storageclass.allowVolumeExpansion
    kubectl get pvc nfs-dynamic-claim
    ```
 
+### Drill 4: Cloud-Native Ceph Dynamic Shared Storage Alternatives
+
+When using Ceph as the cluster storage backend (`storage_nfs_provider: "ceph"`), candidates and administrators have two cloud-native alternatives for dynamic ReadWriteMany shared storage:
+
+#### Approach A: Ceph NFS via NFS CSI (`03-ceph-nfs-sc.yaml`)
+
+Consumes the Ceph NFS-Ganesha daemon export (`nfs-server.local:/exports`) using the standard NFS CSI driver:
+
+1. **Apply Ceph NFS StorageClass**:
+
+   ```bash
+   kubectl apply -f {{ cka_lab_storage_classes_dir }}/02-storage-classes/03-ceph-nfs-sc.yaml
+   kubectl get storageclass {{ cka_lab_ceph_nfs_storage_class | default('ceph-nfs-csi') }}
+   ```
+
+1. **Deploy Dynamic RWX PVC & Multi-Replica Workload**:
+
+   ```bash
+   kubectl apply -f {{ cka_lab_storage_classes_dir }}/02-storage-classes/04-ceph-dynamic-pvc.yaml
+   kubectl apply -f {{ cka_lab_storage_classes_dir }}/02-storage-classes/05-ceph-shared-deployment.yaml
+   kubectl rollout status deployment/ceph-nfs-shared-app --timeout=60s
+   ```
+
+#### Approach B: Native CephFS Shared Filesystem (`03-cephfs-sc.yaml`)
+
+Directly uses Ceph's native distributed filesystem driver (`rook-ceph.cephfs.csi.ceph.com`), bypassing NFS translation layers:
+
+1. **Apply Native CephFS StorageClass**:
+
+   ```bash
+   kubectl apply -f {{ cka_lab_storage_classes_dir }}/02-storage-classes/03-cephfs-sc.yaml
+   kubectl get storageclass {{ cka_lab_cephfs_storage_class | default('rook-cephfs') }}
+   ```
+
 ---
 
 ## 3. Automated Validation
@@ -153,9 +192,12 @@ kubectl explain storageclass.allowVolumeExpansion
 Execute the automated non-interactive verification suites:
 
 ```bash
-# Full dynamic storage verification suite (local-path & NFS CSI):
+# Full dynamic storage verification suite (local-path, NFS CSI, and Ceph NFS):
 {{ cka_lab_storage_classes_dir }}/test-storage-classes-drills.sh
 
 # Dedicated standalone NFS CSI dynamic storage test:
 {{ cka_lab_storage_classes_dir }}/02-storage-classes/test-nfs-csi-drills.sh
+
+# Dedicated standalone Ceph NFS dynamic storage test:
+{{ cka_lab_storage_classes_dir }}/02-storage-classes/test-ceph-nfs-drills.sh
 ```

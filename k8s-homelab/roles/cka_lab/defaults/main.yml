@@ -253,6 +253,8 @@ cka_lab_workloads_advanced_namespace: "default"
 cka_lab_storage_classes_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/storage-classes"
 cka_lab_storage_classes_namespace: "default"
 cka_lab_nfs_csi_storage_class: "nfs-csi"
+cka_lab_ceph_nfs_storage_class: "ceph-nfs-csi"
+cka_lab_cephfs_storage_class: "{{ rook_ceph_fs_storage_class_name | default('rook-cephfs') }}"
 
 # Scenario: cluster_troubleshooting (Cordon/Drain, Static Pod Recovery, Kubelet Diagnostics)
 cka_lab_cluster_troubleshooting_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/cluster-troubleshooting"

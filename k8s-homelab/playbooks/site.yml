@@ -52,7 +52,7 @@
     - caddy
     - ingress
 
-- name: 7. Deploy Rook-Ceph block storage orchestrator
+- name: 7. Deploy Rook-Ceph storage orchestrator (RBD and NFS)
   hosts: control_plane
   become: true
   roles:

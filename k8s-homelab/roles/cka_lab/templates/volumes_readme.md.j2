@@ -216,4 +216,11 @@ kubectl get pods -l app=nfs-shared-app -o wide
 
 # 4. Automated Verification
 08-nfs-csi/test-nfs-csi-drills.sh
+
+# 5. Ceph Cloud-Native Dynamic Storage Alternatives (Ceph NFS & CephFS)
+# Apply Ceph NFS StorageClass and dynamic workload:
+kubectl apply -f 08-nfs-csi/03-ceph-nfs-sc.yaml
+kubectl apply -f 08-nfs-csi/04-ceph-dynamic-pvc.yaml
+kubectl apply -f 08-nfs-csi/05-ceph-shared-deployment.yaml
+08-nfs-csi/test-ceph-nfs-drills.sh
 ```

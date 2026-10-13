@@ -41,7 +41,7 @@ k9s_version: "v0.51.0"
 k9s_skin: "nord"
 helm_apt_repo: "deb [signed-by=/etc/apt/keyrings/helm.gpg] https://packages.buildkite.com/helm-linux/helm-debian/any/ any main"
 helm_apt_key_url: "https://packages.buildkite.com/helm-linux/helm-debian/gpgkey"
-helm_apt_key_fingerprint: "DDF78C3E6EBB2D2CC223C95C62BA89D07698DBC6" # gitleaks:allow
+helm_apt_key_fingerprint: "DDF78C3E6EBB2D2CC223C95C62BA89D07698DBC6"  # gitleaks:allow
 
 # Caddy ingress reverse proxy and DNS-01 ACME
 caddy_version: "v2.11.7"
@@ -94,13 +94,19 @@ caddy_garage_secret_key: >-
     | default(lookup('ansible.builtin.env', 'GARAGE_SECRET_KEY') | default(lookup('ansible.builtin.env', 'AWS_SECRET_ACCESS_KEY') | default('', true)))
   }}
 caddy_build_dir: "/var/cache/caddy-build"
-# Rook-Ceph block storage configuration
+# Storage provider selection ('kernel' for Linux nfs-kernel-server, 'ceph' for Rook CephNFS)
+storage_nfs_provider: "kernel"
+
+# Rook-Ceph storage orchestrator configuration (RBD block, CephFS filesystem, and CephNFS)
 rook_ceph_enabled: true
 rook_ceph_version: "v1.15.5"
 rook_ceph_helm_repo: "https://charts.rook.io/release"
 rook_ceph_namespace: "rook-ceph"
 rook_ceph_cluster_name: "rook-ceph"
 rook_ceph_image_version: "v19.2.1"
+
+# RBD Block Storage configuration
+rook_ceph_rbd_enabled: true
 rook_ceph_storage_class_name: "rook-ceph-block"
 rook_ceph_is_default_sc: true
 rook_ceph_mon_count: 1
@@ -109,6 +115,27 @@ rook_ceph_pool_replicas: 1
 rook_ceph_pool_name: "replicapool"
 rook_ceph_failure_domain: "osd"
 rook_ceph_fs_type: "ext4"
+
+# CephFS Shared Filesystem configuration
+rook_ceph_cephfs_enabled: true
+rook_ceph_fs_name: "cephfs"
+rook_ceph_fs_storage_class_name: "rook-cephfs"
+rook_ceph_fs_pool_replicas: 1
+rook_ceph_mds_count: 1
+rook_ceph_csi_provisioner_replicas: 1
+
+# CephNFS Server & Export configuration (drop-in alternative to nfs-kernel-server)
+rook_ceph_nfs_enabled: "{{ (storage_nfs_provider | default('kernel')) == 'ceph' }}"
+rook_ceph_nfs_cluster_id: "homelab-nfs"
+rook_ceph_nfs_server_count: 1
+rook_ceph_nfs_host_network: true
+rook_ceph_nfs_export_path: "{{ nfs_export_dir | default('/exports') }}"
+rook_ceph_nfs_client_subnets:
+  - "{{ nfs_export_subnet | default('192.168.56.0/24') }}"
+  - "{{ pod_network_cidr | default('10.1.0.0/16') }}"
+
+# Rook Ceph Toolbox configuration
+rook_ceph_toolbox_enabled: true
 
 # NFS shared storage server configuration
 nfs_server_enabled: true

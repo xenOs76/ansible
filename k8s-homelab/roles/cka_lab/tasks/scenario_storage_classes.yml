@@ -37,6 +37,11 @@
     - {src: "storage_classes_04_nfs_dynamic_pvc.yaml.j2", dest: "02-storage-classes/04-nfs-dynamic-pvc.yaml"}
     - {src: "storage_classes_05_nfs_shared_deployment.yaml.j2", dest: "02-storage-classes/05-nfs-shared-deployment.yaml"}
     - {src: "storage_classes_06_test_nfs_csi.sh.j2", dest: "02-storage-classes/test-nfs-csi-drills.sh", mode: "0755"}
+    - {src: "storage_classes_04_ceph_nfs_sc.yaml.j2", dest: "02-storage-classes/03-ceph-nfs-sc.yaml"}
+    - {src: "storage_classes_04_cephfs_sc.yaml.j2", dest: "02-storage-classes/03-cephfs-sc.yaml"}
+    - {src: "storage_classes_04_ceph_dynamic_pvc.yaml.j2", dest: "02-storage-classes/04-ceph-dynamic-pvc.yaml"}
+    - {src: "storage_classes_05_ceph_shared_deployment.yaml.j2", dest: "02-storage-classes/05-ceph-shared-deployment.yaml"}
+    - {src: "storage_classes_06_test_ceph_nfs.sh.j2", dest: "02-storage-classes/test-ceph-nfs-drills.sh", mode: "0755"}
   loop_control:
     label: "storage_classes/{{ item.dest }}"
   tags:
@@ -81,6 +86,7 @@
     - 01-provisioners/install-local-path-provisioner.sh
     - 02-storage-classes/test-storage-classes.sh
     - 02-storage-classes/test-nfs-csi-drills.sh
+    - 02-storage-classes/test-ceph-nfs-drills.sh
   register: cka_lab_storage_classes_syntax_check
   changed_when: false
   tags:

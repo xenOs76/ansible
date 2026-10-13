@@ -1,5 +1,5 @@
 ---
-- name: Deploy Rook-Ceph storage operator and dynamic block storage
+- name: Deploy Rook-Ceph storage operator and dynamic storage (RBD and NFS)
   hosts: control_plane
   become: true
   roles:

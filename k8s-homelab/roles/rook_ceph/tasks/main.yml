@@ -29,29 +29,28 @@
     - ceph
     - storage
 
-- name: Check Rook-Ceph operator Helm release status
-  ansible.builtin.command: helm status {{ rook_ceph_cluster_name }}-operator -n {{ rook_ceph_namespace }}
-  environment:
-    KUBECONFIG: /etc/kubernetes/admin.conf
-  register: rook_ceph_operator_status
-  failed_when: false
-  changed_when: false
+- name: Render Rook-Ceph operator Helm values
+  ansible.builtin.template:
+    src: operator-values.yaml.j2
+    dest: "{{ rook_ceph_manifests_dir }}/operator-values.yaml"
+    owner: root
+    group: root
+    mode: "0644"
   tags:
     - ceph
     - storage
 
-- name: Install Rook-Ceph operator Helm chart
+- name: Install or update Rook-Ceph operator Helm chart
   ansible.builtin.command: >-
     helm upgrade --install {{ rook_ceph_cluster_name }}-operator rook-release/rook-ceph
     --namespace {{ rook_ceph_namespace }}
     --create-namespace
     --version {{ rook_ceph_version }}
-    --set csi.enableRbdDriver=true
-    --set csi.enableCephfsDriver=false
+    -f {{ rook_ceph_manifests_dir }}/operator-values.yaml
   environment:
     KUBECONFIG: /etc/kubernetes/admin.conf
-  when: rook_ceph_operator_status.rc != 0
-  changed_when: true
+  register: rook_ceph_operator_install
+  changed_when: "'Release' in rook_ceph_operator_install.stdout or 'UPDATED' in rook_ceph_operator_install.stdout"
   tags:
     - ceph
     - storage
@@ -91,28 +90,35 @@
     - ceph
     - storage
 
-- name: Render CephBlockPool and StorageClass manifests
-  ansible.builtin.template:
-    src: ceph-blockpool-sc.yaml.j2
-    dest: "{{ rook_ceph_manifests_dir }}/ceph-blockpool-sc.yaml"
-    owner: root
-    group: root
-    mode: "0644"
-  when: rook_ceph_devices | length > 0
+- name: Provision Ceph RBD block storage
+  ansible.builtin.include_tasks: rbd.yml
+  when:
+    - rook_ceph_devices | length > 0
+    - rook_ceph_rbd_enabled | default(true) | bool
   tags:
     - ceph
     - storage
+    - ceph_rbd
 
-- name: Apply CephBlockPool and StorageClass
-  ansible.builtin.command: kubectl apply -f {{ rook_ceph_manifests_dir }}/ceph-blockpool-sc.yaml
-  environment:
-    KUBECONFIG: /etc/kubernetes/admin.conf
-  when: rook_ceph_devices | length > 0
-  register: rook_ceph_blockpool_sc_apply
-  changed_when: "'created' in rook_ceph_blockpool_sc_apply.stdout or 'configured' in rook_ceph_blockpool_sc_apply.stdout"
+- name: Provision CephFS shared filesystem
+  ansible.builtin.include_tasks: cephfs.yml
+  when:
+    - rook_ceph_devices | length > 0
+    - rook_ceph_cephfs_enabled | default(true) | bool
   tags:
     - ceph
     - storage
+    - ceph_fs
+
+- name: Provision CephNFS daemon and export
+  ansible.builtin.include_tasks: nfs.yml
+  when:
+    - rook_ceph_devices | length > 0
+    - rook_ceph_nfs_enabled | default(false) | bool
+  tags:
+    - ceph
+    - storage
+    - ceph_nfs
 
 - name: Render test-ceph-storage.sh script into user home directory
   ansible.builtin.template:

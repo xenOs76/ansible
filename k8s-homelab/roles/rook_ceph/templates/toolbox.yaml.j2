@@ -1,0 +1,84 @@
+---
+# ==============================================================================
+# Rook-Ceph Toolbox Deployment
+# Provides ceph CLI utilities in-cluster for cluster configuration and diagnostics
+# ==============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rook-ceph-tools
+  namespace: "{{ rook_ceph_namespace }}"
+  labels:
+    app: rook-ceph-tools
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rook-ceph-tools
+  template:
+    metadata:
+      labels:
+        app: rook-ceph-tools
+    spec:
+      dnsPolicy: ClusterFirstWithHostNet
+      serviceAccountName: rook-ceph-default
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+      containers:
+        - name: rook-ceph-tools
+          image: quay.io/ceph/ceph:{{ rook_ceph_image_version }}
+          command:
+            - /bin/bash
+            - -c
+            - |
+              ENDPOINT_MOUNT="/etc/rook/mon-endpoints"
+              KEYRING_MOUNT="/var/lib/rook-ceph-mon/secret.keyring"
+              CEPH_CONFIG="/etc/ceph/ceph.conf"
+              KEYRING_FILE="/etc/ceph/keyring"
+
+              write_keyring() {
+                ceph_secret=$(cat "${KEYRING_MOUNT}")
+                cat <<EOF > "${KEYRING_FILE}"
+              [client.admin]
+              key = ${ceph_secret}
+              EOF
+              }
+
+              write_conf() {
+                mon_endpoints=$(cat "${ENDPOINT_MOUNT}" | sed 's/[a-z0-9_-]\+\(=//g')
+                cat <<EOF > "${CEPH_CONFIG}"
+              [global]
+              mon_host = ${mon_endpoints}
+
+              [client]
+              keyring = ${KEYRING_FILE}
+              EOF
+              }
+
+              write_keyring
+              write_conf
+              sleep infinity
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: ROOK_CEPH_USERNAME
+              value: client.admin
+          volumeMounts:
+            - mountPath: /etc/rook
+              name: rook-config
+            - mountPath: /var/lib/rook-ceph-mon
+              name: rook-ceph-mon-secret
+      volumes:
+        - name: rook-config
+          configMap:
+            name: rook-ceph-mon-endpoints
+            items:
+              - key: data
+                path: mon-endpoints
+        - name: rook-ceph-mon-secret
+          secret:
+            secretName: rook-ceph-mon
+            items:
+              - key: secretKey
+                path: secret.keyring

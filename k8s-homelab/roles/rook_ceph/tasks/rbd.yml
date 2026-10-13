@@ -1,0 +1,23 @@
+---
+- name: Render CephBlockPool and StorageClass manifests
+  ansible.builtin.template:
+    src: ceph-blockpool-sc.yaml.j2
+    dest: "{{ rook_ceph_manifests_dir }}/ceph-blockpool-sc.yaml"
+    owner: root
+    group: root
+    mode: "0644"
+  tags:
+    - ceph
+    - storage
+    - ceph_rbd
+
+- name: Apply CephBlockPool and StorageClass
+  ansible.builtin.command: kubectl apply -f {{ rook_ceph_manifests_dir }}/ceph-blockpool-sc.yaml
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: rook_ceph_blockpool_sc_apply
+  changed_when: "'created' in rook_ceph_blockpool_sc_apply.stdout or 'configured' in rook_ceph_blockpool_sc_apply.stdout"
+  tags:
+    - ceph
+    - storage
+    - ceph_rbd

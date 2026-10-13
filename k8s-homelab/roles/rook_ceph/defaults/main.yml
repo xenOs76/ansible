@@ -10,7 +10,8 @@ rook_ceph_namespace: "rook-ceph"
 rook_ceph_cluster_name: "rook-ceph"
 rook_ceph_image_version: "v19.2.1"
 
-# StorageClass configuration
+# StorageClass & RBD configuration
+rook_ceph_rbd_enabled: true
 rook_ceph_storage_class_name: "rook-ceph-block"
 rook_ceph_is_default_sc: true
 rook_ceph_fs_type: "ext4"
@@ -23,6 +24,29 @@ rook_ceph_mgr_count: 1
 rook_ceph_pool_name: "replicapool"
 rook_ceph_pool_replicas: 1
 rook_ceph_failure_domain: "osd"
+
+# CephFS Shared Filesystem configuration
+rook_ceph_cephfs_enabled: true
+rook_ceph_fs_name: "cephfs"
+rook_ceph_fs_storage_class_name: "rook-cephfs"
+rook_ceph_fs_pool_replicas: 1
+rook_ceph_mds_count: 1
+
+# Ceph CSI Driver & Provisioner configuration
+rook_ceph_csi_provisioner_replicas: 1
+
+# CephNFS Server & Export configuration
+rook_ceph_nfs_enabled: "{{ (storage_nfs_provider | default('kernel')) == 'ceph' }}"
+rook_ceph_nfs_cluster_id: "homelab-nfs"
+rook_ceph_nfs_server_count: 1
+rook_ceph_nfs_host_network: true
+rook_ceph_nfs_export_path: "{{ nfs_export_dir | default('/exports') }}"
+rook_ceph_nfs_client_subnets:
+  - "{{ nfs_export_subnet | default('192.168.56.0/24') }}"
+  - "{{ pod_network_cidr | default('10.1.0.0/16') }}"
+
+# Rook Ceph Toolbox configuration
+rook_ceph_toolbox_enabled: true
 
 # Target node and storage devices (must be raw unformatted block devices)
 rook_ceph_storage_node: "{{ inventory_hostname }}"

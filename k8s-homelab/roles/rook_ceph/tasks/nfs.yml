@@ -1,0 +1,102 @@
+---
+- name: Render CephNFS resource manifest
+  ansible.builtin.template:
+    src: ceph-nfs.yaml.j2
+    dest: "{{ rook_ceph_manifests_dir }}/ceph-nfs.yaml"
+    owner: root
+    group: root
+    mode: "0644"
+  tags:
+    - ceph
+    - storage
+    - ceph_nfs
+
+- name: Apply CephNFS resource
+  ansible.builtin.command: kubectl apply -f {{ rook_ceph_manifests_dir }}/ceph-nfs.yaml
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: rook_ceph_nfs_apply
+  changed_when: "'created' in rook_ceph_nfs_apply.stdout or 'configured' in rook_ceph_nfs_apply.stdout"
+  tags:
+    - ceph
+    - storage
+    - ceph_nfs
+
+- name: Render Rook-Ceph toolbox deployment manifest
+  ansible.builtin.template:
+    src: toolbox.yaml.j2
+    dest: "{{ rook_ceph_manifests_dir }}/toolbox.yaml"
+    owner: root
+    group: root
+    mode: "0644"
+  tags:
+    - ceph
+    - storage
+    - ceph_nfs
+
+- name: Apply Rook-Ceph toolbox deployment
+  ansible.builtin.command: kubectl apply -f {{ rook_ceph_manifests_dir }}/toolbox.yaml
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: rook_ceph_toolbox_apply
+  changed_when: "'created' in rook_ceph_toolbox_apply.stdout or 'configured' in rook_ceph_toolbox_apply.stdout"
+  tags:
+    - ceph
+    - storage
+    - ceph_nfs
+
+- name: Wait for Rook-Ceph toolbox rollout
+  ansible.builtin.command: >-
+    kubectl rollout status deployment/rook-ceph-tools
+    -n {{ rook_ceph_namespace }}
+    --timeout=120s
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  changed_when: false
+  tags:
+    - ceph
+    - storage
+    - ceph_nfs
+
+- name: Enable Ceph MGR orchestrator and NFS modules
+  ansible.builtin.command: >-
+    kubectl exec -n {{ rook_ceph_namespace }} deploy/rook-ceph-tools --
+    bash -c "ceph mgr module enable rook && ceph mgr module enable nfs && ceph orch set backend rook"
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  changed_when: false
+  failed_when: false
+  tags:
+    - ceph
+    - storage
+    - ceph_nfs
+
+- name: List active Ceph NFS exports
+  ansible.builtin.command: >-
+    kubectl exec -n {{ rook_ceph_namespace }} deploy/rook-ceph-tools --
+    ceph nfs export ls {{ rook_ceph_nfs_cluster_id }}
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: rook_ceph_nfs_export_list
+  changed_when: false
+  failed_when: false
+  tags:
+    - ceph
+    - storage
+    - ceph_nfs
+
+- name: Create Ceph NFS export for {{ rook_ceph_nfs_export_path }}
+  ansible.builtin.command: >-
+    kubectl exec -n {{ rook_ceph_namespace }} deploy/rook-ceph-tools --
+    ceph nfs export create cephfs {{ rook_ceph_nfs_cluster_id }} {{ rook_ceph_nfs_export_path }} {{ rook_ceph_fs_name }}
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: rook_ceph_nfs_export_create
+  changed_when: true
+  when: >-
+    rook_ceph_nfs_export_list.rc == 0 and
+    (rook_ceph_nfs_export_path not in rook_ceph_nfs_export_list.stdout)
+  tags:
+    - ceph
+    - storage
+    - ceph_nfs

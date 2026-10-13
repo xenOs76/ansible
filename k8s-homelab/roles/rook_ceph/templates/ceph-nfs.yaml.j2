@@ -1,0 +1,27 @@
+---
+# ==============================================================================
+# Rook-Ceph CephNFS Daemon Resource Definition
+# Configures NFS-Ganesha daemon bound to control plane hostNetwork port 2049
+# ==============================================================================
+apiVersion: ceph.rook.io/v1
+kind: CephNFS
+metadata:
+  name: "{{ rook_ceph_nfs_cluster_id }}"
+  namespace: "{{ rook_ceph_namespace }}"
+spec:
+  server:
+    active: {{ rook_ceph_nfs_server_count }}
+    hostNetwork: {{ rook_ceph_nfs_host_network | lower }}
+    placement:
+      nodeAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          nodeSelectorTerms:
+            - matchExpressions:
+                - key: kubernetes.io/hostname
+                  operator: In
+                  values:
+                    - "{{ rook_ceph_storage_node }}"
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule

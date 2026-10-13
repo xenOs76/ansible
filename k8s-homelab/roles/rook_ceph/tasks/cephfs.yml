@@ -1,0 +1,23 @@
+---
+- name: Render CephFilesystem and StorageClass manifests
+  ansible.builtin.template:
+    src: ceph-filesystem-sc.yaml.j2
+    dest: "{{ rook_ceph_manifests_dir }}/ceph-filesystem-sc.yaml"
+    owner: root
+    group: root
+    mode: "0644"
+  tags:
+    - ceph
+    - storage
+    - ceph_fs
+
+- name: Apply CephFilesystem and StorageClass
+  ansible.builtin.command: kubectl apply -f {{ rook_ceph_manifests_dir }}/ceph-filesystem-sc.yaml
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: rook_ceph_filesystem_sc_apply
+  changed_when: "'created' in rook_ceph_filesystem_sc_apply.stdout or 'configured' in rook_ceph_filesystem_sc_apply.stdout"
+  tags:
+    - ceph
+    - storage
+    - ceph_fs

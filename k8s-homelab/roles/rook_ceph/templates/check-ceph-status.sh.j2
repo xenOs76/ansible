@@ -27,6 +27,10 @@ RESET="\033[0m"
 NAMESPACE="{{ rook_ceph_namespace }}"
 CLUSTER_NAME="{{ rook_ceph_cluster_name }}"
 STORAGE_CLASS="{{ rook_ceph_storage_class_name }}"
+CEPHFS_NAME="{{ rook_ceph_fs_name }}"
+CEPHFS_STORAGE_CLASS="{{ rook_ceph_fs_storage_class_name }}"
+NFS_CLUSTER_ID="{{ rook_ceph_nfs_cluster_id }}"
+MANIFESTS_DIR="{{ rook_ceph_manifests_dir }}"
 ENSURE_TOOLBOX=false
 VERBOSE=false
 
@@ -210,6 +214,16 @@ else
       echo -e "  Conditions:"
       kubectl get cephcluster "${CLUSTER_NAME}" -n "${NAMESPACE}" -o jsonpath='{range .status.conditions[*]}{"  - "}{.type}{": "}{.status}{" ("}{.message}{")\n"}{end}' 2>/dev/null || true
     fi
+
+    if kubectl get cephfilesystem "${CEPHFS_NAME}" -n "${NAMESPACE}" >/dev/null 2>&1; then
+      FS_PHASE="$(kubectl get cephfilesystem "${CEPHFS_NAME}" -n "${NAMESPACE}" -o jsonpath='{.status.phase}' 2>/dev/null || true)"
+      echo -e "  ${GREEN}✔ CephFilesystem '${CEPHFS_NAME}': ${FS_PHASE:-Ready}${RESET}"
+    fi
+
+    if kubectl get cephnfs "${NFS_CLUSTER_ID}" -n "${NAMESPACE}" >/dev/null 2>&1; then
+      NFS_PHASE="$(kubectl get cephnfs "${NFS_CLUSTER_ID}" -n "${NAMESPACE}" -o jsonpath='{.status.phase}' 2>/dev/null || true)"
+      echo -e "  ${GREEN}✔ CephNFS '${NFS_CLUSTER_ID}': ${NFS_PHASE:-Ready}${RESET}"
+    fi
   fi
 fi
 echo ""
@@ -249,7 +263,11 @@ fi
 
 if [ "${ENSURE_TOOLBOX}" = "true" ] && [ "${TOOLBOX_RUNNING}" = "false" ]; then
   echo "  Deploying Rook-Ceph toolbox deployment..."
-  kubectl apply -f https://raw.githubusercontent.com/rook/rook/v1.15.5/deploy/examples/toolbox.yaml -n "${NAMESPACE}"
+  if [ -f "${MANIFESTS_DIR}/toolbox.yaml" ]; then
+    kubectl apply -f "${MANIFESTS_DIR}/toolbox.yaml" -n "${NAMESPACE}"
+  else
+    kubectl apply -f https://raw.githubusercontent.com/rook/rook/v1.15.5/deploy/examples/toolbox.yaml -n "${NAMESPACE}"
+  fi
   echo "  Waiting up to 60s for toolbox pod to become ready..."
   if kubectl wait --for=condition=Ready pod -l app=rook-ceph-tools -n "${NAMESPACE}" --timeout=60s >/dev/null 2>&1; then
     TOOLBOX_RUNNING=true
@@ -263,6 +281,12 @@ if [ "${TOOLBOX_RUNNING}" = "true" ]; then
   echo "--------------------------------------------------------------------------------"
   echo -e "  ${GREEN}✔ Executing 'ceph osd status':${RESET}"
   kubectl exec -n "${NAMESPACE}" deploy/rook-ceph-tools -- ceph osd status || true
+  echo "--------------------------------------------------------------------------------"
+  echo -e "  ${GREEN}✔ Executing 'ceph fs status':${RESET}"
+  kubectl exec -n "${NAMESPACE}" deploy/rook-ceph-tools -- ceph fs status || true
+  echo "--------------------------------------------------------------------------------"
+  echo -e "  ${GREEN}✔ Executing 'ceph nfs export ls ${NFS_CLUSTER_ID}':${RESET}"
+  kubectl exec -n "${NAMESPACE}" deploy/rook-ceph-tools -- ceph nfs export ls "${NFS_CLUSTER_ID}" || true
 else
   MON_POD="$(kubectl get pods -n "${NAMESPACE}" -l app=rook-ceph-mon -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)"
   if [ -n "${MON_POD}" ]; then
@@ -282,11 +306,13 @@ fi
 # ------------------------------------------------------------------------------
 echo ""
 echo -e "${BOLD}StorageClass Status:${RESET}"
-if kubectl get storageclass "${STORAGE_CLASS}" >/dev/null 2>&1; then
-  echo -e "  ${GREEN}✔ StorageClass '${STORAGE_CLASS}' is present:${RESET}"
-  kubectl get storageclass "${STORAGE_CLASS}" -o custom-columns="NAME:.metadata.name,PROVISIONER:.provisioner,RECLAIM:.reclaimPolicy,BINDING:.volumeBindingMode,ALLOW_EXPANSION:.allowVolumeExpansion" | sed 's/^/    /'
-else
-  echo -e "  ${YELLOW}⚠ StorageClass '${STORAGE_CLASS}' is not yet created.${RESET}"
-fi
+for sc in "${STORAGE_CLASS}" "${CEPHFS_STORAGE_CLASS}"; do
+  if kubectl get storageclass "${sc}" >/dev/null 2>&1; then
+    echo -e "  ${GREEN}✔ StorageClass '${sc}' is present:${RESET}"
+    kubectl get storageclass "${sc}" -o custom-columns="NAME:.metadata.name,PROVISIONER:.provisioner,RECLAIM:.reclaimPolicy,BINDING:.volumeBindingMode,ALLOW_EXPANSION:.allowVolumeExpansion" | sed 's/^/    /'
+  else
+    echo -e "  ${YELLOW}ℹ StorageClass '${sc}' not registered.${RESET}"
+  fi
+done
 
 echo -e "\n${BOLD}${BLUE}====================================================================${RESET}"

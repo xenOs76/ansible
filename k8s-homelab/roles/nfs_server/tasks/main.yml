@@ -33,6 +33,7 @@
     line: "{{ nfs_server_export_dir }} {{ nfs_server_export_subnet }}({{ nfs_server_export_options }})"
     state: present
   notify: Reload NFS exports
+  when: (storage_nfs_provider | default('kernel')) == 'kernel'
   tags:
     - nfs
     - nfs_server
@@ -49,11 +50,11 @@
     - nfs_server
     - storage
 
-- name: Ensure nfs-kernel-server service is enabled and started
+- name: Manage nfs-kernel-server service state based on storage provider
   ansible.builtin.systemd:
     name: nfs-kernel-server
-    enabled: true
-    state: started
+    enabled: "{{ (storage_nfs_provider | default('kernel')) == 'kernel' }}"
+    state: "{{ 'started' if (storage_nfs_provider | default('kernel')) == 'kernel' else 'stopped' }}"
   tags:
     - nfs
     - nfs_server

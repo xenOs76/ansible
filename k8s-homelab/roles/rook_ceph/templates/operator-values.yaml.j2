@@ -1,0 +1,17 @@
+---
+# ==============================================================================
+# Rook-Ceph Operator Helm Values
+# Configured with control-plane tolerations and tuned provisioner replicas
+# ==============================================================================
+csi:
+  enableRbdDriver: {{ rook_ceph_rbd_enabled | default(true) | lower }}
+  enableCephfsDriver: {{ rook_ceph_cephfs_enabled | default(true) | lower }}
+  provisionerReplicas: {{ rook_ceph_csi_provisioner_replicas | default(1) }}
+  provisionerTolerations:
+    - key: node-role.kubernetes.io/control-plane
+      operator: Exists
+      effect: NoSchedule
+  pluginTolerations:
+    - key: node-role.kubernetes.io/control-plane
+      operator: Exists
+      effect: NoSchedule

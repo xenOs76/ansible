@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Ceph NFS & CephFS Dynamic StorageClasses (`roles/cka_lab`)**: Provided cloud-native alternatives to the Kubernetes NFS CSI StorageClass for shared ReadWriteMany volumes, adding manifests (`03-ceph-nfs-sc.yaml`, `03-cephfs-sc.yaml`), dynamic claims, multi-replica workloads, and automated verification suites (`test-ceph-nfs-drills.sh`).
+- **Dual RBD & NFS Ceph Cloud-Native Storage (`roles/rook_ceph`, `roles/nfs_server`, `playbooks/ceph.yml`)**: Expanded Rook-Ceph orchestrator to serve both RBD block storage and CephFS shared filesystem + CephNFS daemon (NFS-Ganesha) bound to host port 2049 on the control plane, acting as a drop-in alternative to Linux kernel `nfs-server` with configurable `storage_nfs_provider` toggle and end-to-end verification tooling.
 - **CKA Exam Documentation & Canonical Reference Mapping (`roles/cka_lab`)**: Comprehensive audit and enrichment of all 18 CKA practice scenarios and on-node training guides with officially permitted CKA exam documentation links (`kubernetes.io/docs/`, `helm.sh/docs/`, `gateway-api.sigs.k8s.io`), in-exam search keywords, fast `kubectl explain` terminal lookups, and explicit boundaries between allowed browser resources and homelab auxiliary components.
 - **etcd Snapshot Backup & Restore (`~/cka/etcd`)**: Static pod TLS discovery, snapshot verification, and data-dir restore with hostPath manifest updates.
 - **Manual Kubeadm Cluster Upgrade (`~/cka/upgrade`)**: Step-by-step control plane and worker node upgrade procedures with drain/uncordon drills.
@@ -19,7 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Pod Quarantine & Autopsy Pattern (`~/cka/pods`)**: Zero-downtime faulty pod isolation and rapid CLI generation cheatsheet.
 - **ServiceAccount RBAC & Token Management (`~/cka/rbac/serviceaccounts`)**: Modern bounded token generation and API impersonation testing.
 - **PriorityClass & Preemption (`~/cka/scheduling`)**: Workload priority classes and scheduler eviction drills under node contention.
-- **PersistentVolume Reclaim Policy Mutation (`~/cka/volumes`)**: PV lifecycle mutation (`Retain` vs `Delete`) and manual volume data recovery.
+
+### Fixed
+
+- **Rook-Ceph CSI Provisioner Scheduling (`roles/rook_ceph`, `group_vars/all.yml`)**: Added control-plane tolerations (`node-role.kubernetes.io/control-plane:NoSchedule`) and tuned CSI provisioner replicas (`rook_ceph_csi_provisioner_replicas: 1`) to prevent memory exhaustion and unschedulable pod warnings on resource-constrained homelab worker nodes.
 
 ## [1.4.2] - 2026-10-11
 
