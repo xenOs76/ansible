@@ -19,9 +19,11 @@ pkgs.mkShell {
   shellHook = ''
     export VAGRANT_DEFAULT_PROVIDER=libvirt
     export VAGRANT_HOME="/data/downloads/vagrant-boxes"
+    export LIBVIRT_DEFAULT_URI="qemu:///system"
     echo "=== Vagrant Libvirt Environment Loaded ==="
     echo "Vagrant: $(vagrant --version)"
     echo "Default provider: $VAGRANT_DEFAULT_PROVIDER"
     echo "Vagrant home: $VAGRANT_HOME"
+    echo "Libvirt default URI: $LIBVIRT_DEFAULT_URI"
   '';
 }

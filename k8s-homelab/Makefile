@@ -64,7 +64,7 @@ preprod-up:
 
 preprod-destroy:
 	./scripts/shell.sh --run "vagrant destroy -f"
-	@virsh vol-delete --pool default k8s-homelab_kube-control-plane-vdb.qcow2 2>/dev/null || true
+	@virsh -c qemu:///system vol-delete --pool default k8s-homelab_kube-control-plane-vdb.qcow2 2>/dev/null || true
 	@rm -f admin.conf kubeconfig.preprod
 
 preprod-status:
