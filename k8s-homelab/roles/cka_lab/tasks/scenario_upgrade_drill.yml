@@ -1,0 +1,33 @@
+---
+- name: Ensure CKA lab upgrade drill directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ ansible_user | default('vagrant') }}"
+    group: "{{ ansible_user | default('vagrant') }}"
+    mode: "0755"
+  loop:
+    - "{{ cka_lab_upgrade_dir }}"
+    - "{{ cka_lab_upgrade_dir }}/01-control-plane"
+    - "{{ cka_lab_upgrade_dir }}/02-worker-node"
+  tags:
+    - cka_lab
+    - upgrade_drill
+
+- name: Render CKA upgrade drill manifests and guides
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "{{ cka_lab_upgrade_dir }}/{{ item.dest }}"
+    owner: "{{ ansible_user | default('vagrant') }}"
+    group: "{{ ansible_user | default('vagrant') }}"
+    mode: "{{ item.mode | default('0644') }}"
+  loop:
+    - {src: "upgrade_readme.md.j2", dest: "README.md", mode: "0644"}
+    - {src: "upgrade_test_drills.sh.j2", dest: "test-upgrade-drills.sh", mode: "0755"}
+    - {src: "upgrade_01_mock_cp_upgrade.sh.j2", dest: "01-control-plane/mock-control-plane-upgrade.sh", mode: "0755"}
+    - {src: "upgrade_02_mock_worker_upgrade.sh.j2", dest: "02-worker-node/mock-worker-upgrade.sh", mode: "0755"}
+  loop_control:
+    label: "upgrade/{{ item.dest }}"
+  tags:
+    - cka_lab
+    - upgrade_drill

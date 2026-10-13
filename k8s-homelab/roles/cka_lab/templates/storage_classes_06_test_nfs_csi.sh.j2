@@ -18,14 +18,14 @@ cleanup() {
   echo "==> Cleaning up NFS CSI drill resources..."
   kubectl delete deployment nfs-shared-app -n "${NAMESPACE}" --ignore-not-found=true --wait=true --now >/dev/null 2>&1 || true
   kubectl delete pvc nfs-dynamic-claim -n "${NAMESPACE}" --ignore-not-found=true --wait=true --now >/dev/null 2>&1 || true
-  kubectl delete storageclass {{ cka_lab_nfs_csi_storage_class | default('nfs-csi') }} --ignore-not-found=true --wait=true --now >/dev/null 2>&1 || true
+  kubectl delete storageclass "{{ cka_lab_nfs_csi_storage_class | default('nfs-csi') }}" --ignore-not-found=true --wait=true --now >/dev/null 2>&1 || true
 }
 
 trap cleanup EXIT
 
 echo "1. Applying dynamic NFS StorageClass definition..."
 kubectl apply -f "${SCRIPT_DIR}/03-nfs-csi-sc.yaml"
-kubectl get storageclass {{ cka_lab_nfs_csi_storage_class | default('nfs-csi') }}
+kubectl get storageclass "{{ cka_lab_nfs_csi_storage_class | default('nfs-csi') }}"
 
 echo "2. Applying dynamic ReadWriteMany PVC (nfs-dynamic-claim)..."
 kubectl apply -f "${SCRIPT_DIR}/04-nfs-dynamic-pvc.yaml" -n "${NAMESPACE}"

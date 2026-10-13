@@ -1,0 +1,33 @@
+# CoreDNS Break-Fix & Cluster DNS Triage
+
+Troubleshoot and restore DNS service discovery within the Kubernetes cluster.
+
+## Common CoreDNS Failure Modes
+
+1. **Syntax Error in Corefile**: Malformed directives in the `coredns` ConfigMap in `kube-system` cause CoreDNS pods to CrashLoopBackOff.
+2. **Upstream Forward Loop / Port Conflict**: Improper `/etc/resolv.conf` loops or forward plugin configuration.
+3. **Kube-DNS Service Selector Mismatch**: The `kube-dns` service (`10.96.0.10`) must select `k8s-app: kube-dns`.
+
+---
+
+## Triage Commands
+
+```bash
+# 1. Check CoreDNS pod status
+kubectl get pods -n kube-system -l k8s-app=kube-dns
+
+# 2. Inspect CoreDNS container logs
+kubectl logs -n kube-system -l k8s-app=kube-dns --tail=50
+
+# 3. View live Corefile configuration
+kubectl get configmap coredns -n kube-system -o yaml
+
+# 4. Test DNS resolution via temporary debug pod
+kubectl run dns-test --rm -it --restart=Never --image=busybox:1.36 -- nslookup kubernetes.default
+```
+
+## Practice Scripts
+
+- `break-coredns.sh`: Injects an invalid forward directive into the CoreDNS ConfigMap and restarts CoreDNS pods.
+- `fix-coredns.sh`: Restores the valid Corefile and rolls out healthy pods.
+- `test-dns-resolution.sh`: Automated script confirming internal and external DNS query resolution.

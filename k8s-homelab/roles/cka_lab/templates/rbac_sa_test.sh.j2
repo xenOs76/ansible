@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+MANIFEST="${SCRIPT_DIR}/sa-rbac-drill.yaml"
+NS="cka-rbac-sa-test"
+SA="system:serviceaccount:${NS}:deploy-bot"
+
+echo "=== Testing ServiceAccount RBAC & Impersonation ==="
+
+echo "[1/4] Applying ServiceAccount, Role, and RoleBinding..."
+kubectl apply -f "${MANIFEST}"
+
+echo "[2/4] Generating bounded token via kubectl create token..."
+TOKEN=$(kubectl create token deploy-bot -n "${NS}" --duration=10m)
+if [[ -n "${TOKEN}" ]]; then
+    echo "PASS: Successfully created token for deploy-bot (${TOKEN:0:25}...)"
+else
+    echo "FAIL: Failed to create token"
+    exit 1
+fi
+
+echo "[3/4] Testing allowed permissions via impersonation..."
+if kubectl auth can-i list pods -n "${NS}" --as="${SA}" | grep -q "yes"; then
+    echo "PASS: deploy-bot can list pods in ${NS}."
+else
+    echo "FAIL: deploy-bot cannot list pods in ${NS}!"
+    exit 1
+fi
+
+echo "[4/4] Testing forbidden permissions via impersonation..."
+if kubectl auth can-i delete deployments -n "${NS}" --as="${SA}" | grep -q "no"; then
+    echo "PASS: deploy-bot cannot delete deployments (forbidden as expected)."
+else
+    echo "FAIL: deploy-bot was improperly allowed to delete deployments!"
+    exit 1
+fi
+
+echo "Cleaning up drill namespace..."
+kubectl delete namespace "${NS}" --ignore-not-found=true
+
+echo "=== ServiceAccount RBAC Tests PASSED! ==="

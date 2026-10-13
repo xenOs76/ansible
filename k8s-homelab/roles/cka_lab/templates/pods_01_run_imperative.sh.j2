@@ -1,32 +1,58 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# run-imperative.sh: Fast Imperative Pod Generation Cheat Sheet
+# run-imperative.sh: Fast Imperative CLI Generation Cheat Sheet & Speed Drill
 # ==============================================================================
 set -euo pipefail
 
 NAMESPACE="{{ cka_lab_pods_namespace | default('default') }}"
 
-echo "==> [Imperative Drill] Demonstrating kubectl run variations..."
+echo "==> [Imperative Drill] Demonstrating rapid CLI generator commands..."
 
-# Example 1: Create a web server with exposed port, environment variables, and labels
-echo "1. Creating cka-lab-imperative-web with port 80, env vars, and custom labels..."
+# 1. Standalone Pod with labels, env vars, port
+echo "1. Generating Pod with environment variables and labels..."
 kubectl run cka-lab-imperative-web \
   --image=nginx:alpine \
   --port=80 \
   --env="APP_TIER=frontend" \
   --env="LOG_LEVEL=info" \
-  --labels="tier=frontend,app=cka-lab-imperative-web,cka.practice/scenario=pods" \
+  --labels="tier=frontend,app=cka-lab-imperative-web" \
   --restart=Always \
   -n "${NAMESPACE}"
 
-# Example 2: Generate dry-run YAML boilerplate to standard output
-echo "2. Generating dry-run YAML manifest without creating the object..."
+# 2. Dry-run boilerplate generation for Pod
+echo "2. Pod dry-run YAML generation..."
 kubectl run cka-lab-starter-task \
-  --image=busybox:1.36.1 \
+  --image=busybox:1.36 \
   --restart=Never \
   --dry-run=client -o yaml \
-  -- /bin/sh -c 'echo "Starter task finished"'
+  -- /bin/sh -c 'echo "Starter task finished"' > /tmp/starter-pod.yaml
+
+# 3. Deployment with replicas
+echo "3. Deployment generation..."
+kubectl create deployment cka-fast-deploy \
+  --image=nginx:alpine \
+  --replicas=3 \
+  --dry-run=client -o yaml > /tmp/fast-deploy.yaml
+
+# 4. Service exposure from deployment
+echo "4. Exposing Deployment as ClusterIP service..."
+kubectl expose deployment cka-fast-deploy \
+  --port=80 \
+  --target-port=80 \
+  --type=ClusterIP \
+  --dry-run=client -o yaml > /tmp/fast-svc.yaml
+
+# 5. ConfigMap & Secret from literals
+echo "5. Generating ConfigMap & Secret imperative manifests..."
+kubectl create configmap fast-cfg --from-literal=ENV=prod --dry-run=client -o yaml > /tmp/fast-cfg.yaml
+kubectl create secret generic fast-sec --from-literal=TOKEN=secret123 --dry-run=client -o yaml > /tmp/fast-sec.yaml
+
+# 6. One-shot Job
+echo "6. One-shot Job generation..."
+kubectl create job fast-job --image=busybox:1.36 --dry-run=client -o yaml -- sh -c "date" > /tmp/fast-job.yaml
 
 echo "==> Clean up created imperative pod..."
-kubectl delete pod cka-lab-imperative-web -n "${NAMESPACE}" --interactive=false --now
-echo "==> Imperative run drill complete."
+kubectl delete pod cka-lab-imperative-web -n "${NAMESPACE}" --ignore-not-found=true --now
+rm -f /tmp/starter-pod.yaml /tmp/fast-deploy.yaml /tmp/fast-svc.yaml /tmp/fast-cfg.yaml /tmp/fast-sec.yaml /tmp/fast-job.yaml
+
+echo "==> Imperative run velocity drill complete."

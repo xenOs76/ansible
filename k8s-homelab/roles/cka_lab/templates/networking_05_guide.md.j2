@@ -1,0 +1,21 @@
+# Advanced Multi-Namespace NetworkPolicies
+
+Master complex pod-to-pod microsegmentation combining `namespaceSelector`, `podSelector`, and egress port restrictions.
+
+## Exam Rules & Principles
+
+1. **Default Deny vs Allow Rules**: As soon as a NetworkPolicy selects a pod (`spec.podSelector`), that pod enters an **isolated** state for the defined policyTypes (Ingress, Egress). Any traffic not explicitly allowed is dropped.
+2. **Namespace Matching**: To allow traffic from another namespace, the target namespace **must** have a matching label (e.g., `kubernetes.io/metadata.name: portal` or custom label `project: portal`).
+3. **Combining namespaceSelector and podSelector**:
+   - Placed in the **same list item** (`- namespaceSelector: ... \n podSelector: ...`): Logical **AND** (must be from selected namespace AND matching pod label).
+   - Placed in **separate list items**: Logical **OR** (all pods in selected namespace OR matching pods anywhere).
+4. **DNS Egress Requirement**: When implementing default-deny Egress, you **must** allow UDP and TCP egress to port 53 (CoreDNS), otherwise DNS resolution fails completely.
+
+---
+
+## Practice Scripts
+
+- `01-namespaces.yaml`: Provisions namespaces `cka-portal` and `cka-secure-db`.
+- `02-workloads.yaml`: Deploys frontend, unauthorized client, and database pods.
+- `03-cross-namespace-policy.yaml`: Applies cross-namespace ingress and egress rules.
+- `test-advanced-netpol.sh`: Automated matrix testing verifying authorized connections pass and unauthorized connections drop.

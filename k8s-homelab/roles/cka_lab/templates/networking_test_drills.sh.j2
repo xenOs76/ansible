@@ -20,13 +20,14 @@ cleanup() {
   # Clean up services & deployments in default namespace
   kubectl delete deployment cka-lab-backend-app cka-lab-ingress-web cka-lab-ingress-api \
     -n "${NAMESPACE}" --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
-  kubectl delete service cka-lab-clusterip-svc cka-lab-nodeport-svc cka-lab-ingress-web-svc \
+  kubectl delete statefulset cka-headless-app -n "${NAMESPACE}" --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
+  kubectl delete service cka-lab-clusterip-svc cka-lab-nodeport-svc cka-headless-svc cka-lab-ingress-web-svc \
     cka-lab-ingress-api-svc -n "${NAMESPACE}" --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
   kubectl delete ingress cka-lab-ingress -n "${NAMESPACE}" --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
   kubectl delete httproute cka-lab-httproute -n "${NAMESPACE}" --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
   kubectl delete gateway cka-lab-gateway -n "${NAMESPACE}" --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
   # Clean up isolated namespaces
-  kubectl delete namespace "${CLIENT_NS}" "${BACKEND_NS}" --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
+  kubectl delete namespace "${CLIENT_NS}" "${BACKEND_NS}" cka-portal cka-secure-db --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
 }
 
 trap cleanup EXIT
@@ -35,33 +36,49 @@ trap cleanup EXIT
 # Drill 1: Services & CoreDNS
 # ------------------------------------------------------------------------------
 echo "--------------------------------------------------------------------"
-echo "  [1/4] Testing Services & CoreDNS                                  "
+echo "  [1/6] Testing Services & CoreDNS                                  "
 echo "--------------------------------------------------------------------"
 "${SCRIPT_DIR}/01-services/test-services.sh"
 
 # ------------------------------------------------------------------------------
-# Drill 2: Ingress Path Routing
+# Drill 2: Headless Service
 # ------------------------------------------------------------------------------
 echo "--------------------------------------------------------------------"
-echo "  [2/4] Testing Ingress Path Routing                                "
+echo "  [2/6] Testing Headless Service & SRV/A-Record DNS                 "
+echo "--------------------------------------------------------------------"
+"${SCRIPT_DIR}/01-services/test-headless.sh"
+
+# ------------------------------------------------------------------------------
+# Drill 3: Ingress Path Routing
+# ------------------------------------------------------------------------------
+echo "--------------------------------------------------------------------"
+echo "  [3/6] Testing Ingress Path Routing                                "
 echo "--------------------------------------------------------------------"
 "${SCRIPT_DIR}/02-ingresses/test-ingress.sh"
 
 # ------------------------------------------------------------------------------
-# Drill 3: Gateway API & NGINX Gateway Fabric
+# Drill 4: Gateway API & NGINX Gateway Fabric
 # ------------------------------------------------------------------------------
 echo "--------------------------------------------------------------------"
-echo "  [3/4] Testing Gateway API & HTTPRoute                             "
+echo "  [4/6] Testing Gateway API & HTTPRoute                             "
 echo "--------------------------------------------------------------------"
 "${SCRIPT_DIR}/03-gateway-api/test-gateway.sh"
 
 # ------------------------------------------------------------------------------
-# Drill 4: Network Policies with httpbin-go
+# Drill 5: Network Policies with httpbin-go
 # ------------------------------------------------------------------------------
 echo "--------------------------------------------------------------------"
-echo "  [4/4] Testing Network Policies & Packet Filtering                 "
+echo "  [5/6] Testing Network Policies & Packet Filtering                 "
 echo "--------------------------------------------------------------------"
 "${SCRIPT_DIR}/04-network-policies/test-network-policies.sh"
+
+# ------------------------------------------------------------------------------
+# Drill 6: Multi-Namespace NetworkPolicy
+# ------------------------------------------------------------------------------
+echo "--------------------------------------------------------------------"
+echo "  [6/6] Testing Multi-Namespace NetworkPolicy                       "
+echo "--------------------------------------------------------------------"
+"${SCRIPT_DIR}/05-advanced-network-policies/test-advanced-netpol.sh"
 
 echo "===================================================================="
 echo "  [SUCCESS] All CKA Networking drills verified successfully!        "

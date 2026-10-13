@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Test advanced multi-namespace NetworkPolicy rules
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+echo "=== Testing Multi-Namespace NetworkPolicy Enforcement ==="
+
+echo "[1/4] Applying namespaces, workloads, and NetworkPolicy..."
+kubectl apply -f "${SCRIPT_DIR}/01-namespaces.yaml"
+kubectl apply -f "${SCRIPT_DIR}/02-workloads.yaml"
+kubectl apply -f "${SCRIPT_DIR}/03-cross-namespace-policy.yaml"
+
+echo "Waiting for pods to enter Running state..."
+kubectl rollout status deployment backend-db -n cka-secure-db --timeout=60s
+kubectl rollout status deployment frontend-portal -n cka-portal --timeout=60s
+kubectl rollout status deployment intruder-portal -n cka-portal --timeout=60s
+
+FRONTEND_POD=$(kubectl get pods -n cka-portal -l role=frontend -o jsonpath='{.items[0].metadata.name}')
+INTRUDER_POD=$(kubectl get pods -n cka-portal -l role=unauthorized -o jsonpath='{.items[0].metadata.name}')
+DB_SVC="db-service.cka-secure-db.svc.cluster.local"
+
+echo "[2/4] Testing AUTHORIZED traffic: frontend-portal -> db-service (EXPECT: SUCCESS)..."
+if kubectl exec "${FRONTEND_POD}" -n cka-portal -- curl -s -m 5 "http://${DB_SVC}/" >/dev/null; then
+    echo "PASS: Authorized frontend pod reached database service."
+else
+    echo "FAIL: Authorized frontend pod could not connect!"
+    exit 1
+fi
+
+echo "[3/4] Testing UNAUTHORIZED traffic: intruder-portal -> db-service (EXPECT: TIMEOUT/DROP)..."
+if kubectl exec "${INTRUDER_POD}" -n cka-portal -- curl -s -m 3 "http://${DB_SVC}/" >/dev/null 2>&1; then
+    echo "FAIL: Unauthorized pod was able to connect to database service!"
+    exit 1
+else
+    echo "PASS: Unauthorized pod traffic was properly blocked by NetworkPolicy."
+fi
+
+echo "[4/4] Cleaning up drill namespaces..."
+kubectl delete namespace cka-portal cka-secure-db --ignore-not-found=true
+
+echo "=== Multi-Namespace NetworkPolicy Tests PASSED! ==="

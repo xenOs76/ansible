@@ -1,0 +1,36 @@
+# Service & Endpoints Break-Fix Triage
+
+Troubleshoot why a Kubernetes Service is unreachable or returns `Connection refused`.
+
+## Diagnostic Steps
+
+1. **Check Service and Endpoints**:
+
+   ```bash
+   kubectl get svc <service-name>
+   kubectl get endpoints <service-name>
+   kubectl get endpointslices -l kubernetes.io/service-name=<service-name>
+   ```
+
+   If Endpoints show `<none>`, the Service's `spec.selector` does not match the target Pod's `metadata.labels`.
+
+2. **Compare Labels**:
+
+   ```bash
+   # Check service selector:
+   kubectl get svc <service-name> -o jsonpath='{.spec.selector}'
+   # Check pod labels:
+   kubectl get pods --show-labels
+   ```
+
+3. **Check Target Port**:
+
+   Verify that `spec.ports[*].targetPort` matches the container's listening port.
+
+---
+
+## Practice Scripts
+
+- `setup-broken-service.sh`: Deploys backend pods and an unreachable service with label selector and port mismatch.
+- `fix-service.sh`: Corrects the selector and targetPort.
+- `test-service-endpoints.sh`: Verifies endpoint population and end-to-end curl response.

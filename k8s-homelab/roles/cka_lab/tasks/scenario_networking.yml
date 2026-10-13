@@ -12,6 +12,7 @@
     - "{{ cka_lab_networking_dir }}/02-ingresses"
     - "{{ cka_lab_networking_dir }}/03-gateway-api"
     - "{{ cka_lab_networking_dir }}/04-network-policies"
+    - "{{ cka_lab_networking_dir }}/05-advanced-network-policies"
   tags:
     - cka_lab
     - networking
@@ -33,6 +34,8 @@
     - {src: "networking_01_backend_app.yaml.j2", dest: "01-services/cka-lab-backend-app.yaml"}
     - {src: "networking_01_clusterip_svc.yaml.j2", dest: "01-services/cka-lab-clusterip-service.yaml"}
     - {src: "networking_01_nodeport_svc.yaml.j2", dest: "01-services/cka-lab-nodeport-service.yaml"}
+    - {src: "networking_01_headless_service.yaml.j2", dest: "01-services/cka-lab-headless-service.yaml"}
+    - {src: "networking_01_test_headless.sh.j2", dest: "01-services/test-headless.sh", mode: "0755"}
     - {src: "networking_01_test_services.sh.j2", dest: "01-services/test-services.sh", mode: "0755"}
     - {src: "networking_02_ingress_backends.yaml.j2", dest: "02-ingresses/cka-lab-ingress-backends.yaml"}
     - {src: "networking_02_ingress.yaml.j2", dest: "02-ingresses/cka-lab-ingress.yaml"}
@@ -48,6 +51,11 @@
     - {src: "networking_04_allow_client_to_backend.yaml.j2", dest: "04-network-policies/cka-lab-allow-client-to-backend.yaml"}
     - {src: "networking_04_egress_dns_policy.yaml.j2", dest: "04-network-policies/cka-lab-egress-dns-policy.yaml"}
     - {src: "networking_04_test_network_policies.sh.j2", dest: "04-network-policies/test-network-policies.sh", mode: "0755"}
+    - {src: "networking_05_guide.md.j2", dest: "05-advanced-network-policies/README.md", mode: "0644"}
+    - {src: "networking_05_namespaces.yaml.j2", dest: "05-advanced-network-policies/01-namespaces.yaml"}
+    - {src: "networking_05_workloads.yaml.j2", dest: "05-advanced-network-policies/02-workloads.yaml"}
+    - {src: "networking_05_policy_cross_ns.yaml.j2", dest: "05-advanced-network-policies/03-cross-namespace-policy.yaml"}
+    - {src: "networking_05_test_advanced_netpol.sh.j2", dest: "05-advanced-network-policies/test-advanced-netpol.sh", mode: "0755"}
   loop_control:
     label: "networking/{{ item.dest }}"
   tags:

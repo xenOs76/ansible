@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Verify worker static pod presence and status
+WORKER_NODE="${1:-kube-worker-1}"
+POD_NAME="static-worker-web-${WORKER_NODE}"
+
+echo "=== Verifying Worker Static Pod: ${POD_NAME} ==="
+
+if kubectl get pod "${POD_NAME}" >/dev/null 2>&1; then
+    PHASE=$(kubectl get pod "${POD_NAME}" -o jsonpath='{.status.phase}')
+    echo "Found mirror pod in status: ${PHASE}"
+    if [[ "${PHASE}" == "Running" || "${PHASE}" == "Pending" ]]; then
+        echo "=== Worker Static Pod Verification PASSED ==="
+        exit 0
+    fi
+fi
+
+echo "FAIL: Static pod ${POD_NAME} not found or unhealthy."
+exit 1

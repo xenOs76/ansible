@@ -130,3 +130,29 @@
     - chaos_troubleshooting
     - chaos
     - resilience
+
+- name: Execute CKA Lab Scenario - etcd Backup & Restore (etcd)
+  ansible.builtin.include_tasks: scenario_etcd.yml
+  when: cka_lab_scenario_etcd_enabled | bool
+  tags:
+    - cka_lab
+    - etcd
+    - backup
+    - restore
+
+- name: Execute CKA Lab Scenario - Manual Kubeadm Cluster Upgrade (upgrade_drill)
+  ansible.builtin.include_tasks: scenario_upgrade_drill.yml
+  when: cka_lab_scenario_upgrade_drill_enabled | bool
+  tags:
+    - cka_lab
+    - upgrade_drill
+    - upgrade
+    - maintenance
+
+- name: Execute CKA Lab Scenario - Speed JSONPath & Output Formatting (jsonpath)
+  ansible.builtin.include_tasks: scenario_jsonpath.yml
+  when: cka_lab_scenario_jsonpath_enabled | bool
+  tags:
+    - cka_lab
+    - jsonpath
+    - speed_drills

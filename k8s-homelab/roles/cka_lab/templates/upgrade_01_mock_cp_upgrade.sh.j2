@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Scenario 16: Control Plane Mock Upgrade Script
+echo "=== CKA Practice: Control Plane Node Upgrade ==="
+
+CP_NODE=$(kubectl get nodes --selector='node-role.kubernetes.io/control-plane' -o jsonpath='{.items[0].metadata.name}')
+echo "Target Control Plane Node: ${CP_NODE}"
+
+echo "[1/5] Checking current package holds..."
+dpkg --get-selections | grep -E "kubeadm|kubelet|kubectl" || true
+
+echo "[2/5] Running kubeadm upgrade plan (dry-run check)..."
+sudo kubeadm upgrade plan
+
+echo "[3/5] Testing drain command flags on ${CP_NODE}..."
+echo "Command to execute in live exam:"
+echo "  kubectl drain ${CP_NODE} --ignore-daemonsets --delete-emptydir-data"
+
+echo "[4/5] Checking kubelet service status..."
+systemctl is-active kubelet
+
+echo "[5/5] Checking uncordon command..."
+echo "Command to execute after upgrade:"
+echo "  kubectl uncordon ${CP_NODE}"
+
+echo "=== Mock Control Plane Upgrade Validation PASSED ==="

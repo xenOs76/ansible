@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Scenario 16: Worker Node Mock Upgrade Script
+WORKER_NODE="${1:-kube-worker-1}"
+
+echo "=== CKA Practice: Worker Node Upgrade ==="
+echo "Target Worker Node: ${WORKER_NODE}"
+
+echo "[1/4] Testing worker drain validation from control plane..."
+kubectl get node "${WORKER_NODE}" -o wide
+
+echo "Command to execute from control plane:"
+echo "  kubectl drain ${WORKER_NODE} --ignore-daemonsets --delete-emptydir-data"
+
+echo "[2/4] Commands to run directly on ${WORKER_NODE}:"
+cat << 'EOF'
+  sudo apt-mark unhold kubeadm
+  sudo apt-get update && sudo apt-get install -y kubeadm=<version>
+  sudo apt-mark hold kubeadm
+  sudo kubeadm upgrade node
+  sudo apt-mark unhold kubelet kubectl
+  sudo apt-get install -y kubelet=<version> kubectl=<version>
+  sudo apt-mark hold kubelet kubectl
+  sudo systemctl daemon-reload
+  sudo systemctl restart kubelet
+EOF
+
+echo "[3/4] Command to restore scheduling from control plane:"
+echo "  kubectl uncordon ${WORKER_NODE}"
+
+echo "[4/4] Verifying node readiness:"
+kubectl get node "${WORKER_NODE}"
+
+echo "=== Mock Worker Upgrade Validation PASSED ==="

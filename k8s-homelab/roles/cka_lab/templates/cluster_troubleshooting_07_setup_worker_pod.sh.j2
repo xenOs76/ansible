@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Provision static pod on worker node kube-worker-1
+WORKER_NODE="${1:-kube-worker-1}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+MANIFEST_SRC="${SCRIPT_DIR}/static-web.yaml"
+
+echo "=== Deploying Static Pod to Worker: ${WORKER_NODE} ==="
+
+if [[ ! -f "${MANIFEST_SRC}" ]]; then
+    echo "ERROR: ${MANIFEST_SRC} not found!"
+    exit 1
+fi
+
+echo "[1/3] Copying manifest to ${WORKER_NODE}:/etc/kubernetes/manifests/ ..."
+ssh -o StrictHostKeyChecking=no "${WORKER_NODE}" "sudo mkdir -p /etc/kubernetes/manifests"
+scp -o StrictHostKeyChecking=no "${MANIFEST_SRC}" "${WORKER_NODE}:/tmp/static-web.yaml"
+ssh -o StrictHostKeyChecking=no "${WORKER_NODE}" "sudo mv /tmp/static-web.yaml /etc/kubernetes/manifests/"
+
+echo "[2/3] Waiting for mirror pod to register on control plane..."
+sleep 5
+
+RETRY=0
+MAX=12
+FOUND=0
+while [[ ${RETRY} -lt ${MAX} ]]; do
+    if kubectl get pod "static-worker-web-${WORKER_NODE}" >/dev/null 2>&1; then
+        echo "Mirror pod registered successfully:"
+        kubectl get pod "static-worker-web-${WORKER_NODE}" -o wide
+        FOUND=1
+        break
+    fi
+    echo "Waiting for kubelet mirror pod registration... ($(( RETRY + 1 ))/${MAX})"
+    sleep 3
+    RETRY=$(( RETRY + 1 ))
+done
+
+if [[ ${FOUND} -eq 1 ]]; then
+    echo "=== Worker Static Pod Setup PASSED ==="
+    exit 0
+else
+    echo "ERROR: Mirror pod static-worker-web-${WORKER_NODE} did not appear."
+    exit 1
+fi

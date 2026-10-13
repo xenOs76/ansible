@@ -1,0 +1,38 @@
+# ServiceAccount RBAC & Token Impersonation
+
+Practice creating ServiceAccounts, assigning scoped RBAC roles, generating short-lived bearer tokens, and testing permissions via API impersonation.
+
+## Exam Importance & Principles
+
+- **Exam Domain**: Cluster Architecture, Installation & Configuration (25%).
+- **Frequency**: High (creating custom ServiceAccounts and binding them to namespace Roles).
+- **Modern Kubernetes Standard (v1.24+)**: Secret-based service account tokens are no longer created automatically. Use `kubectl create token <sa-name>` for bounded tokens, or configure projected volume tokens.
+- **Verification without token**:
+
+  ```bash
+  kubectl auth can-i get pods --as=system:serviceaccount:<namespace>:<serviceaccount>
+  kubectl auth can-i delete deployments --as=system:serviceaccount:<namespace>:<serviceaccount>
+  ```
+
+---
+
+## Step-by-Step Procedure
+
+1. **Create ServiceAccount, Role, and RoleBinding**:
+
+   ```bash
+   kubectl apply -f sa-rbac-drill.yaml
+   ```
+
+2. **Generate Bounded Token**:
+
+   ```bash
+   TOKEN=$(kubectl create token deploy-bot --duration=1h)
+   echo "Generated Token: ${TOKEN:0:20}..."
+   ```
+
+3. **Verify API Permissions via Impersonation**:
+
+   ```bash
+   ./test-sa-rbac.sh
+   ```

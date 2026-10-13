@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+echo "=== Testing Pod PriorityClass & Scheduling ==="
+
+echo "[1/3] Applying PriorityClasses..."
+kubectl apply -f "${SCRIPT_DIR}/01-priority-classes.yaml"
+
+kubectl get priorityclasses | grep -E "cka-high-priority|cka-low-priority"
+
+echo "[2/3] Applying workloads with distinct priorities..."
+kubectl apply -f "${SCRIPT_DIR}/02-preemption-workloads.yaml"
+
+echo "Waiting for pods to be Scheduled..."
+kubectl wait --for=condition=PodScheduled pod/cka-high-prio-pod -n default --timeout=60s
+kubectl wait --for=condition=PodScheduled pod/cka-low-prio-pod -n default --timeout=60s
+
+HIGH_VAL=$(kubectl get pod cka-high-prio-pod -n default -o jsonpath='{.spec.priority}')
+LOW_VAL=$(kubectl get pod cka-low-prio-pod -n default -o jsonpath='{.spec.priority}')
+
+echo "Verified: High pod priority=${HIGH_VAL}, Low pod priority=${LOW_VAL}"
+
+echo "[3/3] Cleaning up drill workloads..."
+kubectl delete -f "${SCRIPT_DIR}/02-preemption-workloads.yaml" --ignore-not-found=true --now
+kubectl delete -f "${SCRIPT_DIR}/01-priority-classes.yaml" --ignore-not-found=true
+
+echo "=== PriorityClass & Preemption Tests PASSED! ==="

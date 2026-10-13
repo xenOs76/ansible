@@ -18,6 +18,8 @@ cleanup() {
   kubectl delete pod cka-lab-web-service cka-lab-batch-task cka-lab-finite-worker \
     cka-lab-failing-worker cka-lab-telemetry-app cka-lab-echo-server \
     cka-lab-immutable-app -n "${NAMESPACE}" --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
+  kubectl delete deployment cka-quarantine-app -n "${NAMESPACE}" --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
+  kubectl delete service cka-quarantine-svc -n "${NAMESPACE}" --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
   kubectl delete namespace "${STAGING_NS}" --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
   kubectl config set-context --current --namespace="${NAMESPACE}" >/dev/null 2>&1 || true
 }
@@ -27,7 +29,7 @@ trap cleanup EXIT
 # ------------------------------------------------------------------------------
 # Test 1: Imperative & Declarative Pod Creation
 # ------------------------------------------------------------------------------
-echo "==> [1/7] Testing Imperative and Declarative Pod Creation..."
+echo "==> [1/8] Testing Imperative and Declarative Pod Creation..."
 kubectl run cka-lab-web-service \
   --image=nginx:alpine \
   --port=80 \
@@ -41,7 +43,6 @@ kubectl wait --for=condition=Ready pod/cka-lab-web-service -n "${NAMESPACE}" --t
 
 kubectl apply -f "${SCRIPT_DIR}/01-imperative-declarative/cka-lab-batch-task-pod.yaml" -n "${NAMESPACE}"
 echo "Waiting for cka-lab-batch-task to complete..."
-# Wait up to 30s for the batch task
 for _ in {1..30}; do
   PHASE=$(kubectl get pod cka-lab-batch-task -n "${NAMESPACE}" -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
   if [ "${PHASE}" = "Succeeded" ]; then
@@ -54,7 +55,7 @@ done
 # ------------------------------------------------------------------------------
 # Test 2: Lifecycle Phases & Restart Policies
 # ------------------------------------------------------------------------------
-echo "==> [2/7] Testing Lifecycle Phases & Restart Policies..."
+echo "==> [2/8] Testing Lifecycle Phases & Restart Policies..."
 kubectl apply -f "${SCRIPT_DIR}/02-lifecycle-and-restarts/cka-lab-finite-worker-pod.yaml" -n "${NAMESPACE}"
 for _ in {1..30}; do
   PHASE=$(kubectl get pod cka-lab-finite-worker -n "${NAMESPACE}" -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
@@ -68,7 +69,7 @@ done
 # ------------------------------------------------------------------------------
 # Test 3: Container Observability & Diagnostics
 # ------------------------------------------------------------------------------
-echo "==> [3/7] Testing Container Observability (Logs & Exec)..."
+echo "==> [3/8] Testing Container Observability (Logs & Exec)..."
 kubectl apply -f "${SCRIPT_DIR}/03-observability-exec/cka-lab-telemetry-pod.yaml" -n "${NAMESPACE}"
 kubectl wait --for=condition=Ready pod/cka-lab-telemetry-app -n "${NAMESPACE}" --timeout=60s
 
@@ -81,7 +82,7 @@ echo "Retrieved container environment via exec: ${EXEC_ENV}"
 # ------------------------------------------------------------------------------
 # Test 4: Ephemeral Troubleshooting Pods & Cluster IP Networking
 # ------------------------------------------------------------------------------
-echo "==> [4/7] Testing Ephemeral Troubleshooting Pod & Networking..."
+echo "==> [4/8] Testing Ephemeral Troubleshooting Pod & Networking..."
 kubectl apply -f "${SCRIPT_DIR}/04-ephemeral-networking/cka-lab-echo-server-pod.yaml" -n "${NAMESPACE}"
 kubectl wait --for=condition=Ready pod/cka-lab-echo-server -n "${NAMESPACE}" --timeout=60s
 
@@ -104,7 +105,7 @@ fi
 # ------------------------------------------------------------------------------
 # Test 5: Pod Spec Immutability & Force Replacement
 # ------------------------------------------------------------------------------
-echo "==> [5/7] Testing Pod Spec Immutability & Force Replacement..."
+echo "==> [5/8] Testing Pod Spec Immutability & Force Replacement..."
 kubectl apply -f "${SCRIPT_DIR}/05-spec-immutability/cka-lab-immutable-app-v1.yaml" -n "${NAMESPACE}"
 kubectl wait --for=condition=Ready pod/cka-lab-immutable-app -n "${NAMESPACE}" --timeout=60s
 
@@ -119,7 +120,7 @@ echo "Verified updated spec container version: ${V2_VERSION}"
 # ------------------------------------------------------------------------------
 # Test 6: Namespaces & Context Preferences
 # ------------------------------------------------------------------------------
-echo "==> [6/7] Testing Namespaces and Context Preferences..."
+echo "==> [6/8] Testing Namespaces and Context Preferences..."
 kubectl apply -f "${SCRIPT_DIR}/06-namespaces-context/cka-lab-namespace.yaml"
 kubectl get namespace "${STAGING_NS}"
 
@@ -136,10 +137,6 @@ kubectl config set-context --current --namespace="${STAGING_NS}"
 CURRENT_NS=$(kubectl config view --minify -o jsonpath='{.contexts[0].context.namespace}')
 echo "Current active kubeconfig namespace: ${CURRENT_NS}"
 
-# Query without explicit -n flag
-MATCHING_PODS=$(kubectl get pods -o jsonpath='{.items[*].metadata.name}')
-echo "Pods found in default query context: ${MATCHING_PODS}"
-
 # Reset back to default namespace
 kubectl config set-context --current --namespace="${NAMESPACE}"
 echo "Context namespace reset to default."
@@ -147,9 +144,15 @@ echo "Context namespace reset to default."
 # ------------------------------------------------------------------------------
 # Test 7: Cascading Namespace Deletion
 # ------------------------------------------------------------------------------
-echo "==> [7/7] Testing Cascading Namespace Deletion..."
+echo "==> [7/8] Testing Cascading Namespace Deletion..."
 kubectl delete namespace "${STAGING_NS}" --interactive=false
 echo "Namespace ${STAGING_NS} and its workloads deleted."
+
+# ------------------------------------------------------------------------------
+# Test 8: Pod Quarantine & Autopsy Pattern
+# ------------------------------------------------------------------------------
+echo "==> [8/8] Testing Pod Quarantine & Autopsy Pattern..."
+"${SCRIPT_DIR}/07-quarantine-autopsy/test-quarantine.sh"
 
 echo "===================================================================="
 echo "  [SUCCESS] All CKA Pods & Namespaces drills verified successfully! "

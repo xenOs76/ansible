@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Scenario 15: End-to-end etcd Backup & Recovery Simulation Drill
+DRILL_NS="cka-drill-etcd-test"
+BACKUP_DIR="/var/lib/etcd-backup"
+RESTORE_DIR="/var/lib/etcd-drill-restored"
+SNAPSHOT_FILE="${BACKUP_DIR}/etcd-drill-snapshot.db"
+MANIFEST="/etc/kubernetes/manifests/etcd.yaml"
+
+echo "=== CKA Practice: etcd End-to-End Recovery Drill ==="
+
+echo "[1/6] Creating canary resource in namespace ${DRILL_NS}..."
+kubectl create namespace "${DRILL_NS}" --dry-run=client -o yaml | kubectl apply -f -
+kubectl create configmap canary-cm -n "${DRILL_NS}" --from-literal=status="persisted-in-etcd-snapshot" --dry-run=client -o yaml | kubectl apply -f -
+
+echo "Canary ConfigMap created:"
+kubectl get configmap canary-cm -n "${DRILL_NS}" -o yaml
+
+echo "[2/6] Taking snapshot of etcd..."
+CACERT=$(grep -m1 -- "--trusted-ca-file=" "${MANIFEST}" | cut -d= -f2)
+CERT=$(grep -m1 -- "--cert-file=" "${MANIFEST}" | cut -d= -f2)
+KEY=$(grep -m1 -- "--key-file=" "${MANIFEST}" | cut -d= -f2)
+
+sudo mkdir -p "${BACKUP_DIR}"
+ETCDCTL_API=3 sudo etcdctl \
+    --endpoints="https://127.0.0.1:2379" \
+    --cacert="${CACERT}" \
+    --cert="${CERT}" \
+    --key="${KEY}" \
+    snapshot save "${SNAPSHOT_FILE}"
+
+echo "[3/6] Simulating disaster: deleting canary namespace..."
+kubectl delete namespace "${DRILL_NS}" --ignore-not-found=true
+
+echo "Verifying canary is deleted (expected: not found):"
+if kubectl get namespace "${DRILL_NS}" >/dev/null 2>&1; then
+    echo "Warning: namespace still terminating..."
+fi
+
+echo "[4/6] Restoring snapshot to ${RESTORE_DIR}..."
+sudo rm -rf "${RESTORE_DIR}"
+sudo ETCDCTL_API=3 etcdctl snapshot restore "${SNAPSHOT_FILE}" --data-dir="${RESTORE_DIR}"
+sudo chown -R root:root "${RESTORE_DIR}"
+
+echo "[5/6] Updating etcd static pod manifest hostPath..."
+# Safely replace hostPath in etcd.yaml using sed
+sudo cp "${MANIFEST}" "${MANIFEST}.bak"
+sudo sed -i "s|path: /var/lib/etcd.*|path: ${RESTORE_DIR}|g" "${MANIFEST}"
+
+echo "Waiting for etcd static pod to restart..."
+sleep 10
+
+echo "[6/6] Verifying canary restoration..."
+RETRY_COUNT=0
+MAX_RETRIES=12
+RESTORED=0
+
+while [[ ${RETRY_COUNT} -lt ${MAX_RETRIES} ]]; do
+    if kubectl get configmap canary-cm -n "${DRILL_NS}" >/dev/null 2>&1; then
+        echo "SUCCESS: Canary ConfigMap recovered from snapshot!"
+        kubectl get configmap canary-cm -n "${DRILL_NS}"
+        RESTORED=1
+        break
+    fi
+    echo "Waiting for API server reconciliation... ($(( RETRY_COUNT + 1 ))/${MAX_RETRIES})"
+    sleep 5
+    RETRY_COUNT=$(( RETRY_COUNT + 1 ))
+done
+
+# Cleanup drill manifest modification and namespace
+echo "Restoring original etcd static pod configuration..."
+sudo mv "${MANIFEST}.bak" "${MANIFEST}"
+kubectl delete namespace "${DRILL_NS}" --ignore-not-found=true
+
+if [[ ${RESTORED} -eq 1 ]]; then
+    echo "=== DRILL PASSED: Full etcd backup and restore cycle verified! ==="
+    exit 0
+else
+    echo "=== DRILL FAILED: Canary ConfigMap was not recovered. ==="
+    exit 1
+fi

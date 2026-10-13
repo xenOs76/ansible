@@ -1,0 +1,103 @@
+# CKA Drill: etcd Snapshot Backup & Restore (`etcd`)
+
+Practice the etcd v3 snapshot lifecycle, TLS credential discovery, and data-dir restore on the Kubernetes control plane.
+
+## Exam Importance & Principles
+
+- **Exam Domain**: Cluster Architecture, Installation & Configuration (25%).
+- **Frequency**: Present in nearly every CKA exam session.
+- **Key Habit**: Never memorize certificate paths; always extract them directly from the static pod manifest at `/etc/kubernetes/manifests/etcd.yaml`.
+- **API Version**: Always set `ETCDCTL_API=3` (or rely on the system-wide profile export).
+
+---
+
+## Step-by-Step Procedure
+
+### 1. Identify etcd Parameters
+
+Inspect the static pod definition to retrieve:
+
+- Endpoint: `--listen-client-urls` (typically `https://127.0.0.1:2379`)
+- Trusted CA: `--trusted-ca-file` (`/etc/kubernetes/pki/etcd/ca.crt`)
+- Server/Peer Cert: `--cert-file` (`/etc/kubernetes/pki/etcd/server.crt`)
+- Private Key: `--key-file` (`/etc/kubernetes/pki/etcd/server.key`)
+- Data Directory: `--data-dir` (`/var/lib/etcd`)
+
+```bash
+sudo grep -E "data-dir|cert-file|key-file|trusted-ca-file|listen-client-urls" /etc/kubernetes/manifests/etcd.yaml
+```
+
+### 2. Verify Endpoint Health
+
+```bash
+ETCDCTL_API=3 etcdctl \
+  --endpoints=https://127.0.0.1:2379 \
+  --cacert=/etc/kubernetes/pki/etcd/ca.crt \
+  --cert=/etc/kubernetes/pki/etcd/server.crt \
+  --key=/etc/kubernetes/pki/etcd/server.key \
+  endpoint health
+```
+
+### 3. Take a Snapshot Backup
+
+```bash
+sudo mkdir -p /var/lib/etcd-backup
+sudo ETCDCTL_API=3 etcdctl \
+  --endpoints=https://127.0.0.1:2379 \
+  --cacert=/etc/kubernetes/pki/etcd/ca.crt \
+  --cert=/etc/kubernetes/pki/etcd/server.crt \
+  --key=/etc/kubernetes/pki/etcd/server.key \
+  snapshot save /var/lib/etcd-backup/etcd-snapshot.db
+```
+
+Verify snapshot status:
+
+```bash
+ETCDCTL_API=3 etcdctl --write-out=table snapshot status /var/lib/etcd-backup/etcd-snapshot.db
+```
+
+### 4. Restore the Snapshot to a New Directory
+
+> [!IMPORTANT]
+> Always restore to a **new target directory** (e.g., `/var/lib/etcd-restored`) rather than overwriting the live `/var/lib/etcd`.
+
+```bash
+sudo ETCDCTL_API=3 etcdctl snapshot restore /var/lib/etcd-backup/etcd-snapshot.db \
+  --data-dir=/var/lib/etcd-restored
+```
+
+Set correct ownership on the restored directory:
+
+```bash
+sudo chown -R root:root /var/lib/etcd-restored
+```
+
+### 5. Update Static Pod Manifest HostPath
+
+Update `/etc/kubernetes/manifests/etcd.yaml` to point the `etcd-data` hostPath volume to the new restored directory:
+
+```yaml
+  volumes:
+  - hostPath:
+      path: /var/lib/etcd-restored
+      type: DirectoryOrCreate
+    name: etcd-data
+```
+
+Once saved, the kubelet will detect the manifest modification and recreate the etcd static pod using the restored data.
+
+Verify restoration:
+
+```bash
+kubectl get nodes
+kubectl get pods -A
+```
+
+---
+
+## Included Practice Scripts
+
+- `01-backup-restore/backup-etcd.sh`: Automated snapshot creation and verification.
+- `01-backup-restore/restore-etcd.sh`: Automated snapshot restoration to new data-dir.
+- `01-backup-restore/simulate-loss-drill.sh`: Complete end-to-end rehearsal drill creating test data, backing up, simulating loss, and restoring.
+- `test-etcd-drills.sh`: Automated test suite checking etcdctl connectivity, snapshot integrity, and restore logic.

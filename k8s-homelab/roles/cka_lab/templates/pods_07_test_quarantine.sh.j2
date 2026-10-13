@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+MANIFEST="${SCRIPT_DIR}/01-quarantine-app.yaml"
+
+echo "=== Automated Test: Pod Quarantine & Autopsy ==="
+
+kubectl apply -f "${MANIFEST}"
+kubectl rollout status deployment cka-quarantine-app -n default --timeout=60s
+
+TARGET_POD=$(kubectl get pods -l app=prod-web -o jsonpath='{.items[0].metadata.name}')
+kubectl label pod "${TARGET_POD}" app=quarantine --overwrite
+
+# Wait for replacement replica
+sleep 4
+ACTIVE_COUNT=$(kubectl get pods -l app=prod-web --no-headers | wc -l)
+
+if [[ "${ACTIVE_COUNT}" -ne 3 ]]; then
+    echo "FAIL: Expected 3 replicas matching app=prod-web, found ${ACTIVE_COUNT}"
+    kubectl delete -f "${MANIFEST}"
+    exit 1
+fi
+
+ISOLATED_PHASE=$(kubectl get pod "${TARGET_POD}" -o jsonpath='{.status.phase}')
+if [[ "${ISOLATED_PHASE}" != "Running" ]]; then
+    echo "FAIL: Isolated pod is not in Running state: ${ISOLATED_PHASE}"
+    kubectl delete -f "${MANIFEST}"
+    exit 1
+fi
+
+# Cleanup
+kubectl delete pod "${TARGET_POD}" --now
+kubectl delete -f "${MANIFEST}"
+
+echo "=== Pod Quarantine Automated Test PASSED ==="

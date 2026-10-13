@@ -14,6 +14,7 @@
     - "{{ cka_lab_pods_dir }}/04-ephemeral-networking"
     - "{{ cka_lab_pods_dir }}/05-spec-immutability"
     - "{{ cka_lab_pods_dir }}/06-namespaces-context"
+    - "{{ cka_lab_pods_dir }}/07-quarantine-autopsy"
   tags:
     - cka_lab
     - pods
@@ -44,6 +45,10 @@
     - {src: "pods_05_replace_drill.sh.j2", dest: "05-spec-immutability/replace-drill.sh", mode: "0755"}
     - {src: "pods_06_namespace.yaml.j2", dest: "06-namespaces-context/cka-lab-namespace.yaml"}
     - {src: "pods_06_namespace_context_drill.sh.j2", dest: "06-namespaces-context/namespace-context-drill.sh", mode: "0755"}
+    - {src: "pods_07_guide.md.j2", dest: "07-quarantine-autopsy/README.md", mode: "0644"}
+    - {src: "pods_07_quarantine_app.yaml.j2", dest: "07-quarantine-autopsy/01-quarantine-app.yaml"}
+    - {src: "pods_07_quarantine_drill.sh.j2", dest: "07-quarantine-autopsy/quarantine-drill.sh", mode: "0755"}
+    - {src: "pods_07_test_quarantine.sh.j2", dest: "07-quarantine-autopsy/test-quarantine.sh", mode: "0755"}
   loop_control:
     label: "pods/{{ item.dest }}"
   tags:

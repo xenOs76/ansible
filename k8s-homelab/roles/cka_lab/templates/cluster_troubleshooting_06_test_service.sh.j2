@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Test endpoints population and HTTP connectivity
+echo "=== Verifying Service Endpoints and Connectivity ==="
+
+# Check endpoints exist
+EP_COUNT=$(kubectl get endpoints cka-order-svc -o jsonpath='{.subsets[0].addresses[*].ip}' | wc -w || echo "0")
+
+if [[ "${EP_COUNT}" -eq 0 ]]; then
+    echo "ERROR: cka-order-svc has 0 registered endpoints!"
+    exit 1
+fi
+
+echo "Endpoints found (${EP_COUNT}):"
+kubectl get endpoints cka-order-svc
+
+# Test HTTP curl
+echo "Testing curl to cka-order-svc:8080..."
+kubectl run test-order-curl --rm -i --restart=Never --image=curlimages/curl:latest -- \
+    curl -s -m 5 http://cka-order-svc.default.svc.cluster.local:8080/ >/dev/null
+
+echo "=== Service & Endpoints Test PASSED! ==="

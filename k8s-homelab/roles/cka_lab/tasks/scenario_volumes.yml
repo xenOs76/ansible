@@ -100,6 +100,8 @@
     - {src: "volumes_05_local_pv_pvc.yaml.j2", dest: "05-pv-pvc-lifecycle/01-local-pv-pvc.yaml"}
     - {src: "volumes_05_pvc_expansion.yaml.j2", dest: "05-pv-pvc-lifecycle/02-pvc-expansion.yaml"}
     - {src: "volumes_05_reclaim_policy_drill.md.j2", dest: "05-pv-pvc-lifecycle/03-reclaim-policy-drill.md"}
+    - {src: "volumes_05_reclaim_mutation_drill.sh.j2", dest: "05-pv-pvc-lifecycle/reclaim-mutation-drill.sh", mode: "0755"}
+    - {src: "volumes_05_test_reclaim_mutation.sh.j2", dest: "05-pv-pvc-lifecycle/test-reclaim-mutation.sh", mode: "0755"}
     - {src: "volumes_06_rbd_readme.md.j2", dest: "06-rbd/README.md", mode: "0644"}
     - {src: "volumes_06_test_rbd_volumes.sh.j2", dest: "06-rbd/test-rbd-volumes.sh", mode: "0755"}
     - {src: "volumes_06_rbd_dynamic_filesystem.yaml.j2", dest: "06-rbd/01-rbd-dynamic-filesystem.yaml"}

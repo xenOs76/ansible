@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Automated evaluation script for JSONPath challenges
+echo "=========================================================="
+echo " Running Automated Validation: CKA JSONPath Challenges"
+echo "=========================================================="
+
+FAILED=0
+
+run_query() {
+    local id="$1"
+    local desc="$2"
+    local cmd="$3"
+    echo -n "Challenge ${id}: ${desc} ... "
+    if out=$(eval "${cmd}" 2>&1) && [[ -n "${out}" ]]; then
+        echo "PASS"
+    else
+        echo "FAIL (empty or error)"
+        FAILED=$(( FAILED + 1 ))
+    fi
+}
+
+run_query 1 "Node Internal IPs" "kubectl get nodes -o jsonpath='{.items[*].status.addresses[?(@.type==\"InternalIP\")].address}'"
+run_query 2 "Node Architecture and OS" "kubectl get nodes -o jsonpath='{range .items[*]}{.metadata.name}{\"\t\"}{.status.nodeInfo.architecture}{\"\n\"}{end}'"
+run_query 3 "kube-system Pod Names" "kubectl get pods -n kube-system -o jsonpath='{range .items[*]}{.metadata.name}{\"\n\"}{end}'"
+run_query 4 "apiserver image extraction" "kubectl get pods -n kube-system -l component=kube-apiserver -o jsonpath='{.items[0].spec.containers[0].image}'"
+run_query 5 "Pods sorted by creation" "kubectl get pods -n kube-system --sort-by='.metadata.creationTimestamp'"
+run_query 6 "Services and ClusterIPs" "kubectl get svc -A -o jsonpath='{range .items[*]}{.metadata.name}{\"\t\"}{.spec.clusterIP}{\"\n\"}{end}'"
+run_query 8 "ConfigMap Keys" "kubectl get configmap kube-root-ca.crt -n default -o jsonpath='{.data}'"
+run_query 10 "Node CPU and Memory" "kubectl get nodes -o jsonpath='{range .items[*]}{.metadata.name}{\"\t\"}{.status.capacity.cpu}{\"\n\"}{end}'"
+
+echo "=========================================================="
+if [[ ${FAILED} -eq 0 ]]; then
+    echo " All JSONPath evaluations executed and returned valid results!"
+    exit 0
+else
+    echo " ${FAILED} query(ies) failed or returned empty data."
+    exit 1
+fi

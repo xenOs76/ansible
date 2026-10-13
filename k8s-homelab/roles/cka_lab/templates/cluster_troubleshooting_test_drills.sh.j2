@@ -14,7 +14,7 @@ echo "===================================================================="
 # Drill 1: Node Maintenance (Cordon & Drain)
 # ------------------------------------------------------------------------------
 echo "--------------------------------------------------------------------"
-echo "  [1/2] Testing Node Maintenance (Cordon, Drain, Uncordon)          "
+echo "  [1/5] Testing Node Maintenance (Cordon, Drain, Uncordon)          "
 echo "--------------------------------------------------------------------"
 "${SCRIPT_DIR}/01-node-maintenance/drain-cordon-drill.sh"
 
@@ -22,9 +22,38 @@ echo "--------------------------------------------------------------------"
 # Drill 2: Cluster Metrics & Top
 # ------------------------------------------------------------------------------
 echo "--------------------------------------------------------------------"
-echo "  [2/2] Testing Cluster Metrics Telemetry                           "
+echo "  [2/5] Testing Cluster Metrics Telemetry                           "
 echo "--------------------------------------------------------------------"
 "${SCRIPT_DIR}/04-metrics-monitoring/test-metrics-top.sh"
+
+# ------------------------------------------------------------------------------
+# Drill 3: CoreDNS Resolution
+# ------------------------------------------------------------------------------
+echo "--------------------------------------------------------------------"
+echo "  [3/5] Testing CoreDNS Service Resolution                          "
+echo "--------------------------------------------------------------------"
+"${SCRIPT_DIR}/05-coredns-recovery/test-dns-resolution.sh"
+
+# ------------------------------------------------------------------------------
+# Drill 4: Service Endpoints Triage
+# ------------------------------------------------------------------------------
+echo "--------------------------------------------------------------------"
+echo "  [4/5] Testing Service & Endpoints Triage                          "
+echo "--------------------------------------------------------------------"
+"${SCRIPT_DIR}/06-service-endpoints-recovery/setup-broken-service.sh"
+"${SCRIPT_DIR}/06-service-endpoints-recovery/fix-service.sh"
+"${SCRIPT_DIR}/06-service-endpoints-recovery/test-service-endpoints.sh"
+# Cleanup drill deployment and service
+kubectl delete deployment cka-order-backend -n default --ignore-not-found=true
+kubectl delete service cka-order-svc -n default --ignore-not-found=true
+
+# ------------------------------------------------------------------------------
+# Drill 5: Container Runtime Diagnostics (crictl)
+# ------------------------------------------------------------------------------
+echo "--------------------------------------------------------------------"
+echo "  [5/5] Testing Container Runtime Diagnostics (crictl)              "
+echo "--------------------------------------------------------------------"
+"${SCRIPT_DIR}/08-containerd-diagnostics/test-crictl.sh"
 
 echo "===================================================================="
 echo "  [SUCCESS] All CKA Troubleshooting drills verified successfully!   "

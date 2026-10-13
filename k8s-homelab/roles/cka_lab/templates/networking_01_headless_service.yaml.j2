@@ -1,0 +1,44 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: cka-headless-svc
+  namespace: default
+  labels:
+    app.kubernetes.io/part-of: cka-lab
+    tier: headless
+spec:
+  clusterIP: None
+  selector:
+    app: cka-headless-app
+  ports:
+  - port: 80
+    name: http
+    targetPort: 80
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: cka-headless-app
+  namespace: default
+  labels:
+    app.kubernetes.io/part-of: cka-lab
+spec:
+  serviceName: cka-headless-svc
+  replicas: 2
+  selector:
+    matchLabels:
+      app: cka-headless-app
+  template:
+    metadata:
+      labels:
+        app: cka-headless-app
+    spec:
+      containers:
+      - name: web
+        image: nginx:alpine
+        ports:
+        - containerPort: 80
+        resources:
+          requests:
+            cpu: 10m
+            memory: 16Mi

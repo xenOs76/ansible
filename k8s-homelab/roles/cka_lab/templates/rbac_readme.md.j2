@@ -124,3 +124,14 @@ Return to the cluster administrator context:
 ```bash
 kubectl config use-context kubernetes-admin@kubernetes
 ```
+
+---
+
+### Step 6: ServiceAccount RBAC & Token Impersonation (`serviceaccounts/`)
+
+Practice managing non-human workloads:
+
+```bash
+cd {{ cka_lab_rbac_dir }}/serviceaccounts
+./test-sa-rbac.sh
+```

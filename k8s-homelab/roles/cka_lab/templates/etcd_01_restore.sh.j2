@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Scenario 15: etcd Snapshot Restore Script
+BACKUP_DIR="${1:-/var/lib/etcd-backup}"
+SNAPSHOT_FILE="${BACKUP_DIR}/etcd-snapshot.db"
+RESTORE_DIR="${2:-/var/lib/etcd-restored}"
+
+echo "=== CKA Practice: etcd Snapshot Restore ==="
+
+if [[ ! -f "${SNAPSHOT_FILE}" ]]; then
+    echo "ERROR: Snapshot file ${SNAPSHOT_FILE} does not exist. Run backup-etcd.sh first."
+    exit 1
+fi
+
+echo "[1/3] Restoring snapshot to new target directory ${RESTORE_DIR}..."
+if [[ -d "${RESTORE_DIR}" ]]; then
+    echo "Notice: Target directory ${RESTORE_DIR} exists, archiving previous contents..."
+    sudo rm -rf "${RESTORE_DIR}.bak"
+    sudo mv "${RESTORE_DIR}" "${RESTORE_DIR}.bak"
+fi
+
+sudo ETCDCTL_API=3 etcdctl snapshot restore "${SNAPSHOT_FILE}" \
+    --data-dir="${RESTORE_DIR}"
+
+sudo chown -R root:root "${RESTORE_DIR}"
+
+echo "[2/3] Verification of restored directory structure:"
+sudo ls -la "${RESTORE_DIR}/member"
+
+echo "[3/3] Next Manual Exam Steps:"
+echo "1. Edit /etc/kubernetes/manifests/etcd.yaml"
+echo "2. Locate volume 'etcd-data' and update hostPath to:"
+echo "     hostPath:"
+echo "       path: ${RESTORE_DIR}"
+echo "       type: DirectoryOrCreate"
+echo "3. Save and wait for kubelet to restart the etcd static pod."
+echo "4. Verify with: kubectl get nodes"
+echo "=== Restore data prepared successfully at ${RESTORE_DIR} ==="

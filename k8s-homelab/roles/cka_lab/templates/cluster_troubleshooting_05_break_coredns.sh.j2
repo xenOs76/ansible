@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Break CoreDNS by injecting an invalid plugin directive into the Corefile
+echo "=== Injecting CoreDNS Fault ==="
+
+# Backup current configmap
+kubectl get configmap coredns -n kube-system -o yaml > /tmp/coredns-backup.yaml
+
+# Patch Corefile with syntax error
+kubectl get configmap coredns -n kube-system -o json \
+  | jq '.data.Corefile |= sub("ready"; "ready\n        invalid_syntax_directive_error")' \
+  | kubectl apply -f -
+
+# Restart CoreDNS to pick up broken config
+kubectl rollout restart deployment coredns -n kube-system
+echo "CoreDNS has been misconfigured with invalid syntax."
+echo "Check pods with: kubectl get pods -n kube-system -l k8s-app=kube-dns"

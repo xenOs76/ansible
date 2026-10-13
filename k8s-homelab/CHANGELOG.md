@@ -8,6 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **etcd Snapshot Backup & Restore (`~/cka/etcd`)**: Static pod TLS discovery, snapshot verification, and data-dir restore with hostPath manifest updates.
+- **Manual Kubeadm Cluster Upgrade (`~/cka/upgrade`)**: Step-by-step control plane and worker node upgrade procedures with drain/uncordon drills.
+- **Speed JSONPath Challenges (`~/cka/jsonpath`)**: Rapid query evaluation harness and cheatsheets covering high-frequency exam questions.
+- **CoreDNS & Service Troubleshooting (`~/cka/cluster-troubleshooting`)**: Native Corefile break-fix, Service-to-Endpoints selector triage, worker node static pod provisioning, and container runtime (`crictl`) diagnostics.
+- **Advanced Multi-Namespace NetworkPolicies (`~/cka/networking`)**: Cross-namespace microsegmentation (`namespaceSelector` + `podSelector`) and headless service DNS SRV discovery.
+- **Pod Quarantine & Autopsy Pattern (`~/cka/pods`)**: Zero-downtime faulty pod isolation and rapid CLI generation cheatsheet.
+- **ServiceAccount RBAC & Token Management (`~/cka/rbac/serviceaccounts`)**: Modern bounded token generation and API impersonation testing.
+- **PriorityClass & Preemption (`~/cka/scheduling`)**: Workload priority classes and scheduler eviction drills under node contention.
+- **PersistentVolume Reclaim Policy Mutation (`~/cka/volumes`)**: PV lifecycle mutation (`Retain` vs `Delete`) and manual volume data recovery.
+
 ## [1.4.2] - 2026-10-11
 
 ### Added

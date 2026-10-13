@@ -1,0 +1,60 @@
+# CKA Drill: JSONPath Speed & Output Formatting (`jsonpath`)
+
+Master rapid resource queries and custom formatting under exam time limits using `-o jsonpath` and `--sort-by`.
+
+## Exam Importance & Principles
+
+- **Exam Domain**: Troubleshooting (30%) / Workloads & Scheduling (15%).
+- **Frequency**: Often paired with tasks like: *"Extract all node internal IPs and save to /opt/nodes.txt"* or *"Find the pod with highest restarts"*.
+- **Syntax Cheatsheet**:
+  - Root element: `$` or `{}`
+  - List iterator: `{.items[*]...}`
+  - Specific item: `{.items[0]...}`
+  - Wildcard all elements: `[*]`
+  - Field accessor: `.metadata.name`
+  - Filter query: `[?(@.type=="InternalIP")].address`
+  - Newlines: `{"\n"}`
+  - Custom column syntax alternative: `-o custom-columns=NAME:.metadata.name,IP:.status.podIP`
+  - Sorting: `--sort-by=.status.containerStatuses[0].restartCount` or `--sort-by=.metadata.creationTimestamp`
+
+---
+
+## High-Frequency Query Patterns
+
+### 1. Extract Node Names and Internal IPs
+
+```bash
+kubectl get nodes -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.status.addresses[?(@.type=="InternalIP")].address}{"\n"}{end}'
+```
+
+### 2. Extract Container Images of all Pods in a Namespace
+
+```bash
+kubectl get pods -n kube-system -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.spec.containers[*].image}{"\n"}{end}'
+```
+
+### 3. Sort Pods by Restart Count
+
+```bash
+kubectl get pods -A --sort-by='.status.containerStatuses[0].restartCount'
+```
+
+### 4. Extract Pod Names in Status Running
+
+```bash
+kubectl get pods -o jsonpath='{.items[?(@.status.phase=="Running")].metadata.name}'
+```
+
+### 5. Extract PersistentVolume Names and Capacity
+
+```bash
+kubectl get pv -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.spec.capacity.storage}{"\n"}{end}'
+```
+
+---
+
+## Directory Contents
+
+- `challenges.md`: 10 real exam challenges to practice without looking at answers.
+- `solutions.md`: Detailed solutions and fastest imperative commands.
+- `eval-jsonpath.sh`: Automated script running and testing the challenge expressions against your active cluster.

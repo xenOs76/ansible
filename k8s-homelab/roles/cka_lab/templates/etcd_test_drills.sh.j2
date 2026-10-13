@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Automated test harness for Scenario 15: etcd Backup & Restore
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BACKUP_SCRIPT="${SCRIPT_DIR}/01-backup-restore/backup-etcd.sh"
+RESTORE_SCRIPT="${SCRIPT_DIR}/01-backup-restore/restore-etcd.sh"
+
+echo "=========================================================="
+echo " Running Automated Validation: CKA etcd Backup & Restore"
+echo "=========================================================="
+
+FAILED=0
+
+run_test() {
+    local name="$1"
+    local cmd="$2"
+    echo -n "Test: ${name} ... "
+    if eval "${cmd}" >/dev/null 2>&1; then
+        echo "PASS"
+    else
+        echo "FAIL"
+        FAILED=$(( FAILED + 1 ))
+    fi
+}
+
+# 1. Check etcdctl availability
+run_test "etcdctl binary exists in PATH" "command -v etcdctl"
+
+# 2. Check static pod manifest existence
+run_test "etcd static pod manifest exists" "test -f /etc/kubernetes/manifests/etcd.yaml"
+
+# 3. Check endpoint health query
+run_test "etcd cluster endpoint health" "bash -c 'ETCDCTL_API=3 sudo etcdctl --endpoints=https://127.0.0.1:2379 --cacert=/etc/kubernetes/pki/etcd/ca.crt --cert=/etc/kubernetes/pki/etcd/server.crt --key=/etc/kubernetes/pki/etcd/server.key endpoint health'"
+
+# 4. Run backup script
+run_test "Execute backup-etcd.sh" "sudo ${BACKUP_SCRIPT} /tmp/etcd-test-backup"
+
+# 5. Verify generated snapshot file
+run_test "Snapshot file verification" "test -f /tmp/etcd-test-backup/etcd-snapshot.db"
+
+# 6. Verify snapshot status query
+run_test "Snapshot status command" "ETCDCTL_API=3 sudo etcdctl --write-out=table snapshot status /tmp/etcd-test-backup/etcd-snapshot.db"
+
+# 7. Run restore script to temporary location
+run_test "Execute restore-etcd.sh" "sudo ${RESTORE_SCRIPT} /tmp/etcd-test-backup /tmp/etcd-test-restored"
+
+# 8. Check restored member data directory
+run_test "Restored member directory exists" "test -d /tmp/etcd-test-restored/member"
+
+# Cleanup temporary files
+sudo rm -rf /tmp/etcd-test-backup /tmp/etcd-test-restored
+
+echo "=========================================================="
+if [[ ${FAILED} -eq 0 ]]; then
+    echo " All etcd Backup & Restore drill tests PASSED!"
+    exit 0
+else
+    echo " ${FAILED} test(s) FAILED in etcd drill."
+    exit 1
+fi

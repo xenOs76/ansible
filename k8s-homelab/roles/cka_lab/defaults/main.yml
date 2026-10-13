@@ -15,6 +15,9 @@ cka_lab_scenario_storage_classes_enabled: true
 cka_lab_scenario_cluster_troubleshooting_enabled: true
 cka_lab_scenario_crds_enabled: true
 cka_lab_scenario_chaos_troubleshooting_enabled: false
+cka_lab_scenario_etcd_enabled: true
+cka_lab_scenario_upgrade_drill_enabled: true
+cka_lab_scenario_jsonpath_enabled: true
 
 # Scenario: motd (CKA Initial Steps Reminder Announcement)
 cka_lab_motd_user: "{{ ansible_user | default('vagrant') }}"
@@ -262,3 +265,12 @@ cka_lab_crds_namespace: "default"
 cka_lab_chaos_troubleshooting_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/chaos-troubleshooting"
 cka_lab_chaos_namespace: "cka-troubleshooting"
 cka_lab_litmus_operator_version: "v3.0.0"
+
+# Scenario: etcd (etcd Snapshot Backup & Restore)
+cka_lab_etcd_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/etcd"
+
+# Scenario: upgrade_drill (Manual Kubeadm Node & Cluster Upgrade)
+cka_lab_upgrade_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/upgrade"
+
+# Scenario: jsonpath (Speed JSONPath & Output Formatting)
+cka_lab_jsonpath_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/jsonpath"

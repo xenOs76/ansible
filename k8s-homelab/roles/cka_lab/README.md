@@ -299,6 +299,42 @@ Dedicated Ansible role for provisioning isolated hands-on Certified Kubernetes A
   - Automated verification test suite: `/home/vagrant/cka/chaos-troubleshooting/test-chaos-drills.sh`
   - Master practice guide: `/home/vagrant/cka/chaos-troubleshooting/README.md`
 
+### Scenario 15: etcd Snapshot Backup & Restore (`etcd`)
+
+- **Domain**: Cluster Architecture, Installation & Configuration (25%).
+- **Reference**: [Operating etcd clusters for Kubernetes](https://kubernetes.io/docs/tasks/administer-cluster/configure-upgrade-etcd/).
+- **Objective**: Discover TLS parameters directly from static pod manifest `/etc/kubernetes/manifests/etcd.yaml`, take verified snapshot, restore to new data-dir, update static pod hostPath, and verify API server restoration:
+  1. `backup-etcd.sh`: Discovers TLS flags and saves snapshot to `/var/lib/etcd-backup/etcd-snapshot.db`.
+  2. `restore-etcd.sh`: Restores snapshot into `/var/lib/etcd-restored`.
+  3. `simulate-loss-drill.sh`: End-to-end drill testing canary namespace persistence across backup/loss/restore cycles.
+- **Artifacts**:
+  - etcd drill directory: `/home/vagrant/cka/etcd/`
+  - Automated test suite: `/home/vagrant/cka/etcd/test-etcd-drills.sh`
+  - Master practice guide: `/home/vagrant/cka/etcd/README.md`
+
+### Scenario 16: Manual Kubeadm Cluster Upgrade (`upgrade_drill`)
+
+- **Domain**: Cluster Architecture, Installation & Configuration (25%).
+- **Reference**: [Upgrading kubeadm clusters](https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-upgrade/).
+- **Objective**: Hands-on walkthrough of manual node draining, APT package unholding, `kubeadm upgrade apply/node`, `kubelet`/`kubectl` package upgrades, and uncordoning:
+  1. `mock-control-plane-upgrade.sh`: Control plane upgrade commands and dry-run validation.
+  2. `mock-worker-upgrade.sh`: Worker node upgrade sequence.
+- **Artifacts**:
+  - Upgrade drill directory: `/home/vagrant/cka/upgrade/`
+  - Automated test suite: `/home/vagrant/cka/upgrade/test-upgrade-drills.sh`
+  - Master practice guide: `/home/vagrant/cka/upgrade/README.md`
+
+### Scenario 17: Speed JSONPath & Output Formatting (`jsonpath`)
+
+- **Domain**: Troubleshooting (30%) & Workloads (15%).
+- **Reference**: [JSONPath Support](https://kubernetes.io/docs/reference/kubectl/jsonpath/).
+- **Objective**: 10 rapid exam challenges practicing `-o jsonpath`, filter queries `[?(@...)]`, range loops, `--sort-by`, and custom columns.
+- **Artifacts**:
+  - JSONPath directory: `/home/vagrant/cka/jsonpath/`
+  - Challenges and solutions: `challenges.md` and `solutions.md`
+  - Automated evaluation harness: `/home/vagrant/cka/jsonpath/eval-jsonpath.sh`
+  - Master practice guide: `/home/vagrant/cka/jsonpath/README.md`
+
 ## Verification inside Control Plane
 
 ### Verify RBAC Scenario
@@ -551,4 +587,25 @@ cd /home/vagrant/cka/crds-operators
 ```bash
 cd /home/vagrant/cka/chaos-troubleshooting
 ./test-chaos-drills.sh
+```
+
+### Verify etcd Backup & Restore Scenario
+
+```bash
+cd /home/vagrant/cka/etcd
+./test-etcd-drills.sh
+```
+
+### Verify Manual Kubeadm Upgrade Drill
+
+```bash
+cd /home/vagrant/cka/upgrade
+./test-upgrade-drills.sh
+```
+
+### Verify Speed JSONPath Scenario
+
+```bash
+cd /home/vagrant/cka/jsonpath
+./eval-jsonpath.sh
 ```

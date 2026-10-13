@@ -1,0 +1,67 @@
+# JSONPath Exam Challenges: Solutions & Breakdown
+
+## Solution 1: Node Internal IPs
+
+```bash
+kubectl get nodes -o jsonpath='{.items[*].status.addresses[?(@.type=="InternalIP")].address}'
+```
+
+## Solution 2: Node Architecture and OS Images
+
+```bash
+kubectl get nodes -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.status.nodeInfo.architecture}{"\t"}{.status.nodeInfo.osImage}{"\n"}{end}'
+```
+
+Alternative via custom-columns:
+
+```bash
+kubectl get nodes -o custom-columns=NAME:.metadata.name,ARCH:.status.nodeInfo.architecture,OS:.status.nodeInfo.osImage
+```
+
+## Solution 3: kube-system Pod Names
+
+```bash
+kubectl get pods -n kube-system -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}'
+```
+
+## Solution 4: Control Plane Component Images
+
+```bash
+kubectl get pods -n kube-system -l component=kube-apiserver -o jsonpath='{.items[0].spec.containers[0].image}'
+```
+
+## Solution 5: Pods Sorted by Creation Timestamp
+
+```bash
+kubectl get pods -n kube-system --sort-by='.metadata.creationTimestamp'
+```
+
+## Solution 6: Service Names and ClusterIPs
+
+```bash
+kubectl get svc -A -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.spec.clusterIP}{"\n"}{end}'
+```
+
+## Solution 7: Find Non-Running Pods
+
+```bash
+kubectl get pods -A -o jsonpath='{.items[?(@.status.phase!="Running")].metadata.name}'
+```
+
+## Solution 8: ConfigMap Keys
+
+```bash
+kubectl get configmap kube-root-ca.crt -n default -o jsonpath='{.data}'
+```
+
+## Solution 9: PersistentVolume Capacities
+
+```bash
+kubectl get pv -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.spec.capacity.storage}{"\n"}{end}'
+```
+
+## Solution 10: Node Capacity CPU and Memory
+
+```bash
+kubectl get nodes -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.status.capacity.cpu}{"\t"}{.status.allocatable.memory}{"\n"}{end}'
+```

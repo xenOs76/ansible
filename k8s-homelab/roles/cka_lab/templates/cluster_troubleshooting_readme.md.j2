@@ -1,6 +1,6 @@
 # CKA Lab Exercise: Cluster Maintenance & Node Troubleshooting
 
-Hands-on training scenario for the Certified Kubernetes Administrator (CKA) certification, covering node cordon and drain workflows, static pod recovery in `/etc/kubernetes/manifests`, systemd kubelet diagnostics, and cluster resource telemetry.
+Hands-on training scenario for the Certified Kubernetes Administrator (CKA) certification, covering node cordon and drain workflows, static pod recovery in `/etc/kubernetes/manifests`, systemd kubelet diagnostics, cluster resource telemetry, CoreDNS recovery, service endpoints triage, worker static pods, and container runtime diagnostics.
 
 ---
 
@@ -12,6 +12,10 @@ Troubleshooting makes up the largest scoring weight (30%) of the CKA exam:
 - **Section 2: Static Pod Recovery**: Diagnosing and repairing control plane static pod failures (`kube-scheduler`, `kube-apiserver`) directly on the host using `crictl` and `/etc/kubernetes/manifests`.
 - **Section 3: Kubelet Diagnostics**: Diagnosing failing worker node daemons using `systemctl status kubelet`, `journalctl -u kubelet`, and `/var/lib/kubelet/config.yaml`.
 - **Section 4: Resource Telemetry**: Identifying resource-constrained nodes and pods using `kubectl top nodes` and `kubectl top pods`.
+- **Section 5: CoreDNS Recovery**: Diagnosing and repairing CoreDNS ConfigMap `Corefile` syntax errors and upstream forwarders.
+- **Section 6: Service & Endpoints Triage**: Resolving mismatched label selectors and targetPort definitions causing unreachable services.
+- **Section 7: Worker Static Pods**: Configuring a worker node's kubelet `staticPodPath` and deploying static pods directly on the worker node.
+- **Section 8: Container Runtime (CRI) Diagnostics**: Using `crictl` and inspecting `/var/log/pods/` when the container engine is degraded.
 
 ### Scenario Directory Structure
 
@@ -31,8 +35,27 @@ Troubleshooting makes up the largest scoring weight (30%) of the CKA exam:
 │   ├── break-kubelet.sh                       # Simulates invalid kubelet configuration
 │   ├── fix-kubelet.sh                         # Restores valid kubelet service
 │   └── README.md                              # Kubelet failure diagnosis guide
-└── 04-metrics-monitoring/                     # Section 4: Resource Telemetry
-    └── test-metrics-top.sh                    # kubectl top verification script
+├── 04-metrics-monitoring/                     # Section 4: Resource Telemetry
+│   └── test-metrics-top.sh                    # kubectl top verification script
+├── 05-coredns-recovery/                       # Section 5: CoreDNS Break-Fix
+│   ├── break-coredns.sh                       # Injects Corefile syntax error
+│   ├── fix-coredns.sh                         # Restores clean Corefile config
+│   ├── debug-dns-pod.yaml                     # Ephemeral diagnostic pod manifest
+│   ├── test-dns-resolution.sh                 # DNS verification test
+│   └── README.md                              # CoreDNS diagnosis guide
+├── 06-service-endpoints-recovery/             # Section 6: Service/Endpoints Triage
+│   ├── setup-broken-service.sh                # Deploys service with selector mismatch
+│   ├── fix-service.sh                         # Patches selector and targetPort
+│   ├── test-service-endpoints.sh              # Connectivity assertion test
+│   └── README.md                              # Service troubleshooting guide
+├── 07-worker-static-pods/                     # Section 7: Worker Static Pods
+│   ├── static-web.yaml                        # NGINX alpine static pod manifest
+│   ├── setup-worker-static-pod.sh             # Provisions static pod to worker node
+│   ├── test-worker-static-pod.sh              # Validates mirror pod on API server
+│   └── README.md                              # Worker static pod guide
+└── 08-containerd-diagnostics/                 # Section 8: Container Runtime Triage
+    ├── test-crictl.sh                         # crictl CLI verification script
+    └── README.md                              # CRI debugging guide
 ```
 
 ---
@@ -41,56 +64,70 @@ Troubleshooting makes up the largest scoring weight (30%) of the CKA exam:
 
 ### Drill 1: Node Cordon & Drain (`01-node-maintenance/`)
 
-1. **Cordon and Drain Worker Node**:
-
-   ```bash
-   {{ cka_lab_cluster_troubleshooting_dir }}/01-node-maintenance/drain-cordon-drill.sh
-   ```
+```bash
+{{ cka_lab_cluster_troubleshooting_dir }}/01-node-maintenance/drain-cordon-drill.sh
+```
 
 ### Drill 2: Static Pod Recovery (`02-static-pod-recovery/`)
 
-1. **Break and Recover Scheduler**:
-
-   ```bash
-   cd {{ cka_lab_cluster_troubleshooting_dir }}/02-static-pod-recovery
-   sudo ./break-scheduler.sh
-   # Observe failure:
-   kubectl get pods -n kube-system -l component=kube-scheduler
-   # Restore healthy state:
-   sudo ./fix-scheduler.sh
-   ```
-
-1. **Break and Recover API Server**:
-
-   ```bash
-   cd {{ cka_lab_cluster_troubleshooting_dir }}/02-static-pod-recovery
-   sudo ./break-apiserver.sh
-   # Observe failure:
-   kubectl get nodes
-   # Restore healthy state:
-   sudo ./fix-apiserver.sh
-   ```
+```bash
+cd {{ cka_lab_cluster_troubleshooting_dir }}/02-static-pod-recovery
+sudo ./break-scheduler.sh
+# Observe failure:
+kubectl get pods -n kube-system -l component=kube-scheduler
+# Restore healthy state:
+sudo ./fix-scheduler.sh
+```
 
 ### Drill 3: Kubelet Diagnostics (`03-kubelet-diagnostics/`)
 
-1. **Break and Recover Kubelet**:
-
-   ```bash
-   cd {{ cka_lab_cluster_troubleshooting_dir }}/03-kubelet-diagnostics
-   sudo ./break-kubelet.sh
-   # Inspect failure:
-   sudo systemctl status kubelet
-   # Restore healthy state:
-   sudo ./fix-kubelet.sh
-   ```
+```bash
+cd {{ cka_lab_cluster_troubleshooting_dir }}/03-kubelet-diagnostics
+sudo ./break-kubelet.sh
+sudo systemctl status kubelet
+sudo ./fix-kubelet.sh
+```
 
 ### Drill 4: Resource Telemetry (`04-metrics-monitoring/`)
 
-1. **Query Metrics Server**:
+```bash
+{{ cka_lab_cluster_troubleshooting_dir }}/04-metrics-monitoring/test-metrics-top.sh
+```
 
-   ```bash
-   {{ cka_lab_cluster_troubleshooting_dir }}/04-metrics-monitoring/test-metrics-top.sh
-   ```
+### Drill 5: CoreDNS Recovery (`05-coredns-recovery/`)
+
+```bash
+cd {{ cka_lab_cluster_troubleshooting_dir }}/05-coredns-recovery
+./break-coredns.sh
+kubectl get pods -n kube-system -l k8s-app=kube-dns
+./fix-coredns.sh
+./test-dns-resolution.sh
+```
+
+### Drill 6: Service & Endpoints Recovery (`06-service-endpoints-recovery/`)
+
+```bash
+cd {{ cka_lab_cluster_troubleshooting_dir }}/06-service-endpoints-recovery
+./setup-broken-service.sh
+kubectl get endpoints cka-order-svc
+./fix-service.sh
+./test-service-endpoints.sh
+```
+
+### Drill 7: Worker Static Pod (`07-worker-static-pods/`)
+
+```bash
+cd {{ cka_lab_cluster_troubleshooting_dir }}/07-worker-static-pods
+./setup-worker-static-pod.sh
+./test-worker-static-pod.sh
+```
+
+### Drill 8: Container Runtime Diagnostics (`08-containerd-diagnostics/`)
+
+```bash
+cd {{ cka_lab_cluster_troubleshooting_dir }}/08-containerd-diagnostics
+./test-crictl.sh
+```
 
 ---
 

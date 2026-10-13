@@ -12,6 +12,7 @@
     - "{{ cka_lab_scheduling_dir }}/02-affinities"
     - "{{ cka_lab_scheduling_dir }}/03-hpa-autoscaling"
     - "{{ cka_lab_scheduling_dir }}/04-quotas-limits"
+    - "{{ cka_lab_scheduling_dir }}/05-priority-preemption"
   tags:
     - cka_lab
     - scheduling
@@ -43,6 +44,10 @@
     - {src: "scheduling_04_compute_quota.yaml.j2", dest: "04-quotas-limits/cka-lab-compute-quota.yaml"}
     - {src: "scheduling_04_limit_range.yaml.j2", dest: "04-quotas-limits/cka-lab-limit-range.yaml"}
     - {src: "scheduling_04_test_quotas.sh.j2", dest: "04-quotas-limits/test-quotas.sh", mode: "0755"}
+    - {src: "scheduling_05_guide.md.j2", dest: "05-priority-preemption/README.md", mode: "0644"}
+    - {src: "scheduling_05_priority_classes.yaml.j2", dest: "05-priority-preemption/01-priority-classes.yaml"}
+    - {src: "scheduling_05_workloads.yaml.j2", dest: "05-priority-preemption/02-preemption-workloads.yaml"}
+    - {src: "scheduling_05_test_preemption.sh.j2", dest: "05-priority-preemption/test-preemption.sh", mode: "0755"}
   loop_control:
     label: "scheduling/{{ item.dest }}"
   tags:

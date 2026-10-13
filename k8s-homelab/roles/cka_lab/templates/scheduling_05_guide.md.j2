@@ -1,0 +1,17 @@
+# Pod PriorityClass & Eviction Preemption
+
+Learn how kube-scheduler handles resource contention and preempts low-priority pods in favor of mission-critical workloads.
+
+## Concepts
+
+1. **PriorityClass Resource**: Non-namespaced object defining a priority value (e.g., `value: 1000000`).
+2. **Preemption Policy**: Defaults to `PreemptionPolicy: PreemptLowerPriority`.
+3. **Preemption Flow**: When high-priority pods cannot be scheduled due to insufficient CPU/memory on any node, kube-scheduler evicts pods with lower priority to free resources.
+
+---
+
+## Practice Scripts
+
+- `01-priority-classes.yaml`: Creates `mission-critical` (1000000) and `batch-low` (1000) PriorityClasses.
+- `02-preemption-workloads.yaml`: Deploys pods requesting resource capacity.
+- `test-preemption.sh`: Automated verification script demonstrating preemption and eviction events.

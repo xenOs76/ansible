@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Verify crictl functionality and containerd socket connectivity
+echo "=== Verifying Container Runtime & crictl ==="
+
+if ! command -v crictl >/dev/null 2>&1; then
+    echo "ERROR: crictl binary not found in PATH"
+    exit 1
+fi
+
+echo "[1/3] Checking containerd daemon service..."
+systemctl is-active containerd
+
+echo "[2/3] Checking crictl pod listing..."
+sudo crictl pods | head -n 5
+
+echo "[3/3] Checking crictl image listing..."
+sudo crictl images | head -n 5
+
+echo "=== Container Runtime Diagnostics PASSED ==="

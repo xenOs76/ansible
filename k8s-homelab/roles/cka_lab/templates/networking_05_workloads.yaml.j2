@@ -1,0 +1,93 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend-db
+  namespace: cka-secure-db
+  labels:
+    app.kubernetes.io/part-of: cka-lab
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      role: database
+  template:
+    metadata:
+      labels:
+        role: database
+    spec:
+      containers:
+      - name: db-mock
+        image: nginx:alpine
+        ports:
+        - containerPort: 80
+        resources:
+          requests:
+            cpu: 10m
+            memory: 16Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: db-service
+  namespace: cka-secure-db
+  labels:
+    app.kubernetes.io/part-of: cka-lab
+spec:
+  type: ClusterIP
+  selector:
+    role: database
+  ports:
+  - port: 80
+    targetPort: 80
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend-portal
+  namespace: cka-portal
+  labels:
+    app.kubernetes.io/part-of: cka-lab
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      role: frontend
+  template:
+    metadata:
+      labels:
+        role: frontend
+    spec:
+      containers:
+      - name: client
+        image: curlimages/curl:latest
+        command: ["sleep", "3600"]
+        resources:
+          requests:
+            cpu: 10m
+            memory: 16Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: intruder-portal
+  namespace: cka-portal
+  labels:
+    app.kubernetes.io/part-of: cka-lab
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      role: unauthorized
+  template:
+    metadata:
+      labels:
+        role: unauthorized
+    spec:
+      containers:
+      - name: client
+        image: curlimages/curl:latest
+        command: ["sleep", "3600"]
+        resources:
+          requests:
+            cpu: 10m
+            memory: 16Mi

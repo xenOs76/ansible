@@ -12,6 +12,10 @@
     - "{{ cka_lab_cluster_troubleshooting_dir }}/02-static-pod-recovery"
     - "{{ cka_lab_cluster_troubleshooting_dir }}/03-kubelet-diagnostics"
     - "{{ cka_lab_cluster_troubleshooting_dir }}/04-metrics-monitoring"
+    - "{{ cka_lab_cluster_troubleshooting_dir }}/05-coredns-recovery"
+    - "{{ cka_lab_cluster_troubleshooting_dir }}/06-service-endpoints-recovery"
+    - "{{ cka_lab_cluster_troubleshooting_dir }}/07-worker-static-pods"
+    - "{{ cka_lab_cluster_troubleshooting_dir }}/08-containerd-diagnostics"
   tags:
     - cka_lab
     - cluster_troubleshooting
@@ -40,6 +44,21 @@
     - {src: "cluster_troubleshooting_03_fix_kubelet.sh.j2", dest: "03-kubelet-diagnostics/fix-kubelet.sh", mode: "0755"}
     - {src: "cluster_troubleshooting_03_guide.md.j2", dest: "03-kubelet-diagnostics/README.md", mode: "0644"}
     - {src: "cluster_troubleshooting_04_test_metrics.sh.j2", dest: "04-metrics-monitoring/test-metrics-top.sh", mode: "0755"}
+    - {src: "cluster_troubleshooting_05_guide.md.j2", dest: "05-coredns-recovery/README.md", mode: "0644"}
+    - {src: "cluster_troubleshooting_05_break_coredns.sh.j2", dest: "05-coredns-recovery/break-coredns.sh", mode: "0755"}
+    - {src: "cluster_troubleshooting_05_fix_coredns.sh.j2", dest: "05-coredns-recovery/fix-coredns.sh", mode: "0755"}
+    - {src: "cluster_troubleshooting_05_debug_dns_pod.yaml.j2", dest: "05-coredns-recovery/debug-dns-pod.yaml", mode: "0644"}
+    - {src: "cluster_troubleshooting_05_test_dns.sh.j2", dest: "05-coredns-recovery/test-dns-resolution.sh", mode: "0755"}
+    - {src: "cluster_troubleshooting_06_guide.md.j2", dest: "06-service-endpoints-recovery/README.md", mode: "0644"}
+    - {src: "cluster_troubleshooting_06_setup_broken.sh.j2", dest: "06-service-endpoints-recovery/setup-broken-service.sh", mode: "0755"}
+    - {src: "cluster_troubleshooting_06_fix_service.sh.j2", dest: "06-service-endpoints-recovery/fix-service.sh", mode: "0755"}
+    - {src: "cluster_troubleshooting_06_test_service.sh.j2", dest: "06-service-endpoints-recovery/test-service-endpoints.sh", mode: "0755"}
+    - {src: "cluster_troubleshooting_07_guide.md.j2", dest: "07-worker-static-pods/README.md", mode: "0644"}
+    - {src: "cluster_troubleshooting_07_static_web.yaml.j2", dest: "07-worker-static-pods/static-web.yaml", mode: "0644"}
+    - {src: "cluster_troubleshooting_07_setup_worker_pod.sh.j2", dest: "07-worker-static-pods/setup-worker-static-pod.sh", mode: "0755"}
+    - {src: "cluster_troubleshooting_07_test_worker_pod.sh.j2", dest: "07-worker-static-pods/test-worker-static-pod.sh", mode: "0755"}
+    - {src: "cluster_troubleshooting_08_guide.md.j2", dest: "08-containerd-diagnostics/README.md", mode: "0644"}
+    - {src: "cluster_troubleshooting_08_test_crictl.sh.j2", dest: "08-containerd-diagnostics/test-crictl.sh", mode: "0755"}
   loop_control:
     label: "cluster_troubleshooting/{{ item.dest }}"
   tags:

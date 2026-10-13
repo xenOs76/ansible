@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Automated test harness for Scenario 16: Kubeadm Upgrade Drills
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CP_SCRIPT="${SCRIPT_DIR}/01-control-plane/mock-control-plane-upgrade.sh"
+WORKER_SCRIPT="${SCRIPT_DIR}/02-worker-node/mock-worker-upgrade.sh"
+
+echo "=========================================================="
+echo " Running Automated Validation: CKA Kubeadm Upgrade Drills"
+echo "=========================================================="
+
+FAILED=0
+
+run_test() {
+    local name="$1"
+    local cmd="$2"
+    echo -n "Test: ${name} ... "
+    if eval "${cmd}" >/dev/null 2>&1; then
+        echo "PASS"
+    else
+        echo "FAIL"
+        FAILED=$(( FAILED + 1 ))
+    fi
+}
+
+# 1. Verify kubeadm binary exists
+run_test "kubeadm binary available" "command -v kubeadm"
+
+# 2. Verify kubelet binary exists
+run_test "kubelet binary available" "command -v kubelet"
+
+# 3. Verify kubectl binary exists
+run_test "kubectl binary available" "command -v kubectl"
+
+# 4. Check package holds on current node
+run_test "dpkg package hold verification" "dpkg --get-selections | grep -q 'hold'"
+
+# 5. Run control plane mock upgrade script
+run_test "Control plane mock script execution" "bash ${CP_SCRIPT}"
+
+# 6. Run worker node mock upgrade script
+run_test "Worker mock script execution" "bash ${WORKER_SCRIPT}"
+
+echo "=========================================================="
+if [[ ${FAILED} -eq 0 ]]; then
+    echo " All Kubeadm Upgrade drill tests PASSED!"
+    exit 0
+else
+    echo " ${FAILED} test(s) FAILED in upgrade drill."
+    exit 1
+fi

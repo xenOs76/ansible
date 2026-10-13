@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Deploy backend pods and a broken service with label and port mismatches
+echo "=== Setting up Broken Service Scenario ==="
+
+kubectl apply -f - << 'EOF'
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cka-order-backend
+  namespace: default
+  labels:
+    app.kubernetes.io/part-of: cka-lab
+    app: order-api
+    tier: backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: order-api
+      tier: backend
+  template:
+    metadata:
+      labels:
+        app: order-api
+        tier: backend
+    spec:
+      containers:
+      - name: web
+        image: nginx:alpine
+        ports:
+        - containerPort: 80
+        resources:
+          requests:
+            cpu: 10m
+            memory: 16Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cka-order-svc
+  namespace: default
+  labels:
+    app.kubernetes.io/part-of: cka-lab
+spec:
+  type: ClusterIP
+  selector:
+    # Deliberate typo: does not match 'order-api'
+    app: order-backend
+    tier: backend
+  ports:
+  - port: 8080
+    # Deliberate mismatch: targets 8888 instead of 80
+    targetPort: 8888
+EOF
+
+echo "Broken deployment and service created."
+echo "Notice endpoints are empty:"
+kubectl get endpoints cka-order-svc

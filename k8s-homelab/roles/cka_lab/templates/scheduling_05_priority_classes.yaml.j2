@@ -1,0 +1,19 @@
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: cka-high-priority
+  labels:
+    app.kubernetes.io/part-of: cka-lab
+value: 1000000
+globalDefault: false
+description: "High priority class for mission-critical workloads"
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: cka-low-priority
+  labels:
+    app.kubernetes.io/part-of: cka-lab
+value: 1000
+globalDefault: false
+description: "Low priority class for batch background workloads"

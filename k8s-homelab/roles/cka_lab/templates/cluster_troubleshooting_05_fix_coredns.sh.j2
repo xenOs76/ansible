@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Repair CoreDNS by restoring clean Corefile ConfigMap
+echo "=== Restoring CoreDNS Configuration ==="
+
+if [[ -f /tmp/coredns-backup.yaml ]]; then
+    kubectl apply -f /tmp/coredns-backup.yaml
+else
+    # Strip any invalid directive
+    kubectl get configmap coredns -n kube-system -o json \
+      | jq '.data.Corefile |= gsub("invalid_syntax_directive_error"; "")' \
+      | kubectl apply -f -
+fi
+
+kubectl rollout restart deployment coredns -n kube-system
+kubectl rollout status deployment coredns -n kube-system --timeout=60s
+
+echo "=== CoreDNS successfully restored and healthy! ==="

@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Fix the broken service by patching selector and targetPort
+echo "=== Fixing Service Selector & Target Port ==="
+
+kubectl patch service cka-order-svc -n default --type='merge' -p '{
+  "spec": {
+    "selector": {
+      "app": "order-api",
+      "tier": "backend"
+    },
+    "ports": [
+      {
+        "port": 8080,
+        "targetPort": 80
+      }
+    ]
+  }
+}'
+
+echo "Waiting for EndpointSlice synchronization..."
+sleep 3
+kubectl get endpoints cka-order-svc
+echo "=== Service successfully fixed! ==="

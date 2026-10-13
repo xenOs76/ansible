@@ -1,0 +1,35 @@
+# Worker Node Static Pod Provisioning
+
+Configure a worker node's kubelet to manage a static pod without API server intervention.
+
+## Exam Importance & Requirements
+
+- **Domain**: Troubleshooting & Workloads.
+- **Exam Pattern**: *"On worker node `kube-worker-1`, run a static pod named `my-worker-web` using image `nginx:alpine`."*
+- **Kubelet Discovery**:
+  1. Inspect kubelet systemd service or config file at `/var/lib/kubelet/config.yaml`.
+  2. Locate `staticPodPath:` (defaults to `/etc/kubernetes/manifests`).
+  3. If missing, configure `staticPodPath: /etc/kubernetes/manifests` and restart `systemctl restart kubelet`.
+  4. Place pod YAML directly into `/etc/kubernetes/manifests/`.
+  5. The kubelet automatically creates the static pod and registers a read-only mirror pod in the API server with name `<pod-name>-<node-name>`.
+
+---
+
+## Commands to Practice
+
+```bash
+# 1. SSH into worker node
+ssh kube-worker-1
+
+# 2. Check staticPodPath setting in kubelet config
+grep -i "staticpod" /var/lib/kubelet/config.yaml
+
+# 3. Ensure manifests directory exists
+sudo mkdir -p /etc/kubernetes/manifests
+
+# 4. Copy or generate static pod manifest
+sudo cp static-web.yaml /etc/kubernetes/manifests/
+
+# 5. On control plane, verify mirror pod
+kubectl get pods -o wide | grep static-web
+```

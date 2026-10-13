@@ -1,0 +1,23 @@
+# Container Runtime (CRI / containerd) Diagnostics
+
+Troubleshoot the underlying container runtime when pods fail to start or the node reports `NotReady`.
+
+## Common Commands
+
+```bash
+# 1. Inspect containerd daemon status
+sudo systemctl status containerd
+
+# 2. View containerd journal logs
+sudo journalctl -u containerd -e --no-pager
+
+# 3. Use crictl CLI for container inspections
+sudo crictl pods
+sudo crictl ps -a
+sudo crictl images
+sudo crictl info
+
+# 4. Inspect container log files directly on filesystem
+ls -l /var/log/pods/
+sudo tail -n 50 /var/log/containers/<pod-name>*.log
+```

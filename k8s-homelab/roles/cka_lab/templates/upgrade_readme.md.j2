@@ -1,0 +1,110 @@
+# CKA Drill: Manual Kubeadm Cluster Upgrade (`upgrade`)
+
+Hands-on rehearsal of the manual Kubernetes node and cluster upgrade sequence using `kubeadm`, `kubelet`, and `kubectl`.
+
+## Exam Importance & Constraints
+
+- **Exam Domain**: Cluster Architecture, Installation & Configuration (25%).
+- **Frequency**: Present in nearly every CKA exam session.
+- **Rules of Thumb**:
+  - Always upgrade the control plane node before any worker nodes.
+  - Never skip minor versions (e.g. 1.33 $\to$ 1.34 $\to$ 1.35; never 1.33 $\to$ 1.35 directly).
+  - Version skew: `kubelet` must never be newer than `kube-apiserver`, and can be at most 1 minor version older.
+  - Always `drain` before upgrading `kubelet` on worker nodes; unhold packages before running `apt-get install`.
+
+---
+
+## 1. Control Plane Node Upgrade Procedure
+
+### Step 1: Drain the Control Plane Node (if scheduling application pods)
+
+```bash
+kubectl drain <control-plane-node> --ignore-daemonsets --delete-emptydir-data
+```
+
+### Step 2: Upgrade kubeadm
+
+```bash
+sudo apt-mark unhold kubeadm
+sudo apt-get update && sudo apt-get install -y kubeadm=1.34.x-1.1
+sudo apt-mark hold kubeadm
+```
+
+### Step 3: Run Upgrade Plan and Apply
+
+```bash
+sudo kubeadm upgrade plan
+sudo kubeadm upgrade apply v1.34.x
+```
+
+### Step 4: Upgrade kubelet and kubectl
+
+```bash
+sudo apt-mark unhold kubelet kubectl
+sudo apt-get install -y kubelet=1.34.x-1.1 kubectl=1.34.x-1.1
+sudo apt-mark hold kubelet kubectl
+```
+
+### Step 5: Reload and Restart kubelet
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart kubelet
+```
+
+### Step 6: Uncordon the Control Plane Node
+
+```bash
+kubectl uncordon <control-plane-node>
+```
+
+---
+
+## 2. Worker Node Upgrade Procedure
+
+### Step 1: Drain Worker Node (from Control Plane)
+
+```bash
+kubectl drain <worker-node> --ignore-daemonsets --delete-emptydir-data
+```
+
+### Step 2: SSH into Worker Node & Upgrade kubeadm
+
+```bash
+ssh <worker-node>
+sudo apt-mark unhold kubeadm
+sudo apt-get update && sudo apt-get install -y kubeadm=1.34.x-1.1
+sudo apt-mark hold kubeadm
+```
+
+### Step 3: Upgrade Kubelet Configuration
+
+```bash
+sudo kubeadm upgrade node
+```
+
+### Step 4: Upgrade kubelet and kubectl Packages
+
+```bash
+sudo apt-mark unhold kubelet kubectl
+sudo apt-get install -y kubelet=1.34.x-1.1 kubectl=1.34.x-1.1
+sudo apt-mark hold kubelet kubectl
+sudo systemctl daemon-reload
+sudo systemctl restart kubelet
+exit
+```
+
+### Step 5: Uncordon Worker Node (from Control Plane)
+
+```bash
+kubectl uncordon <worker-node>
+kubectl get nodes
+```
+
+---
+
+## Practice Scripts
+
+- `01-control-plane/mock-control-plane-upgrade.sh`: Walkthrough and validation of control plane upgrade commands.
+- `02-worker-node/mock-worker-upgrade.sh`: Walkthrough and validation of worker node upgrade commands.
+- `test-upgrade-drills.sh`: Automated test checking `kubeadm upgrade plan` availability and package hold status.

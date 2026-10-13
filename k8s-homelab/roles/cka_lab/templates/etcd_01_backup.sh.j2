@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Scenario 15: etcd Snapshot Backup Script
+BACKUP_DIR="${1:-/var/lib/etcd-backup}"
+SNAPSHOT_FILE="${BACKUP_DIR}/etcd-snapshot.db"
+MANIFEST="/etc/kubernetes/manifests/etcd.yaml"
+
+echo "=== CKA Practice: etcd Snapshot Backup ==="
+
+if [[ ! -f "${MANIFEST}" ]]; then
+    echo "ERROR: etcd static pod manifest not found at ${MANIFEST}"
+    exit 1
+fi
+
+echo "[1/4] Extracting TLS parameters from ${MANIFEST}..."
+CACERT=$(grep -m1 -- "--trusted-ca-file=" "${MANIFEST}" | cut -d= -f2)
+CERT=$(grep -m1 -- "--cert-file=" "${MANIFEST}" | cut -d= -f2)
+KEY=$(grep -m1 -- "--key-file=" "${MANIFEST}" | cut -d= -f2)
+ENDPOINT="https://127.0.0.1:2379"
+
+echo "  CA:       ${CACERT}"
+echo "  Cert:     ${CERT}"
+echo "  Key:      ${KEY}"
+echo "  Endpoint: ${ENDPOINT}"
+
+echo "[2/4] Verifying etcd cluster health..."
+ETCDCTL_API=3 sudo etcdctl \
+    --endpoints="${ENDPOINT}" \
+    --cacert="${CACERT}" \
+    --cert="${CERT}" \
+    --key="${KEY}" \
+    endpoint health
+
+echo "[3/4] Creating backup directory and saving snapshot to ${SNAPSHOT_FILE}..."
+sudo mkdir -p "${BACKUP_DIR}"
+ETCDCTL_API=3 sudo etcdctl \
+    --endpoints="${ENDPOINT}" \
+    --cacert="${CACERT}" \
+    --cert="${CERT}" \
+    --key="${KEY}" \
+    snapshot save "${SNAPSHOT_FILE}"
+
+echo "[4/4] Verifying snapshot integrity..."
+ETCDCTL_API=3 sudo etcdctl --write-out=table snapshot status "${SNAPSHOT_FILE}"
+
+echo "=== Backup completed successfully: ${SNAPSHOT_FILE} ==="

@@ -40,9 +40,14 @@ In the CKA exam, the **Pod** is the central building block for workloads and con
 │   ├── cka-lab-immutable-app-v1.yaml          # Initial Pod specification (v1)
 │   ├── cka-lab-immutable-app-v2.yaml          # Updated Pod specification (v2)
 │   └── replace-drill.sh                       # Immutability rejection & force replacement drill
-└── 06-namespaces-context/
-    ├── cka-lab-namespace.yaml                 # Namespace manifest (cka-lab-staging)
-    └── namespace-context-drill.sh             # Context namespace preference drill
+├── 06-namespaces-context/
+│   ├── cka-lab-namespace.yaml                 # Namespace manifest (cka-lab-staging)
+│   └── namespace-context-drill.sh             # Context namespace preference drill
+└── 07-quarantine-autopsy/
+    ├── 01-quarantine-app.yaml                 # 3-replica web deployment
+    ├── quarantine-drill.sh                    # Live pod label mutation and autopsy drill
+    ├── test-quarantine.sh                     # Automated quarantine verification
+    └── README.md                              # Autopsy troubleshooting guide
 ```
 
 ---
@@ -235,6 +240,15 @@ In the CKA exam, the **Pod** is the central building block for workloads and con
 
    ```bash
    kubectl delete namespace {{ cka_lab_pods_staging_namespace }}
+   ```
+
+### Drill 7: Pod Quarantine & Autopsy (`07-quarantine-autopsy/`)
+
+1. **Isolate Misbehaving Pod for Offline Debugging**:
+
+   ```bash
+   cd {{ cka_lab_pods_dir }}/07-quarantine-autopsy
+   ./quarantine-drill.sh
    ```
 
 ---

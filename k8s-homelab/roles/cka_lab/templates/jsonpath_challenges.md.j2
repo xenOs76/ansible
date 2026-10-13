@@ -1,0 +1,49 @@
+# JSONPath Exam Challenges
+
+Try to solve each challenge using `kubectl` and `-o jsonpath` or `--sort-by` in under 60 seconds without consulting `solutions.md`.
+
+## Challenge 1: Node Internal IPs
+
+Extract all node internal IPs separated by spaces.
+
+- Target Output: e.g. `192.168.56.20 192.168.56.21 192.168.56.22`
+
+## Challenge 2: Node Architecture and OS Images
+
+Display each node's name, architecture, and OS image separated by tabs.
+
+- Fields: `metadata.name`, `status.nodeInfo.architecture`, `status.nodeInfo.osImage`
+
+## Challenge 3: kube-system Pod Names
+
+Extract the name of every pod currently in the `kube-system` namespace, each on a new line.
+
+## Challenge 4: Control Plane Component Images
+
+Extract the image used by the `kube-apiserver` static pod in `kube-system`.
+
+## Challenge 5: Pods Sorted by Creation Timestamp
+
+List all pods in `kube-system` sorted chronologically by `metadata.creationTimestamp`.
+
+## Challenge 6: Service Names and ClusterIPs
+
+List all Services across all namespaces with format `NAME: <name>, CLUSTER-IP: <ip>`.
+
+## Challenge 7: Find Non-Running Pods
+
+Extract the names of any pods in the cluster whose `status.phase` is NOT equal to `Running`.
+
+## Challenge 8: ConfigMap Keys
+
+Extract all data keys contained in the `kube-root-ca.crt` ConfigMap in the `default` namespace.
+
+## Challenge 9: PersistentVolume Capacities
+
+Extract all PV names and their allocated storage capacity.
+
+## Challenge 10: Node Capacity CPU and Memory
+
+Extract each node's name, total CPU count, and allocatable memory.
+
+- Fields: `status.capacity.cpu`, `status.allocatable.memory`
