@@ -33,7 +33,35 @@ In Kubernetes, the in-tree `iscsi` volume plugin leverages host-level `open-iscs
 
 ---
 
-## 3. Host Discovery & Sanity Checks
+## 3. Official Exam References & Quick Lookups
+
+### Permitted Exam Documentation
+
+- **Persistent Volumes**: [Persistent Volumes](https://kubernetes.io/docs/concepts/storage/persistent-volumes/) `[EXAM ALLOWED]`
+- **Access Modes (ReadWriteOnce)**: [Persistent Volumes - Access Modes](https://kubernetes.io/docs/concepts/storage/persistent-volumes/#access-modes) `[EXAM ALLOWED]`
+- **Volume Mode (Block vs Filesystem)**: [Persistent Volumes - Volume Mode](https://kubernetes.io/docs/concepts/storage/persistent-volumes/#volume-mode) `[EXAM ALLOWED]`
+
+### In-Exam Search Keywords
+
+- `"persistent volume access modes"`
+- `"volume mode block"`
+- `"readwriteonce"`
+
+### Terminal Fast Lookups (`kubectl explain`)
+
+```bash
+kubectl explain pv.spec.accessModes
+kubectl explain pv.spec.volumeMode
+kubectl explain pod.spec.volumes.iscsi
+```
+
+### Exam Context & Permissibility Notes
+
+- Linux-IO (`LIO`) target and `iscsiadm` provide the backing block system `[HOMELAB AUXILIARY]`. In the CKA exam, candidates configure the standard Kubernetes volume access modes (`ReadWriteOnce`, `ReadOnlyMany`, `ReadWriteMany`) and understand single-node attachment constraints.
+
+---
+
+## 4. Host Discovery & Sanity Checks
 
 Before scheduling pods, trainees can test iSCSI portal visibility from any worker node (`kube-worker-1`):
 

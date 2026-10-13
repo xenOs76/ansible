@@ -55,6 +55,43 @@ All NFS examples connect to the control plane NFS export at:
 
 ---
 
+## Official Exam References & Quick Lookups
+
+### Permitted Exam Documentation
+
+- **Core Volumes Concept**: [Volumes](https://kubernetes.io/docs/concepts/storage/volumes/) `[EXAM ALLOWED]`
+- **Persistent Volumes & Claims**: [Persistent Volumes](https://kubernetes.io/docs/concepts/storage/persistent-volumes/) `[EXAM ALLOWED]`
+- **Configure Pod with Persistent Volume**: [Configure a Pod to Use a PersistentVolume for Storage](https://kubernetes.io/docs/tasks/configure-pod-container/configure-persistent-volume-storage/) `[EXAM ALLOWED]`
+- **PV Reclaim Policy Mutation**: [Change the Reclaim Policy of a PersistentVolume](https://kubernetes.io/docs/tasks/administer-cluster/change-pv-reclaim-policy/) `[EXAM ALLOWED]`
+
+### In-Exam Search Keywords
+>
+> *Type these exact phrases into the kubernetes.io search bar to jump directly to copy-pasteable YAML templates:*
+
+- `"persistent volume"`
+- `"persistent volume claim"`
+- `"pv reclaim policy"`
+- `"emptydir volume"`
+- `"hostpath"`
+
+### Terminal Fast Lookups (`kubectl explain`)
+
+```bash
+# Rapid schema discovery without leaving terminal
+kubectl explain pv.spec
+kubectl explain pv.spec.persistentVolumeReclaimPolicy
+kubectl explain pvc.spec
+kubectl explain pod.spec.volumes.nfs
+kubectl explain pod.spec.volumes.emptyDir
+kubectl explain pod.spec.volumes.hostPath
+```
+
+### Exam Context & Permissibility Notes
+
+- Ceph RBD (`06-rbd/`) and iSCSI (`07-iscsi/`) represent homelab block storage simulators `[HOMELAB AUXILIARY]`. In the CKA exam, candidates interact with standard Kubernetes PersistentVolumes (`accessModes`, `capacity`, `hostPath`, `nfs`, `persistentVolumeReclaimPolicy`) and volume mounts.
+
+---
+
 ## CKA Exam Drills
 
 ### Drill 1: Inline NFS Volume Mount

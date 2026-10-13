@@ -2,6 +2,28 @@
 
 Troubleshoot why a Kubernetes Service is unreachable or returns `Connection refused`.
 
+## Official Exam References & Quick Lookups
+
+### Permitted Exam Documentation
+
+- **Debugging Services**: [Debug Services](https://kubernetes.io/docs/tasks/debug/debug-application/debug-service/) `[EXAM ALLOWED]`
+- **Services Specification**: [Services](https://kubernetes.io/docs/concepts/services-networking/service/) `[EXAM ALLOWED]`
+
+### In-Exam Search Keywords
+
+- `"debug service"`
+- `"services and endpoints"`
+
+### Terminal Fast Lookups (`kubectl`)
+
+```bash
+kubectl get endpoints <service-name>
+kubectl get endpointslices -l kubernetes.io/service-name=<service-name>
+kubectl describe svc <service-name>
+```
+
+---
+
 ## Diagnostic Steps
 
 1. **Check Service and Endpoints**:
@@ -14,7 +36,7 @@ Troubleshoot why a Kubernetes Service is unreachable or returns `Connection refu
 
    If Endpoints show `<none>`, the Service's `spec.selector` does not match the target Pod's `metadata.labels`.
 
-2. **Compare Labels**:
+1. **Compare Labels**:
 
    ```bash
    # Check service selector:
@@ -23,7 +45,7 @@ Troubleshoot why a Kubernetes Service is unreachable or returns `Connection refu
    kubectl get pods --show-labels
    ```
 
-3. **Check Target Port**:
+1. **Check Target Port**:
 
    Verify that `spec.ports[*].targetPort` matches the container's listening port.
 

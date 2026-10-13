@@ -40,7 +40,44 @@ To prevent memory starvation on local 2GB worker VMs, this lab runs LitmusChaos 
 
 ---
 
-## 2. Walkthrough & Practice Drills
+## 2. Official Exam References & Quick Lookups
+
+### Permitted Exam Documentation
+
+- **Debugging Pods (OOM / CrashLoopBackOff)**: [Debugging Pods](https://kubernetes.io/docs/tasks/debug/debug-application/debug-pods/) `[EXAM ALLOWED]`
+- **Pod Quality of Service (QoS) Classes**: [Pod Quality of Service (QoS) Classes](https://kubernetes.io/docs/concepts/workloads/pods/pod-qos-class/) `[EXAM ALLOWED]`
+- **Node-Pressure Eviction Mechanics**: [Node-pressure Eviction](https://kubernetes.io/docs/concepts/scheduling-eviction/node-pressure-eviction/) `[EXAM ALLOWED]`
+- **Ephemeral Debug Containers**: [Debugging with Ephemeral Debug Containers](https://kubernetes.io/docs/tasks/debug/debug-application/debug-running-pod/#ephemeral-container) `[EXAM ALLOWED]`
+
+### In-Exam Search Keywords
+>
+> *Type these exact phrases into the kubernetes.io search bar to jump directly to copy-pasteable YAML templates:*
+
+- `"debug pods"`
+- `"oomkilled"`
+- `"pod qos class"`
+- `"node pressure eviction"`
+
+### Terminal Fast Lookups (`kubectl`)
+
+```bash
+# Triage OOMKilled containers
+kubectl describe pod <pod-name> | grep -E "Exit Code|Reason|Last State"
+
+# Launch ephemeral debug container
+kubectl debug pod/<pod-name> -it --image=busybox:1.36 --target=<container-name>
+
+# Inspect node pressure conditions
+kubectl describe node <node-name> | grep -A 6 Conditions
+```
+
+### Exam Context & Permissibility Notes
+
+- Headless LitmusChaos is a homelab failure injection simulator `[HOMELAB AUXILIARY]`. The exam environment will never have Litmus installed or permitted in the browser; all troubleshooting drills must be diagnosed and resolved using standard Kubernetes primitives and inspection commands.
+
+---
+
+## 3. Walkthrough & Practice Drills
 
 ### One-Time Setup: Install Headless Operator
 

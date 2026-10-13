@@ -12,7 +12,7 @@ The ReplicaSet controller identifies which Pods belong to its control loop exclu
 
 1. **`spec.selector.matchLabels`**:
    Specifies the exact key-value pairs required for a Pod to be claimed and managed by this Deployment's ReplicaSet.
-2. **`spec.template.metadata.labels`**:
+1. **`spec.template.metadata.labels`**:
    Defines the labels stamped onto each new Pod created by this Deployment.
 
 ### The Validation Rule
@@ -23,7 +23,28 @@ If a label key-value specified in `spec.selector.matchLabels` is missing or has 
 
 ---
 
-## 2. Hands-on Practice Drill
+## 2. Official Exam References & Quick Lookups
+
+### Permitted Exam Documentation
+
+- **Deployments - Label Selector**: [Deployments - Selector](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#selector) `[EXAM ALLOWED]`
+- **Labels and Selectors**: [Labels and Selectors](https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/) `[EXAM ALLOWED]`
+
+### In-Exam Search Keywords
+
+- `"deployment selector"`
+- `"labels and selectors"`
+
+### Terminal Fast Lookups (`kubectl explain`)
+
+```bash
+kubectl explain deployment.spec.selector.matchLabels
+kubectl explain deployment.spec.template.metadata.labels
+```
+
+---
+
+## 3. Hands-on Practice Drill
 
 ### Step 1: Attempt to Apply the Broken Manifest
 

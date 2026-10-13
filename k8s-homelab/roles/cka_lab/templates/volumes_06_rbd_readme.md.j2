@@ -32,7 +32,36 @@ In this lab environment:
 
 ---
 
-## 3. Hands-on Drills
+## 3. Official Exam References & Quick Lookups
+
+### Permitted Exam Documentation
+
+- **Persistent Volumes**: [Persistent Volumes](https://kubernetes.io/docs/concepts/storage/persistent-volumes/) `[EXAM ALLOWED]`
+- **Raw Block Volumes**: [Persistent Volumes - Raw Block Volume](https://kubernetes.io/docs/concepts/storage/persistent-volumes/#raw-block-volume) `[EXAM ALLOWED]`
+- **Expanding Persistent Volume Claims**: [Expanding Persistent Volumes](https://kubernetes.io/docs/concepts/storage/persistent-volumes/#expanding-persistent-volumes-claims) `[EXAM ALLOWED]`
+
+### In-Exam Search Keywords
+
+- `"raw block volume"`
+- `"volumeMode block"`
+- `"volumeDevices"`
+- `"expanding persistent volume"`
+
+### Terminal Fast Lookups (`kubectl explain`)
+
+```bash
+kubectl explain pvc.spec.volumeMode
+kubectl explain pod.spec.containers.volumeDevices
+kubectl explain pv.spec.csi
+```
+
+### Exam Context & Permissibility Notes
+
+- Ceph RBD provides the cluster backing storage `[HOMELAB AUXILIARY]`. In the CKA exam, candidates configure the standard Kubernetes `volumeMode: Block` with `volumeDevices` (instead of `volumeMounts`) and dynamic PVC expansion against any supported CSI driver.
+
+---
+
+## 4. Hands-on Drills
 
 ### Drill 1: Dynamic RBD Filesystem Volume
 

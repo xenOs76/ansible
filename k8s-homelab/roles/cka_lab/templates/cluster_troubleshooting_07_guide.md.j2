@@ -2,16 +2,37 @@
 
 Configure a worker node's kubelet to manage a static pod without API server intervention.
 
+## Official Exam References & Quick Lookups
+
+### Permitted Exam Documentation
+
+- **Create Static Pods**: [Create Static Pods](https://kubernetes.io/docs/tasks/configure-pod-container/static-pod/) `[EXAM ALLOWED]`
+- **kubelet Configuration**: [kubelet Configuration](https://kubernetes.io/docs/reference/config-api/kubelet-config.v1beta1/) `[EXAM ALLOWED]`
+
+### In-Exam Search Keywords
+
+- `"static pod"`
+- `"staticpodpath"`
+
+### Terminal Fast Lookups
+
+```bash
+grep -i "staticpod" /var/lib/kubelet/config.yaml
+sudo systemctl restart kubelet
+```
+
+---
+
 ## Exam Importance & Requirements
 
 - **Domain**: Troubleshooting & Workloads.
 - **Exam Pattern**: *"On worker node `kube-worker-1`, run a static pod named `my-worker-web` using image `nginx:alpine`."*
 - **Kubelet Discovery**:
   1. Inspect kubelet systemd service or config file at `/var/lib/kubelet/config.yaml`.
-  2. Locate `staticPodPath:` (defaults to `/etc/kubernetes/manifests`).
-  3. If missing, configure `staticPodPath: /etc/kubernetes/manifests` and restart `systemctl restart kubelet`.
-  4. Place pod YAML directly into `/etc/kubernetes/manifests/`.
-  5. The kubelet automatically creates the static pod and registers a read-only mirror pod in the API server with name `<pod-name>-<node-name>`.
+  1. Locate `staticPodPath:` (defaults to `/etc/kubernetes/manifests`).
+  1. If missing, configure `staticPodPath: /etc/kubernetes/manifests` and restart `systemctl restart kubelet`.
+  1. Place pod YAML directly into `/etc/kubernetes/manifests/`.
+  1. The kubelet automatically creates the static pod and registers a read-only mirror pod in the API server with name `<pod-name>-<node-name>`.
 
 ---
 

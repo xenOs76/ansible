@@ -2,11 +2,33 @@
 
 Troubleshoot and restore DNS service discovery within the Kubernetes cluster.
 
+## Official Exam References & Quick Lookups
+
+### Permitted Exam Documentation
+
+- **Debugging DNS Resolution**: [Debugging DNS Resolution](https://kubernetes.io/docs/tasks/administer-cluster/dns-debugging-resolution/) `[EXAM ALLOWED]`
+- **Customizing DNS Service**: [Customizing DNS Service](https://kubernetes.io/docs/tasks/administer-cluster/dns-custom-nameservers/) `[EXAM ALLOWED]`
+
+### In-Exam Search Keywords
+
+- `"dns debugging resolution"`
+- `"coredns"`
+
+### Terminal Fast Lookups (`kubectl`)
+
+```bash
+kubectl get configmap coredns -n kube-system -o yaml
+kubectl logs -n kube-system -l k8s-app=kube-dns --tail=50
+kubectl rollout restart deployment coredns -n kube-system
+```
+
+---
+
 ## Common CoreDNS Failure Modes
 
 1. **Syntax Error in Corefile**: Malformed directives in the `coredns` ConfigMap in `kube-system` cause CoreDNS pods to CrashLoopBackOff.
-2. **Upstream Forward Loop / Port Conflict**: Improper `/etc/resolv.conf` loops or forward plugin configuration.
-3. **Kube-DNS Service Selector Mismatch**: The `kube-dns` service (`10.96.0.10`) must select `k8s-app: kube-dns`.
+1. **Upstream Forward Loop / Port Conflict**: Improper `/etc/resolv.conf` loops or forward plugin configuration.
+1. **Kube-DNS Service Selector Mismatch**: The `kube-dns` service (`10.96.0.10`) must select `k8s-app: kube-dns`.
 
 ---
 

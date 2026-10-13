@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **CKA Exam Documentation & Canonical Reference Mapping (`roles/cka_lab`)**: Comprehensive audit and enrichment of all 18 CKA practice scenarios and on-node training guides with officially permitted CKA exam documentation links (`kubernetes.io/docs/`, `helm.sh/docs/`, `gateway-api.sigs.k8s.io`), in-exam search keywords, fast `kubectl explain` terminal lookups, and explicit boundaries between allowed browser resources and homelab auxiliary components.
 - **etcd Snapshot Backup & Restore (`~/cka/etcd`)**: Static pod TLS discovery, snapshot verification, and data-dir restore with hostPath manifest updates.
 - **Manual Kubeadm Cluster Upgrade (`~/cka/upgrade`)**: Step-by-step control plane and worker node upgrade procedures with drain/uncordon drills.
 - **Speed JSONPath Challenges (`~/cka/jsonpath`)**: Rapid query evaluation harness and cheatsheets covering high-frequency exam questions.

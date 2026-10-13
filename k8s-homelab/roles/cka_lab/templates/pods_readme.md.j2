@@ -52,7 +52,39 @@ In the CKA exam, the **Pod** is the central building block for workloads and con
 
 ---
 
-## 2. Walkthrough & Exam Drills
+## 2. Official Exam References & Quick Lookups
+
+### Permitted Exam Documentation
+
+- **Core Pod Concepts**: [Pods](https://kubernetes.io/docs/concepts/workloads/pods/) `[EXAM ALLOWED]`
+- **Pod Lifecycle & Container States**: [Pod Lifecycle](https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/) `[EXAM ALLOWED]`
+- **Namespaces Overview**: [Namespaces](https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/) `[EXAM ALLOWED]`
+- **Command & Arguments Overrides**: [Define a Command and Arguments for a Container](https://kubernetes.io/docs/tasks/inject-data-application/define-command-argument-container/) `[EXAM ALLOWED]`
+- **Debugging & Container Troubleshooting**: [Debugging Pods](https://kubernetes.io/docs/tasks/debug/debug-application/debug-pods/) `[EXAM ALLOWED]`
+- **kubectl Cheat Sheet**: [kubectl Cheat Sheet - Creating Objects](https://kubernetes.io/docs/reference/kubectl/cheatsheet/#creating-objects) `[EXAM ALLOWED]`
+
+### In-Exam Search Keywords
+>
+> *Type these exact phrases into the kubernetes.io search bar to jump directly to copy-pasteable YAML templates:*
+
+- `"pod lifecycle"`
+- `"container states"`
+- `"restartpolicy"`
+- `"command arguments pod"`
+
+### Terminal Fast Lookups (`kubectl explain`)
+
+```bash
+# Rapid schema discovery without leaving terminal
+kubectl explain pod.spec.containers.command
+kubectl explain pod.spec.containers.args
+kubectl explain pod.spec.restartPolicy
+kubectl explain pod.spec.containers.env
+```
+
+---
+
+## 3. Walkthrough & Exam Drills
 
 ### Drill 1: Imperative vs. Declarative Pod Creation (`01-imperative-declarative/`)
 

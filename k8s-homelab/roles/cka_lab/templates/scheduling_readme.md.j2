@@ -46,7 +46,46 @@ Kubernetes scheduling governs how the control plane places workloads across clus
 
 ---
 
-## 2. Walkthrough & Exam Drills
+## 2. Official Exam References & Quick Lookups
+
+### Permitted Exam Documentation
+
+- **Taints & Tolerations**: [Taints and Tolerations](https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/) `[EXAM ALLOWED]`
+- **Node & Pod Affinities**: [Assigning Pods to Nodes](https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/) `[EXAM ALLOWED]`
+- **Horizontal Pod Autoscaling**: [Horizontal Pod Autoscaling](https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/) `[EXAM ALLOWED]`
+- **Resource Quotas**: [Resource Quotas](https://kubernetes.io/docs/concepts/policy/resource-quotas/) `[EXAM ALLOWED]`
+- **Limit Ranges**: [Limit Ranges](https://kubernetes.io/docs/concepts/policy/limit-range/) `[EXAM ALLOWED]`
+- **Pod Priority & Preemption**: [Pod Priority and Preemption](https://kubernetes.io/docs/concepts/scheduling-eviction/pod-priority-preemption/) `[EXAM ALLOWED]`
+
+### In-Exam Search Keywords
+>
+> *Type these exact phrases into the kubernetes.io search bar to jump directly to copy-pasteable YAML templates:*
+
+- `"taints and tolerations"`
+- `"node affinity"`
+- `"pod anti affinity"`
+- `"horizontal pod autoscaler"`
+- `"resource quota"`
+- `"limit range"`
+- `"priority class"`
+
+### Terminal Fast Lookups (`kubectl explain`)
+
+```bash
+# Rapid schema discovery without leaving terminal
+kubectl explain pod.spec.tolerations
+kubectl explain pod.spec.affinity.nodeAffinity
+kubectl explain pod.spec.affinity.podAntiAffinity
+kubectl explain quota.spec.hard
+kubectl explain limitrange.spec.limits
+kubectl explain priorityclass
+kubectl taint nodes <node-name> key=value:NoSchedule
+kubectl taint nodes <node-name> key=value:NoSchedule-
+```
+
+---
+
+## 3. Walkthrough & Exam Drills
 
 ### Drill 1: Taints & Tolerations (`01-taints-tolerations/`)
 

@@ -33,7 +33,41 @@ Kubernetes provides controllers tailored for batch processing, node daemon servi
 
 ---
 
-## 2. Walkthrough & Exam Drills
+## 2. Official Exam References & Quick Lookups
+
+### Permitted Exam Documentation
+
+- **DaemonSets**: [DaemonSet](https://kubernetes.io/docs/concepts/workloads/controllers/daemonset/) `[EXAM ALLOWED]`
+- **Jobs**: [Jobs](https://kubernetes.io/docs/concepts/workloads/controllers/job/) `[EXAM ALLOWED]`
+- **CronJobs**: [CronJob](https://kubernetes.io/docs/concepts/workloads/controllers/cron-jobs/) `[EXAM ALLOWED]`
+- **Init Containers**: [Init Containers](https://kubernetes.io/docs/concepts/workloads/pods/init-containers/) `[EXAM ALLOWED]`
+- **Native Sidecar Containers**: [Native Sidecar Containers](https://kubernetes.io/docs/concepts/workloads/pods/sidecar-containers/) `[EXAM ALLOWED]`
+
+### In-Exam Search Keywords
+>
+> *Type these exact phrases into the kubernetes.io search bar to jump directly to copy-pasteable YAML templates:*
+
+- `"daemonset"`
+- `"job completions"`
+- `"cronjob concurrency"`
+- `"init container"`
+- `"sidecar container"`
+
+### Terminal Fast Lookups (`kubectl explain`)
+
+```bash
+# Rapid schema discovery without leaving terminal
+kubectl explain daemonset.spec
+kubectl explain job.spec.completions
+kubectl explain job.spec.parallelism
+kubectl explain cronjob.spec.schedule
+kubectl explain pod.spec.initContainers
+kubectl create cronjob my-job --image=busybox --schedule="*/5 * * * *" --dry-run=client -o yaml -- /bin/sh -c "echo hello"
+```
+
+---
+
+## 3. Walkthrough & Exam Drills
 
 ### Drill 1: DaemonSet Deployment (`01-daemonsets/`)
 

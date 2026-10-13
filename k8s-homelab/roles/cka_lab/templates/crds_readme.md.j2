@@ -26,7 +26,30 @@ Operators and custom controllers rely on CRDs to extend the core Kubernetes API:
 
 ---
 
-## 2. Walkthrough & Exam Drills
+## 2. Official Exam References & Quick Lookups
+
+### Permitted Exam Documentation
+
+- **Custom Resources**: [Custom Resources](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/) `[EXAM ALLOWED]`
+- **Extend API with CustomResourceDefinitions**: [Extend the Kubernetes API with CustomResourceDefinitions](https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definitions/) `[EXAM ALLOWED]`
+
+### In-Exam Search Keywords
+
+- `"custom resource definitions"`
+- `"openapiv3schema"`
+- `"additional printer columns"`
+
+### Terminal Fast Lookups (`kubectl explain`)
+
+```bash
+kubectl explain crd.spec
+kubectl explain crd.spec.versions.schema.openAPIV3Schema
+kubectl explain crd.spec.names
+```
+
+---
+
+## 3. Walkthrough & Exam Drills
 
 ### Drill 1: Apply CRD & Inspect Established State (`01-crd-schema/`)
 

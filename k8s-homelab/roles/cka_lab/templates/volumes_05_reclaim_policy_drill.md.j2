@@ -9,6 +9,28 @@ Understanding the PV/PVC lifecycle states is a critical core concept in the CKA 
 
 ---
 
+## Official Exam References & Quick Lookups
+
+### Permitted Exam Documentation
+
+- **PV Reclaim Policy**: [Change the Reclaim Policy of a PersistentVolume](https://kubernetes.io/docs/tasks/administer-cluster/change-pv-reclaim-policy/) `[EXAM ALLOWED]`
+- **Persistent Volumes Lifecycle**: [Persistent Volumes - Lifecycle](https://kubernetes.io/docs/concepts/storage/persistent-volumes/#lifecycle) `[EXAM ALLOWED]`
+
+### In-Exam Search Keywords
+
+- `"change pv reclaim policy"`
+- `"persistent volume lifecycle"`
+
+### Terminal Fast Lookups (`kubectl explain`)
+
+```bash
+kubectl explain pv.spec.persistentVolumeReclaimPolicy
+kubectl explain pv.spec.claimRef
+kubectl patch pv <pv-name> -p '{"spec":{"persistentVolumeReclaimPolicy":"Retain"}}'
+```
+
+---
+
 ## Exercise: Observing the Retain Reclaim Policy
 
 ### Step 1: Create PV and PVC
@@ -39,14 +61,14 @@ kubectl get pv local-storage-pv
 Notice:
 
 1. Status is now `Released`.
-2. A new PVC cannot bind to this PV yet because `claimRef` is still assigned to the old PVC.
+1. A new PVC cannot bind to this PV yet because `claimRef` is still assigned to the old PVC.
 
 ### Step 4: Making the PV Available Again
 
 To reuse the PV for a new PVC:
 
 1. Manually clean any persistent data in the backing directory if needed.
-2. Edit the PV to remove the `claimRef` block:
+1. Edit the PV to remove the `claimRef` block:
 
 ```bash
 kubectl patch pv local-storage-pv -p '{"spec":{"claimRef": null}}'

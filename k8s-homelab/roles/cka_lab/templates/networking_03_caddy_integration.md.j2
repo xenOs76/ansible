@@ -33,7 +33,35 @@ External Client
 
 ---
 
-## 2. In-Cluster Gateway API Configuration
+## 2. Official Exam References & Quick Lookups
+
+### Permitted Exam Documentation
+
+- **Gateway API Official Site (CKA Allowed)**: [Gateway API Documentation](https://gateway-api.sigs.k8s.io/) `[EXAM ALLOWED]`
+- **Gateway API Concepts**: [Gateway API - Concepts](https://gateway-api.sigs.k8s.io/concepts/) `[EXAM ALLOWED]`
+- **HTTPRoute Specification**: [Gateway API - HTTPRoute](https://gateway-api.sigs.k8s.io/api-types/httproute/) `[EXAM ALLOWED]`
+
+### In-Exam Search Keywords
+
+- `"gateway api"`
+- `"httproute"`
+- `"gatewayclass"`
+
+### Terminal Fast Lookups (`kubectl explain`)
+
+```bash
+kubectl explain gateway.spec
+kubectl explain httproute.spec.rules
+kubectl explain httproute.spec.rules.backendRefs
+```
+
+### Exam Context & Permissibility Notes
+
+- Caddy acts as an external homelab reverse proxy `[HOMELAB AUXILIARY]`. In the CKA exam, candidates configure the standard in-cluster `Gateway` and `HTTPRoute` CRDs supported natively by Gateway API controllers.
+
+---
+
+## 3. In-Cluster Gateway API Configuration
 
 ### The Gateway Resource
 

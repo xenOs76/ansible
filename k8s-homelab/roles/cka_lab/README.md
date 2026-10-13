@@ -8,24 +8,69 @@ Dedicated Ansible role for provisioning isolated hands-on Certified Kubernetes A
 - **Environment Isolation**: Strictly excluded from standard deployment pipelines (`make preprod-deploy`, `playbooks/site.yml`) and never run against production environments.
 - **Modular Scenarios**: Scenarios map directly to CKA curriculum domains (Security, Troubleshooting, Maintenance, Networking) and are managed in modular task files under `tasks/`.
 
+## Official CKA Exam Allowed Resources & Navigation Guidelines
+
+Under official Linux Foundation / CNCF candidate policies, candidates may access specific documentation resources within the exam environment browser:
+
+1. **Permitted Web Resources**:
+   - **Kubernetes Documentation**: [https://kubernetes.io/docs/](https://kubernetes.io/docs/) (official docs, cheatsheet, API reference, tutorials).
+   - **Kubernetes Blog**: [https://kubernetes.io/blog/](https://kubernetes.io/blog/).
+   - **Helm Documentation**: [https://helm.sh/docs/](https://helm.sh/docs/).
+   - **Gateway API Documentation (CKA only)**: [https://gateway-api.sigs.k8s.io/](https://gateway-api.sigs.k8s.io/).
+   - **Task-Specific Documentation**: Direct links provided inside the question's Quick Reference box.
+2. **Search Policy**:
+   - Built-in search on allowed websites is permitted.
+   - External search engines (Google, Bing) and navigating away to unapproved third-party domains (e.g., StackOverflow, general GitHub issues) are **strictly prohibited** and trigger immediate exam invalidation.
+3. **Terminal Fast Aids**:
+   - `kubectl explain <resource>.<field>`: Fast offline schema discovery directly in your shell.
+   - CLI help: `kubectl --help`, `kubeadm --help`, `crictl --help`, `etcdctl --help`.
+   - Local documentation: `/usr/share/doc/` and system `man` pages.
+4. **Homelab Auxiliary vs. Exam Primitives**:
+   - The lab incorporates supplementary homelab tools (LitmusChaos, Caddy edge router, Ceph RBD, iSCSI). While valuable for practical learning, their documentation is **not** accessible during the actual exam. Scenarios note `[EXAM ALLOWED]` vs `[HOMELAB AUXILIARY]` so trainees cultivate exam-compliant reflexes.
+
 ## Scenarios
 
 ### Scenario 0: Initial Steps Reminder MOTD (`motd`)
 
 - **Domain**: Exam Workflow & Orientation.
+- **Exam References & Permitted Documentation**:
+  - [kubectl Cheat Sheet](https://kubernetes.io/docs/reference/kubectl/cheatsheet/) `[EXAM ALLOWED]`
+  - [Organizing Cluster Access Using kubeconfig Files](https://kubernetes.io/docs/concepts/configuration/organize-cluster-access-kubeconfig/) `[EXAM ALLOWED]`
+- **In-Exam Search Keywords**: `"kubectl cheat sheet"`, `"bash autocomplete"`, `"kubeconfig"`
+- **Fast Terminal Lookups**:
+
+  ```bash
+  source <(kubectl completion bash)
+  complete -o default -F __start_kubectl k
+  ```
+
 - **Objective**: Activate dynamic system MOTD reminder on `kube-control-plane` guiding trainees through manual preliminary setup steps:
   - Provisions `/home/vagrant/.motd` and registers system hook `/etc/update-motd.d/99-cka-training` (`0755`) for PAM SSH login display.
   - Reminds trainees to manually practice:
     1. Backup `~/.kube` directory.
-    2. Check/configure autocompletion for `kubectl`.
-    3. Check/configure bash alias `k`.
-    4. Check/configure autocompletion for bash alias `k`.
-    5. Check/configure safe deletion via `~/.kube/kuberc`.
+    1. Check/configure autocompletion for `kubectl`.
+    1. Check/configure bash alias `k`.
+    1. Check/configure autocompletion for bash alias `k`.
+    1. Check/configure safe deletion via `~/.kube/kuberc`.
   - Automatically deleted upon running full cluster deployment via `make preprod-deploy`.
 
 ### Scenario 1: User Authentication & RBAC (`user_rbac`)
 
-- **Domain**: Security & RBAC.
+- **Domain**: Security & RBAC (25%).
+- **Exam References & Permitted Documentation**:
+  - [Using RBAC Authorization](https://kubernetes.io/docs/reference/access-authn-authz/rbac/) `[EXAM ALLOWED]`
+  - [CertificateSigningRequests](https://kubernetes.io/docs/reference/access-authn-authz/certificate-signing-requests/) `[EXAM ALLOWED]`
+  - [Managing Service Accounts](https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/) `[EXAM ALLOWED]`
+- **In-Exam Search Keywords**: `"using rbac authorization"`, `"certificate signing request"`, `"service account token"`
+- **Fast Terminal Lookups**:
+
+  ```bash
+  kubectl explain role.rules
+  kubectl explain clusterrolebinding.subjects
+  kubectl create role developer --verb=create,get,list --resource=pods --dry-run=client -o yaml
+  kubectl create rolebinding dev-binding --role=developer --user=anna --dry-run=client -o yaml
+  ```
+
 - **Objective**: Create dedicated Kubernetes user authentication setups and minimal-permission contexts for RBAC authorization drills:
   1. **User `anna` Environment**:
      - Creates Linux user `anna` on `kube-control-plane` with membership in the `sudo` group and passwordless sudo privileges.
@@ -33,17 +78,31 @@ Dedicated Ansible role for provisioning isolated hands-on Certified Kubernetes A
      - Generates 2048-bit RSA private key (`anna.key`) and CSR (`anna.csr`) with Subject `/CN=anna/O=developers`.
      - Submits a Kubernetes `CertificateSigningRequest` (`certificates.k8s.io/v1`), approves it via `kubectl certificate approve`, and extracts the issued client certificate (`anna.crt`).
      - Assembles `/home/anna/.kube/config` with embedded client certificates and sets active context to `anna@kubernetes`.
-  2. **Vagrant User Context Script (`create-user-context.sh`)**:
+  1. **Vagrant User Context Script (`create-user-context.sh`)**:
      - Based on the [bmuschko/cka-crash-course Exercise 04](https://github.com/bmuschko/cka-crash-course/blob/master/exercises/04-rbac/create-user-context.sh) pattern.
      - Provisions `/home/vagrant/cka/rbac/create-user-context.sh` (with convenience symlink at `/home/vagrant/cka/create-user-context.sh`).
      - Dynamically generates private key, submits and approves CSR, and registers credentials and context `vagrant` in the vagrant user's `~/.kube/config` with minimal permissions (zero initial RBAC roles bound).
      - Includes a step-by-step drill guide at `/home/vagrant/cka/rbac/README.md`.
+  1. **ServiceAccount Token & RBAC Scenarios**:
+     - Dedicated ServiceAccount RBAC guide at `/home/vagrant/cka/rbac/serviceaccounts/README.md`.
 
 ### Scenario 2: Sample Secrets across Namespaces (`secrets`)
 
-- **Domain**: Configuration & Security.
+- **Domain**: Configuration & Security (25%).
+- **Exam References & Permitted Documentation**:
+  - [Secrets](https://kubernetes.io/docs/concepts/configuration/secret/) `[EXAM ALLOWED]`
+  - [Distribute Credentials Securely Using Secrets](https://kubernetes.io/docs/tasks/inject-data-application/distribute-credentials-secure/) `[EXAM ALLOWED]`
+  - [Managing Secrets using kubectl](https://kubernetes.io/docs/tasks/configmaps-secrets/managing-secret-using-kubectl/) `[EXAM ALLOWED]`
+- **In-Exam Search Keywords**: `"secret"`, `"secret envfrom"`, `"secret volume"`
+- **Fast Terminal Lookups**:
 
-- **Reference**: [Kubernetes Secrets Documentation](https://kubernetes.io/docs/concepts/configuration/secret/)
+  ```bash
+  kubectl create secret generic sample-secret --from-literal=password=secret123 --dry-run=client -o yaml
+  kubectl create secret tls sample-tls --cert=tls.crt --key=tls.key --dry-run=client -o yaml
+  kubectl explain pod.spec.volumes.secret
+  kubectl explain pod.spec.containers.envFrom.secretRef
+  ```
+
 - **Objective**: Ensure the `development` namespace exists and provision sample Secrets representing distinct built-in Kubernetes types across both `default` and `development` namespaces:
   - **`default` Namespace Secrets**:
     1. `sample-app-secret` (`type: Opaque`): Generic application credentials (`username`, `password`, `database-url`, `api-key`).
@@ -59,8 +118,21 @@ Dedicated Ansible role for provisioning isolated hands-on Certified Kubernetes A
 
 ### Scenario 3: Sample ConfigMaps & Kustomize Practice (`configmaps`)
 
-- **Domain**: Configuration & Kustomize.
-- **Reference**: [Kubernetes ConfigMaps Documentation](https://kubernetes.io/docs/concepts/configuration/configmap/)
+- **Domain**: Configuration & Kustomize (15%).
+- **Exam References & Permitted Documentation**:
+  - [ConfigMaps](https://kubernetes.io/docs/concepts/configuration/configmap/) `[EXAM ALLOWED]`
+  - [Configure a Pod to Use a ConfigMap](https://kubernetes.io/docs/tasks/configure-pod-container/configure-pod-configmap/) `[EXAM ALLOWED]`
+  - [Declarative Management Using Kustomize](https://kubernetes.io/docs/tasks/manage-kubernetes-objects/kustomization/) `[EXAM ALLOWED]`
+- **In-Exam Search Keywords**: `"configmap"`, `"immutable configmap"`, `"kustomize"`
+- **Fast Terminal Lookups**:
+
+  ```bash
+  kubectl create configmap app-cfg --from-literal=APP_ENV=prod --dry-run=client -o yaml
+  kubectl explain pod.spec.containers.envFrom.configMapRef
+  kubectl explain configmap.immutable
+  kubectl kustomize <directory>
+  ```
+
 - **Objective**: Provision sample ConfigMaps dynamically generated via Jinja2 templates across both `default` and `development` namespaces, and set up a hands-on Kustomize customization lab:
   - **`default` Namespace ConfigMaps**:
     1. `sample-app-config`: Property-like key-value environment pairs (`APP_ENV`, `LOG_LEVEL`, `MAX_CONNECTIONS`, `FEATURE_FLAG_ANALYTICS`, `SERVER_PORT`).
@@ -81,8 +153,24 @@ Dedicated Ansible role for provisioning isolated hands-on Certified Kubernetes A
 
 ### Scenario 4: Helm Tools, Monitoring & Gateway API (`helm`)
 
-- **Domain**: Cluster Architecture, Installation & Configuration.
-- **Reference**: [Helm Documentation](https://helm.sh/docs/), [Prometheus Community Helm Charts](https://github.com/prometheus-community/helm-charts), [NGINX Gateway Fabric](https://github.com/nginx/nginx-gateway-fabric) & [estahn/httpbingo Chart](https://github.com/estahn/charts/tree/main/charts/httpbingo)
+- **Domain**: Cluster Architecture, Installation & Configuration (25%).
+- **Exam References & Permitted Documentation**:
+  - [Helm Documentation](https://helm.sh/docs/) `[EXAM ALLOWED]`
+  - [Resource Metrics Pipeline](https://kubernetes.io/docs/tasks/debug/debug-cluster/resource-metrics-pipeline/) `[EXAM ALLOWED]`
+  - [Tools for Monitoring Resources](https://kubernetes.io/docs/tasks/debug/debug-cluster/resource-usage-monitoring/) `[EXAM ALLOWED]`
+  - [Gateway API Official Documentation](https://gateway-api.sigs.k8s.io/) `[EXAM ALLOWED]`
+- **In-Exam Search Keywords**: `"helm install"`, `"metrics server"`, `"kubectl top"`, `"gateway api"`
+- **Fast Terminal Lookups**:
+
+  ```bash
+  helm repo add <repo-name> <repo-url>
+  helm search repo <keyword>
+  helm install <release-name> <chart> --set key=value
+  helm list -A
+  kubectl top nodes
+  kubectl top pods -A --sort-by=cpu
+  ```
+
 - **Objective**: Provision standalone Helm deployment scripts for hands-on cluster addon management, monitoring, and Gateway API:
   1. `install-kube-metrics.sh`: Deploys Kubernetes Metrics Server with `--kubelet-insecure-tls` enabling `kubectl top nodes` and `kubectl top pods`.
   1. `install-kube-prometheus.sh`: Deploys the Prometheus Operator (`kube-prometheus-stack`) configured with Prometheus ONLY (Alertmanager, Grafana, node-exporter, and kube-state-metrics disabled) for minimal resource footprint on lab VMs.
@@ -95,239 +183,381 @@ Dedicated Ansible role for provisioning isolated hands-on Certified Kubernetes A
 
 ### Scenario 5: NFS Server & Storage Volumes Practice (`volumes`)
 
-- **Domain**: Storage & Volume Management.
-- **Objective**: Leverage the cluster NFS server (provisioned by `roles/nfs_server` during `make preprod-up`, exporting `/exports` with `nfs-server.local` mapped across nodes) to scaffold comprehensive CKA volume drills and sample dataset files under `/home/vagrant/cka/volumes/`:
-  1. **NFS Shared Storage (`01-nfs/`)**:
-     - Direct inline NFS Pod volume mount (`01-nfs-direct-pod.yaml`) referencing `server: nfs-server.local`.
-     - Multi-replica Deployment demonstrating shared read/write (`ReadWriteMany`) across worker nodes (`02-nfs-deployment-shared.yaml`).
-     - PersistentVolume (`03-nfs-pv.yaml`) and PersistentVolumeClaim (`04-nfs-pvc.yaml`) binding with consumer Pod (`05-nfs-pvc-pod.yaml`).
-  2. **Ephemeral Volumes (`02-emptydir/`)**:
-     - Multi-container sidecar data sharing via `emptyDir: {}` (`01-emptydir-sidecar-pod.yaml`).
-     - In-memory tmpfs volume with `medium: Memory` and `sizeLimit: 64Mi` (`02-emptydir-memory-pod.yaml`).
-  3. **Node Filesystem Volumes (`03-hostpath/`)**:
-     - `hostPath` mount with `type: DirectoryOrCreate` (`01-hostpath-pod.yaml`).
-     - Read-only inspection of node `/var/log` (`02-hostpath-log-viewer.yaml`).
-  4. **ConfigMap & Secret Volumes (`04-configmap-secret/`)**:
-     - ConfigMap mounted as volume files with specific items and `0644` permissions (`01-configmap-volume-pod.yaml`).
-     - Secret mounted as files with restricted permissions (`defaultMode: 0400`) (`02-secret-volume-pod.yaml`).
-  5. **PV/PVC Lifecycle & Expansion (`05-pv-pvc-lifecycle/`)**:
-     - Local manual PV binding with `Retain` reclaim policy (`01-local-pv-pvc.yaml`).
-     - PVC online volume expansion drill (`02-pvc-expansion.yaml`).
-     - Reclaim policy step-by-step drill guide (`03-reclaim-policy-drill.md`).
-  6. **Ceph RBD Block Storage (`06-rbd/`)**:
-     - Dynamic Ceph RBD PVC and consumer Pod with ext4 filesystem (`01-rbd-dynamic-filesystem.yaml`).
-     - Raw block volume with `volumeMode: Block` and `volumeDevices` (`02-rbd-raw-block.yaml`).
-     - Static Ceph CSI PV, PVC, and consumer Pod binding (`03-rbd-static-pv-pvc-pod.yaml`).
-     - Live online PVC volume expansion drill (`04-rbd-pvc-expansion.yaml`).
-     - Dedicated test suite: `test-rbd-volumes.sh`.
-  7. **iSCSI Block Storage (`07-iscsi/`)**:
-     - Direct inline iSCSI Pod volume mount (`01-iscsi-direct-pod.yaml`).
-     - Static PersistentVolume and PersistentVolumeClaim binding with consumer Pod (`02-iscsi-pv-pvc-pod.yaml`).
-     - Raw block volume with `volumeMode: Block` and `volumeDevices` (`03-iscsi-raw-block.yaml`).
-     - ReadWriteOnce multi-node single-writer conflict demonstration (`04-iscsi-two-nodes-rwo.yaml`).
-     - Authenticated iSCSI with CHAP credentials Secret (`05-iscsi-chap-secret.yaml`).
-     - Dedicated test suite: `test-iscsi-volumes.sh`.
+- **Domain**: Storage & Volume Management (10%).
+- **Exam References & Permitted Documentation**:
+  - [Volumes](https://kubernetes.io/docs/concepts/storage/volumes/) `[EXAM ALLOWED]`
+  - [Persistent Volumes](https://kubernetes.io/docs/concepts/storage/persistent-volumes/) `[EXAM ALLOWED]`
+  - [Configure a Pod to Use a PersistentVolume for Storage](https://kubernetes.io/docs/tasks/configure-pod-container/configure-persistent-volume-storage/) `[EXAM ALLOWED]`
+  - [Change the Reclaim Policy of a PersistentVolume](https://kubernetes.io/docs/tasks/administer-cluster/change-pv-reclaim-policy/) `[EXAM ALLOWED]`
+- **In-Exam Search Keywords**: `"persistent volume"`, `"persistent volume claim"`, `"pv reclaim policy"`, `"emptydir volume"`, `"hostpath"`
+- **Fast Terminal Lookups**:
+
+  ```bash
+  kubectl explain pv.spec
+  kubectl explain pvc.spec
+  kubectl explain pod.spec.volumes.nfs
+  kubectl explain pod.spec.volumes.emptyDir
+  kubectl explain pod.spec.volumes.hostPath
+  ```
+
+- **Exam Context & Permissibility Notes**:
+  - Ceph RBD and iSCSI targets represent homelab raw block volume configurations `[HOMELAB AUXILIARY]`. The exam tests standard Kubernetes PersistentVolumes (`accessModes`, `capacity`, `hostPath`, `nfs`, `persistentVolumeReclaimPolicy`) and volume mounts.
+- **Objective**: Leverage cluster NFS server (exporting `/exports` with `nfs-server.local` mapped across nodes) to scaffold comprehensive CKA volume drills under `/home/vagrant/cka/volumes/`:
+  1. **NFS Shared Storage (`01-nfs/`)**: Direct inline NFS Pod mount (`01-nfs-direct-pod.yaml`), multi-replica shared read/write (`ReadWriteMany`) Deployment (`02-nfs-deployment-shared.yaml`), and PersistentVolume/PersistentVolumeClaim binding (`03-nfs-pv.yaml`, `04-nfs-pvc.yaml`, `05-nfs-pvc-pod.yaml`).
+  1. **Ephemeral Volumes (`02-emptydir/`)**: Multi-container sidecar data sharing (`01-emptydir-sidecar-pod.yaml`) and in-memory tmpfs volume (`02-emptydir-memory-pod.yaml`).
+  1. **Node Filesystem Volumes (`03-hostpath/`)**: `hostPath` mount with `DirectoryOrCreate` (`01-hostpath-pod.yaml`) and read-only host `/var/log` inspection (`02-hostpath-log-viewer.yaml`).
+  1. **ConfigMap & Secret Volumes (`04-configmap-secret/`)**: Mounted ConfigMap items with `0644` permissions (`01-configmap-volume-pod.yaml`) and Secret files with restricted permissions (`defaultMode: 0400`) (`02-secret-volume-pod.yaml`).
+  1. **PV/PVC Lifecycle & Expansion (`05-pv-pvc-lifecycle/`)**: Local manual PV binding with `Retain` reclaim policy (`01-local-pv-pvc.yaml`), online PVC expansion drill (`02-pvc-expansion.yaml`), and reclaim policy step-by-step drill guide (`03-reclaim-policy-drill.md`).
+  1. **Ceph RBD Block Storage (`06-rbd/`)**: Dynamic Ceph RBD PVC, raw block volumes (`volumeMode: Block`), and expansion.
+  1. **iSCSI Block Storage (`07-iscsi/`)**: Direct inline iSCSI mount, static PV/PVC binding, raw block devices, and CHAP credentials.
 - **Artifacts**:
   - Volume practice directory: `/home/vagrant/cka/volumes/`
-  - Automated verification test scripts: `/home/vagrant/cka/volumes/test-nfs-mounts.sh`, `06-rbd/test-rbd-volumes.sh`, and `07-iscsi/test-iscsi-volumes.sh`
-  - Practice guide: `/home/vagrant/cka/volumes/README.md`, `06-rbd/README.md`, and `07-iscsi/README.md`
+  - Automated verification scripts: `test-nfs-mounts.sh`, `06-rbd/test-rbd-volumes.sh`, and `07-iscsi/test-iscsi-volumes.sh`
+  - Practice guides: `README.md`, `06-rbd/README.md`, and `07-iscsi/README.md`
 
 ### Scenario 6: Deployments, ReplicaSets & Rollouts Practice (`deployments`)
 
-- **Domain**: Workloads & Scheduling.
-- **Reference**: [Kubernetes Deployments Documentation](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/)
+- **Domain**: Workloads & Scheduling (15%).
+- **Exam References & Permitted Documentation**:
+  - [Deployments](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/) `[EXAM ALLOWED]`
+  - [Performing a Rolling Update](https://kubernetes.io/docs/tutorials/kubernetes-basics/update/update-intro/) `[EXAM ALLOWED]`
+  - [ReplicaSets](https://kubernetes.io/docs/concepts/workloads/controllers/replicaset/) `[EXAM ALLOWED]`
+- **In-Exam Search Keywords**: `"deployment"`, `"rolling update"`, `"rollout undo"`, `"maxsurge"`
+- **Fast Terminal Lookups**:
+
+  ```bash
+  kubectl create deployment web --image=nginx:1.25-alpine --replicas=3 --dry-run=client -o yaml
+  kubectl rollout status deployment/web
+  kubectl rollout history deployment/web
+  kubectl rollout undo deployment/web --to-revision=1
+  kubectl explain deployment.spec.strategy.rollingUpdate
+  ```
+
 - **Objective**: Practice declarative and imperative deployment lifecycle management, rolling updates, rollbacks, history tracking, label selector troubleshooting, and deployment strategies:
-  1. **Deployment Basics (`01-basic-deployment/`)**:
-     - `web-frontend-deployment.yaml`: Production reverse-proxy deployment with 3 replicas, resource requests, and environment variables.
-     - `api-service-deployment.yaml`: Background microservice deployment with custom command loop.
-  2. **Label Selector Troubleshooting (`02-troubleshooting-labels/`)**:
-     - `broken-deployment.yaml`: Broken manifest with mismatched `spec.selector.matchLabels` (`env: staging`) vs `spec.template.metadata.labels` (`env: production`) for diagnostic practice.
-     - `fixed-deployment.yaml`: Corrected matching manifest.
-     - `README.md`: Error inspection, ReplicaSet selector mechanics, and immutability rules.
-  3. **Rolling Updates & Rollbacks (`03-rolling-updates-rollbacks/`)**:
-     - `01-catalog-v1.yaml` (`nginx:1.24-alpine`) & `02-catalog-v2.yaml` (`nginx:1.25-alpine`).
-     - `rollout-drill.sh`: Interactive walkthrough demonstrating `rollout status`, revision history inspection, change-cause annotations, and rollbacks via `rollout undo --to-revision`.
-  4. **Deployment Strategies (`04-strategies/`)**:
-     - `rolling-update-custom.yaml`: Zero-downtime RollingUpdate with discrete integers (`maxSurge: 1`, `maxUnavailable: 0`).
-     - `rolling-update-percent.yaml`: Percentage-based RollingUpdate (`maxSurge: 50%`, `maxUnavailable: 25%`).
-     - `recreate-strategy.yaml`: Recreate strategy for singleton workers requiring complete container teardown prior to launch.
-  5. **Pausing and Resuming Rollouts (`05-pause-resume/`)**:
-     - `batch-change-deployment.yaml` & `pause-resume-drill.sh`: Demonstrating batch updates (image, environment variables, resource limits) while paused, followed by single-revision resume.
+  1. **Deployment Basics (`01-basic-deployment/`)**: `web-frontend-deployment.yaml` (3 replicas, resources, env vars) and `api-service-deployment.yaml`.
+  1. **Label Selector Troubleshooting (`02-troubleshooting-labels/`)**: `broken-deployment.yaml` (mismatched selector vs template labels) and `fixed-deployment.yaml`.
+  1. **Rolling Updates & Rollbacks (`03-rolling-updates-rollbacks/`)**: Version updates (`nginx:1.24` to `1.25`) and `rollout-drill.sh` walkthrough.
+  1. **Deployment Strategies (`04-strategies/`)**: Custom RollingUpdate (`maxSurge: 1`, `maxUnavailable: 0`), percent-based rolling update, and Recreate strategy.
+  1. **Pausing and Resuming Rollouts (`05-pause-resume/`)**: Batch changes while paused and resuming single-revision deployment.
 - **Artifacts**:
   - Deployments drill directory: `/home/vagrant/cka/deployments/`
-  - Automated test suite: `/home/vagrant/cka/deployments/test-deployments-drills.sh`
-  - Master practice guide: `/home/vagrant/cka/deployments/README.md`
+  - Automated test suite: `test-deployments-drills.sh`
+  - Master practice guide: `README.md`
 
 ### Scenario 7: Pods, Lifecycle & Namespaces Practice (`pods`)
 
-- **Domain**: Workloads & Scheduling.
-- **Reference**: [Kubernetes Pods Documentation](https://kubernetes.io/docs/concepts/workloads/pods/).
+- **Domain**: Workloads & Scheduling (15%).
+- **Exam References & Permitted Documentation**:
+  - [Pods](https://kubernetes.io/docs/concepts/workloads/pods/) `[EXAM ALLOWED]`
+  - [Pod Lifecycle](https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/) `[EXAM ALLOWED]`
+  - [Namespaces](https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/) `[EXAM ALLOWED]`
+  - [Define a Command and Arguments for a Container](https://kubernetes.io/docs/tasks/inject-data-application/define-command-argument-container/) `[EXAM ALLOWED]`
+  - [Debugging Pods](https://kubernetes.io/docs/tasks/debug/debug-application/debug-pods/) `[EXAM ALLOWED]`
+- **In-Exam Search Keywords**: `"pod lifecycle"`, `"container states"`, `"restartpolicy"`, `"command arguments pod"`
+- **Fast Terminal Lookups**:
+
+  ```bash
+  kubectl run web --image=nginx:alpine --port=80 --labels=app=web --dry-run=client -o yaml
+  kubectl run test-pod --rm -it --restart=Never --image=busybox:1.36 -- sh
+  kubectl replace --force -f pod.yaml
+  kubectl explain pod.spec.containers.command
+  kubectl explain pod.spec.restartPolicy
+  ```
+
 - **Objective**: Practice imperative and declarative Pod management, command and argument overrides, lifecycle phase and container state diagnostics, observability (logs and exec), ephemeral network probing, spec immutability workflows, and namespace context preferences:
-  1. **Imperative & Declarative Pods (`01-imperative-declarative/`)**:
-     - `run-imperative.sh`: Command reference for generating and executing Pods using `kubectl run` with flags (`--image`, `--port`, `--env`, `--labels`, `--restart`, `--dry-run=client -o yaml`).
-     - `cka-lab-web-service-pod.yaml`: Declarative Nginx web server manifest with container ports and environment variables.
-     - `cka-lab-batch-task-pod.yaml`: Declarative batch processing task overriding container `command` and `args`.
-  2. **Lifecycle Phases & Restart Policies (`02-lifecycle-and-restarts/`)**:
-     - `cka-lab-finite-worker-pod.yaml`: Finite task with `restartPolicy: Never` demonstrating successful transition to `Succeeded` (Completed).
-     - `cka-lab-failing-worker-pod.yaml`: Non-zero exit task with `restartPolicy: OnFailure` demonstrating `CrashLoopBackOff`.
-     - `README.md`: In-depth breakdown of Pod phases (`Pending`, `Running`, `Succeeded`, `Failed`) versus container states (`Waiting`, `Running`, `Terminated`).
-  3. **Observability & Diagnostics (`03-observability-exec/`)**:
-     - `cka-lab-telemetry-pod.yaml`: Structured log emitter utilizing downward API for node name injection.
-     - `debug-drill.sh`: Interactive drill demonstrating log retrieval, log tailing, container environment inspection, and process table auditing via `kubectl exec`.
-  4. **Ephemeral Networking Diagnostics (`04-ephemeral-networking/`)**:
-     - `cka-lab-echo-server-pod.yaml`: Internal HTTP service target.
-     - `test-connectivity.sh`: Launches temporary ephemeral Pod (`--rm -it --restart=Never`) to probe cluster IP reachability via `wget`.
-  5. **Pod Spec Immutability (`05-spec-immutability/`)**:
-     - `cka-lab-immutable-app-v1.yaml` & `cka-lab-immutable-app-v2.yaml`: Versioned manifests for demonstrating mutation restrictions.
-     - `replace-drill.sh`: Walkthrough demonstrating admission rejection on live spec modifications and force replacement via `kubectl replace --force`.
-  6. **Namespaces & Context Preferences (`06-namespaces-context/`)**:
-     - `cka-lab-namespace.yaml`: Declarative staging namespace (`cka-lab-staging`).
-     - `namespace-context-drill.sh`: Interactive drill for binding active kubeconfig context namespace preference and demonstrating cascading resource deletion.
+  1. **Imperative & Declarative Pods (`01-imperative-declarative/`)**: `run-imperative.sh` reference and declarative manifests.
+  1. **Lifecycle Phases & Restart Policies (`02-lifecycle-and-restarts/`)**: Finite task (`restartPolicy: Never`), failing task (`CrashLoopBackOff`), and phases vs container states.
+  1. **Observability & Diagnostics (`03-observability-exec/`)**: Structured log emitter, Downward API, log tailing, previous container logs (`-p`), and interactive exec.
+  1. **Ephemeral Networking Diagnostics (`04-ephemeral-networking/`)**: Testing cluster IP reachability using one-off pods (`--rm -it --restart=Never`).
+  1. **Pod Spec Immutability (`05-spec-immutability/`)**: Handling admission mutation errors via `kubectl replace --force`.
+  1. **Namespaces & Context Preferences (`06-namespaces-context/`)**: Namespace creation and `kubectl config set-context --current --namespace=...`.
+  1. **Pod Quarantine & Autopsy (`07-quarantine-autopsy/`)**: Isolating unhealthy pods from Service endpoints via label manipulation for live debugging.
 - **Artifacts**:
   - Pods drill directory: `/home/vagrant/cka/pods/`
-  - Automated test suite: `/home/vagrant/cka/pods/test-pods-drills.sh`
-  - Master practice guide: `/home/vagrant/cka/pods/README.md`
+  - Automated test suite: `test-pods-drills.sh`
+  - Master practice guide: `README.md`
 
 ### Scenario 8: Services, Ingress, Gateway API & Network Policies (`networking`)
 
-- **Domain**: Services & Networking.
-- **Reference**: [Kubernetes Services & Networking Documentation](https://kubernetes.io/docs/concepts/services-networking/).
+- **Domain**: Services & Networking (20%).
+- **Exam References & Permitted Documentation**:
+  - [Services](https://kubernetes.io/docs/concepts/services-networking/service/) `[EXAM ALLOWED]`
+  - [Ingress](https://kubernetes.io/docs/concepts/services-networking/ingress/) `[EXAM ALLOWED]`
+  - [Network Policies](https://kubernetes.io/docs/concepts/services-networking/network-policies/) `[EXAM ALLOWED]`
+  - [DNS for Services and Pods](https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/) `[EXAM ALLOWED]`
+  - [Gateway API Official Documentation](https://gateway-api.sigs.k8s.io/) `[EXAM ALLOWED]`
+- **In-Exam Search Keywords**: `"service nodeport"`, `"ingress path"`, `"network policy default deny"`, `"httproute"`
+- **Fast Terminal Lookups**:
+
+  ```bash
+  kubectl expose deployment web --port=80 --target-port=8080 --type=NodePort --dry-run=client -o yaml
+  kubectl explain service.spec.type
+  kubectl explain ingress.spec.rules
+  kubectl explain networkpolicy.spec.ingress
+  kubectl explain networkpolicy.spec.egress
+  ```
+
+- **Exam Context & Permissibility Notes**:
+  - Caddy acts as a homelab edge reverse proxy terminating external TLS `[HOMELAB AUXILIARY]`. CKA exam networking focuses on Kubernetes Ingress controllers, Ingress resources, and Gateway API CRDs (`Gateway`, `HTTPRoute`).
 - **Objective**: Comprehensive training across core Kubernetes networking abstractions, edge routing, and pod-to-pod microsegmentation:
-  1. **Services & CoreDNS (`01-services/`)**:
-     - `cka-lab-backend-app.yaml`: Multi-port microservice deployment exposing HTTP (port 80) and metrics (port 8080).
-     - `cka-lab-clusterip-service.yaml`: ClusterIP service providing stable virtual IP and CoreDNS name discovery (`cka-lab-clusterip-svc.default.svc.cluster.local`).
-     - `cka-lab-nodeport-service.yaml`: Multi-port NodePort service exposing port 80 on NodePort 31080 and port 8080 on NodePort 31090.
-     - `test-services.sh`: Non-interactive script verifying endpoint registration, DNS resolution, and NodePort access.
-  2. **Ingresses (`02-ingresses/`)**:
-     - `cka-lab-ingress-backends.yaml`: Independent web and API backend deployments and ClusterIP services.
-     - `cka-lab-ingress.yaml`: Ingress resource routing host `cka-lab.example.local` with path prefixes `/web` and `/api` using `ingressClassName: nginx`.
-     - `test-ingress.sh`: Non-interactive curl verification script testing Host header path routing.
-  3. **Gateway API & Caddy Integration (`03-gateway-api/`)**:
-     - `cka-lab-gateway.yaml`: Gateway resource implementing Gateway API standard CRDs with listeners on port 80 and port 443.
-     - `cka-lab-httproute.yaml`: HTTPRoute resource attaching to `cka-lab-gateway`, routing `/api` and `/httpbin` (with URLRewrite prefix stripping) to backend services.
-     - `cka-lab-caddy-integration.md`: Architecture guide documenting edge TLS termination on Caddy (port 443) and upstream reverse proxying to NGINX Gateway Fabric NodePort 30443.
-     - `test-gateway.sh`: Non-interactive script testing Gateway status and HTTPRoute path evaluation.
-  4. **Network Policies (`04-network-policies/`)**:
-     - `cka-lab-namespaces.yaml`: Isolated namespaces `cka-lab-net-client` and `cka-lab-net-backend`.
-     - `cka-lab-backend-workload.yaml`: Target backend microservice (`httpbin-go`).
-     - `cka-lab-client-workloads.yaml`: Authorized (`access: authorized`) and unauthorized (`access: unauthorized`) client pods.
-     - `cka-lab-default-deny-ingress.yaml`: Default-deny ingress isolation policy.
-     - `cka-lab-allow-client-to-backend.yaml`: Ingress policy permitting traffic only from authorized client pods.
-     - `cka-lab-egress-dns-policy.yaml`: Egress policy allowing CoreDNS (UDP/TCP 53) and backend access.
-     - `test-network-policies.sh`: Non-interactive script verifying permitted traffic vs connection timeouts when dropped.
+  1. **Services & CoreDNS (`01-services/`)**: ClusterIP, NodePort, and Headless services with CoreDNS resolution (`<service>.<namespace>.svc.cluster.local`).
+  1. **Ingresses (`02-ingresses/`)**: Multi-host and path-based Ingress routing (`ingressClassName: nginx`).
+  1. **Gateway API & Caddy Integration (`03-gateway-api/`)**: Standard Gateway and HTTPRoute resources with path prefix routing and URL rewrite rules.
+  1. **Network Policies (`04-network-policies/`)**: Default-deny ingress, client-to-backend authorization via `podSelector`, and egress DNS policy.
+  1. **Advanced Multi-Namespace NetworkPolicies (`05-advanced-netpol/`)**: Combined `namespaceSelector` and `podSelector` rules.
 - **Artifacts**:
   - Networking drill directory: `/home/vagrant/cka/networking/`
-  - Automated test suite: `/home/vagrant/cka/networking/test-networking-drills.sh`
-  - Master practice guide: `/home/vagrant/cka/networking/README.md`
+  - Automated test suite: `test-networking-drills.sh`
+  - Master practice guide: `README.md`
 
 ### Scenario 9: Advanced Scheduling & Capacity Management (`scheduling`)
 
-- **Domain**: Workloads & Scheduling.
-- **Reference**: [Kubernetes Scheduling Documentation](https://kubernetes.io/docs/concepts/scheduling-eviction/).
+- **Domain**: Workloads & Scheduling (15%).
+- **Exam References & Permitted Documentation**:
+  - [Taints and Tolerations](https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/) `[EXAM ALLOWED]`
+  - [Assigning Pods to Nodes](https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/) `[EXAM ALLOWED]`
+  - [Horizontal Pod Autoscaling](https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/) `[EXAM ALLOWED]`
+  - [Resource Management for Pods and Containers](https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/) `[EXAM ALLOWED]`
+  - [Resource Quotas](https://kubernetes.io/docs/concepts/policy/resource-quotas/) `[EXAM ALLOWED]`
+  - [Limit Ranges](https://kubernetes.io/docs/concepts/policy/limit-range/) `[EXAM ALLOWED]`
+  - [Pod Priority and Preemption](https://kubernetes.io/docs/concepts/scheduling-eviction/pod-priority-preemption/) `[EXAM ALLOWED]`
+- **In-Exam Search Keywords**: `"taints and tolerations"`, `"node affinity"`, `"pod anti affinity"`, `"horizontal pod autoscaler"`, `"resource quota"`, `"limit range"`, `"priority class"`
+- **Fast Terminal Lookups**:
+
+  ```bash
+  kubectl taint nodes kube-worker-1 key=value:NoSchedule
+  kubectl taint nodes kube-worker-1 key=value:NoSchedule-
+  kubectl explain pod.spec.tolerations
+  kubectl explain pod.spec.affinity.nodeAffinity
+  kubectl explain pod.spec.affinity.podAntiAffinity
+  kubectl explain quota.spec.hard
+  kubectl explain limitrange.spec.limits
+  ```
+
 - **Objective**: Master node scheduling constraints, pod spreading, autoscaling, and namespace capacity governance:
   1. **Taints & Tolerations (`01-taints-tolerations/`)**: Applying and removing `NoSchedule` taints to nodes and configuring matching pod tolerations.
-  2. **Affinities & Anti-Affinities (`02-affinities/`)**: Hard and soft `nodeAffinity` placement rules, and multi-replica hostname spreading via `podAntiAffinity`.
-  3. **Horizontal Pod Autoscaling (`03-hpa-autoscaling/`)**: Dynamic pod replica autoscaling using `autoscaling/v2` based on target CPU utilization.
-  4. **Capacity Governance (`04-quotas-limits/`)**: Namespace boundary enforcement using `ResourceQuota` and default limit/request injection via `LimitRange`.
+  1. **Affinities & Anti-Affinities (`02-affinities/`)**: Hard (`requiredDuringSchedulingIgnoredDuringExecution`) and soft (`preferredDuringSchedulingIgnoredDuringExecution`) `nodeAffinity`, and multi-replica hostname spreading via `podAntiAffinity`.
+  1. **Horizontal Pod Autoscaling (`03-hpa-autoscaling/`)**: Dynamic pod replica autoscaling using `autoscaling/v2` based on target CPU utilization.
+  1. **Capacity Governance (`04-quotas-limits/`)**: Namespace boundary enforcement using `ResourceQuota` and default limit/request injection via `LimitRange`.
+  1. **PriorityClasses & Preemption (`05-priority-preemption/`)**: Priority classes, `preemptionPolicy`, and scheduler eviction under resource exhaustion.
 - **Artifacts**:
   - Scheduling drill directory: `/home/vagrant/cka/scheduling/`
-  - Automated test suite: `/home/vagrant/cka/scheduling/test-scheduling-drills.sh`
-  - Master practice guide: `/home/vagrant/cka/scheduling/README.md`
+  - Automated test suite: `test-scheduling-drills.sh`
+  - Master practice guide: `README.md`
 
 ### Scenario 10: Specialized Workload Controllers & Multi-Container Pods (`workloads_advanced`)
 
-- **Domain**: Workloads & Scheduling.
-- **Reference**: [Kubernetes Workloads Documentation](https://kubernetes.io/docs/concepts/workloads/).
+- **Domain**: Workloads & Scheduling (15%).
+- **Exam References & Permitted Documentation**:
+  - [DaemonSet](https://kubernetes.io/docs/concepts/workloads/controllers/daemonset/) `[EXAM ALLOWED]`
+  - [Jobs](https://kubernetes.io/docs/concepts/workloads/controllers/job/) `[EXAM ALLOWED]`
+  - [CronJob](https://kubernetes.io/docs/concepts/workloads/controllers/cron-jobs/) `[EXAM ALLOWED]`
+  - [Init Containers](https://kubernetes.io/docs/concepts/workloads/pods/init-containers/) `[EXAM ALLOWED]`
+  - [Native Sidecar Containers](https://kubernetes.io/docs/concepts/workloads/pods/sidecar-containers/) `[EXAM ALLOWED]`
+- **In-Exam Search Keywords**: `"daemonset"`, `"job completions"`, `"cronjob concurrency"`, `"init container"`, `"sidecar container"`
+- **Fast Terminal Lookups**:
+
+  ```bash
+  kubectl explain daemonset.spec
+  kubectl explain job.spec.completions
+  kubectl explain job.spec.parallelism
+  kubectl create cronjob batch-job --schedule="0 * * * *" --image=busybox --dry-run=client -o yaml -- /bin/sh -c "echo running"
+  kubectl explain pod.spec.initContainers
+  ```
+
 - **Objective**: Deploy and maintain background node daemons, batch workloads, and coordinated multi-container pods:
   1. **DaemonSets (`01-daemonsets/`)**: Deploying node agents across all cluster nodes with control plane tolerations and hostPath inspection.
-  2. **Batch Jobs & CronJobs (`02-batch-jobs/`)**: Parallel batch jobs (`completions`, `parallelism`) and scheduled CronJobs (`concurrencyPolicy: Forbid`).
-  3. **Multi-Container Pods (`03-multi-container/`)**: Gated sequential initialization via `initContainers`, and native persistent helper execution via Kubernetes 1.28+ native sidecar containers (`restartPolicy: Always`).
+  1. **Batch Jobs & CronJobs (`02-batch-jobs/`)**: Parallel batch jobs (`completions`, `parallelism`) and scheduled CronJobs (`concurrencyPolicy: Forbid`).
+  1. **Multi-Container Pods (`03-multi-container/`)**: Gated sequential initialization via `initContainers`, and native persistent helper execution via Kubernetes 1.28+ native sidecar containers (`restartPolicy: Always`).
 - **Artifacts**:
   - Workloads drill directory: `/home/vagrant/cka/workloads-advanced/`
-  - Automated test suite: `/home/vagrant/cka/workloads-advanced/test-workloads-advanced-drills.sh`
-  - Master practice guide: `/home/vagrant/cka/workloads-advanced/README.md`
+  - Automated test suite: `test-workloads-advanced-drills.sh`
+  - Master practice guide: `README.md`
 
 ### Scenario 11: Dynamic Provisioning & StorageClasses (`storage_classes`)
 
-- **Domain**: Storage.
-- **Reference**: [Kubernetes Storage Documentation](https://kubernetes.io/docs/concepts/storage/).
+- **Domain**: Storage (10%).
+- **Exam References & Permitted Documentation**:
+  - [Storage Classes](https://kubernetes.io/docs/concepts/storage/storage-classes/) `[EXAM ALLOWED]`
+  - [Dynamic Volume Provisioning](https://kubernetes.io/docs/concepts/storage/dynamic-provisioning/) `[EXAM ALLOWED]`
+  - [Expanding Persistent Volumes](https://kubernetes.io/docs/concepts/storage/persistent-volumes/#expanding-persistent-volumes-claims) `[EXAM ALLOWED]`
+- **In-Exam Search Keywords**: `"storage class"`, `"volume binding mode"`, `"allow volume expansion"`, `"reclaim policy delete"`
+- **Fast Terminal Lookups**:
+
+  ```bash
+  kubectl explain storageclass
+  kubectl explain storageclass.volumeBindingMode
+  kubectl explain storageclass.reclaimPolicy
+  kubectl explain storageclass.allowVolumeExpansion
+  ```
+
 - **Objective**: Configure dynamic storage provisioners, customize StorageClass operational parameters, and manage dynamic volume lifecycles:
   1. **Dynamic Provisioners (`01-provisioners/`)**: Deploying Rancher's lightweight `local-path-provisioner`.
-  2. **StorageClass Lifecycle (`02-storage-classes/`)**: Configuring `reclaimPolicy` (`Delete` vs `Retain`), delayed binding (`volumeBindingMode: WaitForFirstConsumer`), dynamic PVC binding upon first pod consumer, and PVC volume expansion.
+  1. **StorageClass Lifecycle (`02-storage-classes/`)**: Configuring `reclaimPolicy` (`Delete` vs `Retain`), delayed binding (`volumeBindingMode: WaitForFirstConsumer`), dynamic PVC binding upon first pod consumer, and PVC volume expansion.
+  1. **Dynamic NFS CSI Provisioning (`04-nfs-csi/`)**: Dynamic NFS volume provisioning using the official Kubernetes SIG Storage NFS CSI Driver.
 - **Artifacts**:
   - StorageClasses drill directory: `/home/vagrant/cka/storage-classes/`
-  - Automated test suite: `/home/vagrant/cka/storage-classes/test-storage-classes-drills.sh`
-  - Master practice guide: `/home/vagrant/cka/storage-classes/README.md`
+  - Automated test suite: `test-storage-classes-drills.sh`
+  - Master practice guide: `README.md`
 
 ### Scenario 12: Cluster Maintenance & Node Troubleshooting (`cluster_troubleshooting`)
 
-- **Domain**: Troubleshooting.
-- **Reference**: [Kubernetes Troubleshooting Documentation](https://kubernetes.io/docs/tasks/debug/).
+- **Domain**: Troubleshooting (30%).
+- **Exam References & Permitted Documentation**:
+  - [Safely Drain a Node](https://kubernetes.io/docs/tasks/administer-cluster/safely-drain-node/) `[EXAM ALLOWED]`
+  - [Create Static Pods](https://kubernetes.io/docs/tasks/configure-pod-container/static-pod/) `[EXAM ALLOWED]`
+  - [Troubleshoot Clusters](https://kubernetes.io/docs/tasks/debug/debug-cluster/) `[EXAM ALLOWED]`
+  - [Debugging DNS Resolution](https://kubernetes.io/docs/tasks/administer-cluster/dns-debugging-resolution/) `[EXAM ALLOWED]`
+  - [Debug Services](https://kubernetes.io/docs/tasks/debug/debug-application/debug-service/) `[EXAM ALLOWED]`
+- **In-Exam Search Keywords**: `"safely drain node"`, `"static pod"`, `"troubleshoot cluster"`, `"dns debugging"`
+- **Fast Terminal Lookups**:
+
+  ```bash
+  kubectl cordon <node>
+  kubectl drain <node> --ignore-daemonsets --delete-emptydir-data
+  kubectl uncordon <node>
+  sudo journalctl -u kubelet -e --no-pager
+  crictl ps
+  crictl logs <container-id>
+  ```
+
 - **Objective**: Execute safe cluster node maintenance workflows, recover failing control plane static pods, and inspect resource telemetry:
   1. **Node Maintenance (`01-node-maintenance/`)**: Non-interactive node cordoning (`kubectl cordon`), workload eviction (`kubectl drain --ignore-daemonsets --delete-emptydir-data`), and return to service (`kubectl uncordon`).
-  2. **Static Pod Break-Fix (`02-static-pod-recovery/`)**: Diagnosing and repairing corrupted control plane manifests in `/etc/kubernetes/manifests/` using `crictl` and system logs.
-  3. **Kubelet Diagnostics (`03-kubelet-diagnostics/`)**: Troubleshooting worker node systemd `kubelet.service` failures and configuration syntax errors.
-  4. **Resource Telemetry (`04-metrics-monitoring/`)**: Live node and pod CPU/memory consumption inspection using `kubectl top nodes` and `kubectl top pods`.
+  1. **Static Pod Break-Fix (`02-static-pod-recovery/`)**: Diagnosing and repairing corrupted control plane manifests in `/etc/kubernetes/manifests/` using `crictl` and system logs.
+  1. **Kubelet Diagnostics (`03-kubelet-diagnostics/`)**: Troubleshooting worker node systemd `kubelet.service` failures and configuration syntax errors (`/var/lib/kubelet/config.yaml`).
+  1. **Resource Telemetry (`04-metrics-monitoring/`)**: Live node and pod CPU/memory consumption inspection using `kubectl top nodes` and `kubectl top pods`.
+  1. **CoreDNS Recovery (`05-coredns-recovery/`)**: Diagnosing and repairing CoreDNS ConfigMap `Corefile` syntax errors and upstream forwarders.
+  1. **Service & Endpoints Triage (`06-service-endpoints-recovery/`)**: Resolving mismatched label selectors and targetPort definitions causing unreachable services.
+  1. **Worker Static Pods (`07-worker-static-pods/`)**: Configuring worker node kubelet `staticPodPath` and validating mirror pod creation on the API server.
+  1. **Container Runtime Diagnostics (`08-containerd-diagnostics/`)**: Direct CRI triage using `crictl` and container logs.
 - **Artifacts**:
   - Troubleshooting drill directory: `/home/vagrant/cka/cluster-troubleshooting/`
-  - Automated test suite: `/home/vagrant/cka/cluster-troubleshooting/test-cluster-troubleshooting.sh`
-  - Master practice guide: `/home/vagrant/cka/cluster-troubleshooting/README.md`
+  - Automated test suite: `test-cluster-troubleshooting.sh`
+  - Master practice guide: `README.md`
 
 ### Scenario 13: Custom Resource Definitions & Operators (`crds`)
 
-- **Domain**: Cluster Architecture, Installation & Configuration.
-- **Reference**: [Kubernetes Extend API Documentation](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/).
+- **Domain**: Cluster Architecture, Installation & Configuration (25%).
+- **Exam References & Permitted Documentation**:
+  - [Custom Resources](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/) `[EXAM ALLOWED]`
+  - [Extend the Kubernetes API with CustomResourceDefinitions](https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definitions/) `[EXAM ALLOWED]`
+- **In-Exam Search Keywords**: `"custom resource definitions"`, `"openapiv3schema"`, `"printer columns"`
+- **Fast Terminal Lookups**:
+
+  ```bash
+  kubectl explain crd.spec
+  kubectl explain crd.spec.versions.schema.openAPIV3Schema
+  kubectl explain crd.spec.names
+  ```
+
 - **Objective**: Define custom API schemas with OpenAPI v3 validation and manage custom resource lifecycles:
   1. **CRD Specification (`01-crd-schema/`)**: Declaring group, version, kind, shortNames, additional printer columns, and OpenAPI v3 structural validation rules.
-  2. **Custom Resource Lifecycle**: Creating declarative instances and testing admission webhook rejection on malformed specifications.
+  1. **Custom Resource Lifecycle**: Creating declarative instances and testing admission webhook rejection on malformed specifications.
 - **Artifacts**:
   - CRD drill directory: `/home/vagrant/cka/crds-operators/`
-  - Automated test suite: `/home/vagrant/cka/crds-operators/test-crds-drills.sh`
-  - Master practice guide: `/home/vagrant/cka/crds-operators/README.md`
+  - Automated test suite: `test-crds-drills.sh`
+  - Master practice guide: `README.md`
 
 ### Scenario 14: Chaos Engineering & Dynamic Troubleshooting (`chaos_troubleshooting`)
 
-- **Domain**: Troubleshooting & Resilience.
-- **Reference**: [LitmusChaos Documentation](https://litmuschaos.io/).
+- **Domain**: Troubleshooting & Resilience (30%).
+- **Exam References & Permitted Documentation**:
+  - [Debugging Pods (OOM / CrashLoopBackOff)](https://kubernetes.io/docs/tasks/debug/debug-application/debug-pods/) `[EXAM ALLOWED]`
+  - [Troubleshooting Cluster Networking](https://kubernetes.io/docs/tasks/debug/debug-cluster/debug-network/) `[EXAM ALLOWED]`
+  - [Pod Quality of Service (QoS) Classes](https://kubernetes.io/docs/concepts/workloads/pods/pod-qos-class/) `[EXAM ALLOWED]`
+  - [Node-pressure Eviction](https://kubernetes.io/docs/concepts/scheduling-eviction/node-pressure-eviction/) `[EXAM ALLOWED]`
+- **In-Exam Search Keywords**: `"debug pods"`, `"oomkilled"`, `"pod qos class"`, `"node pressure eviction"`
+- **Fast Terminal Lookups**:
+
+  ```bash
+  kubectl describe pod <pod-name> | grep -E "Exit Code|Reason|Last State"
+  kubectl debug pod/<pod-name> -it --image=busybox --target=<container-name>
+  kubectl describe node <node-name> | grep -A 5 Conditions
+  ```
+
+- **Exam Context & Permissibility Notes**:
+  - Headless LitmusChaos is an automated homelab fault injection engine `[HOMELAB AUXILIARY]`. Candidates in the actual CKA exam will not see Litmus; they must diagnose injected system failures (OOM Exit Code 137, Network Drops, Node MemoryPressure) using standard `kubectl describe`, logs, and node conditions.
 - **Objective**: On-demand runtime fault injection using Headless LitmusChaos to simulate live service failures:
   1. **Memory OOM Drill (`01-memory-oom`)**: Simulates container memory exhaustion (`pod-memory-hog`), inspecting `OOMKilled` (ExitCode 137), and adjusting resource limits.
-  2. **Network Degradation Drill (`02-network-latency`)**: Injects 70% packet loss (`pod-network-loss`) to troubleshoot timeouts using ephemeral debug containers (`kubectl debug`).
-  3. **CoreDNS Blackhole Drill (`03-dns-chaos`)**: Disrupts inter-service DNS lookups (`pod-dns-error`) to diagnose resolution paths.
-  4. **Node MemoryPressure Drill (`04-node-pressure`)**: Induces node memory saturation (`node-memory-hog`) to examine node conditions and QoS pod eviction priorities.
+  1. **Network Degradation Drill (`02-network-latency`)**: Injects 70% packet loss (`pod-network-loss`) to troubleshoot timeouts using ephemeral debug containers (`kubectl debug`).
+  1. **CoreDNS Blackhole Drill (`03-dns-chaos`)**: Disrupts inter-service DNS lookups (`pod-dns-error`) to diagnose resolution paths.
+  1. **Node MemoryPressure Drill (`04-node-pressure`)**: Induces node memory saturation (`node-memory-hog`) to examine node conditions and QoS pod eviction priorities.
 - **Artifacts**:
   - Chaos drill directory: `/home/vagrant/cka/chaos-troubleshooting/`
-  - Automated verification test suite: `/home/vagrant/cka/chaos-troubleshooting/test-chaos-drills.sh`
-  - Master practice guide: `/home/vagrant/cka/chaos-troubleshooting/README.md`
+  - Automated verification test suite: `test-chaos-drills.sh`
+  - Master practice guide: `README.md`
 
 ### Scenario 15: etcd Snapshot Backup & Restore (`etcd`)
 
 - **Domain**: Cluster Architecture, Installation & Configuration (25%).
-- **Reference**: [Operating etcd clusters for Kubernetes](https://kubernetes.io/docs/tasks/administer-cluster/configure-upgrade-etcd/).
+- **Exam References & Permitted Documentation**:
+  - [Operating etcd clusters for Kubernetes (Backup & Restore)](https://kubernetes.io/docs/tasks/administer-cluster/configure-upgrade-etcd/) `[EXAM ALLOWED]`
+- **In-Exam Search Keywords**: `"backup etcd"`, `"restore etcd"`, `"etcd snapshot"`
+- **Fast Terminal Lookups**:
+
+  ```bash
+  ETCDCTL_API=3 etcdctl --endpoints=https://127.0.0.1:2379 \
+    --cacert=/etc/kubernetes/pki/etcd/ca.crt \
+    --cert=/etc/kubernetes/pki/etcd/server.crt \
+    --key=/etc/kubernetes/pki/etcd/server.key \
+    snapshot save /tmp/etcd-snapshot.db
+
+  ETCDCTL_API=3 etcdctl snapshot status /tmp/etcd-snapshot.db --write-out=table
+
+  ETCDCTL_API=3 etcdctl snapshot restore /tmp/etcd-snapshot.db \
+    --data-dir=/var/lib/etcd-restored
+  ```
+
 - **Objective**: Discover TLS parameters directly from static pod manifest `/etc/kubernetes/manifests/etcd.yaml`, take verified snapshot, restore to new data-dir, update static pod hostPath, and verify API server restoration:
   1. `backup-etcd.sh`: Discovers TLS flags and saves snapshot to `/var/lib/etcd-backup/etcd-snapshot.db`.
-  2. `restore-etcd.sh`: Restores snapshot into `/var/lib/etcd-restored`.
-  3. `simulate-loss-drill.sh`: End-to-end drill testing canary namespace persistence across backup/loss/restore cycles.
+  1. `restore-etcd.sh`: Restores snapshot into `/var/lib/etcd-restored`.
+  1. `simulate-loss-drill.sh`: End-to-end drill testing canary namespace persistence across backup/loss/restore cycles.
 - **Artifacts**:
   - etcd drill directory: `/home/vagrant/cka/etcd/`
-  - Automated test suite: `/home/vagrant/cka/etcd/test-etcd-drills.sh`
-  - Master practice guide: `/home/vagrant/cka/etcd/README.md`
+  - Automated test suite: `test-etcd-drills.sh`
+  - Master practice guide: `README.md`
 
 ### Scenario 16: Manual Kubeadm Cluster Upgrade (`upgrade_drill`)
 
 - **Domain**: Cluster Architecture, Installation & Configuration (25%).
-- **Reference**: [Upgrading kubeadm clusters](https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-upgrade/).
+- **Exam References & Permitted Documentation**:
+  - [Upgrading kubeadm clusters](https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-upgrade/) `[EXAM ALLOWED]`
+- **In-Exam Search Keywords**: `"upgrading kubeadm clusters"`, `"kubeadm upgrade apply"`
+- **Fast Terminal Lookups**:
+
+  ```bash
+  apt-mark unhold kubeadm kubelet kubectl
+  apt-get update && apt-get install -y --allow-change-held-packages kubeadm=1.34.x-1.1
+  kubeadm upgrade plan
+  sudo kubeadm upgrade apply v1.34.x
+  sudo kubeadm upgrade node
+  apt-mark hold kubeadm kubelet kubectl
+  ```
+
 - **Objective**: Hands-on walkthrough of manual node draining, APT package unholding, `kubeadm upgrade apply/node`, `kubelet`/`kubectl` package upgrades, and uncordoning:
   1. `mock-control-plane-upgrade.sh`: Control plane upgrade commands and dry-run validation.
-  2. `mock-worker-upgrade.sh`: Worker node upgrade sequence.
+  1. `mock-worker-upgrade.sh`: Worker node upgrade sequence.
 - **Artifacts**:
   - Upgrade drill directory: `/home/vagrant/cka/upgrade/`
-  - Automated test suite: `/home/vagrant/cka/upgrade/test-upgrade-drills.sh`
-  - Master practice guide: `/home/vagrant/cka/upgrade/README.md`
+  - Automated test suite: `test-upgrade-drills.sh`
+  - Master practice guide: `README.md`
 
 ### Scenario 17: Speed JSONPath & Output Formatting (`jsonpath`)
 
 - **Domain**: Troubleshooting (30%) & Workloads (15%).
-- **Reference**: [JSONPath Support](https://kubernetes.io/docs/reference/kubectl/jsonpath/).
+- **Exam References & Permitted Documentation**:
+  - [JSONPath Support](https://kubernetes.io/docs/reference/kubectl/jsonpath/) `[EXAM ALLOWED]`
+  - [kubectl Cheat Sheet - Formatting Output](https://kubernetes.io/docs/reference/kubectl/cheatsheet/#formatting-output) `[EXAM ALLOWED]`
+- **In-Exam Search Keywords**: `"jsonpath support"`, `"custom columns"`
+- **Fast Terminal Lookups**:
+
+  ```bash
+  kubectl get nodes -o jsonpath='{.items[*].metadata.name}'
+  kubectl get nodes -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.status.addresses[?(@.type=="InternalIP")].address}{"\n"}{end}'
+  kubectl get pods -A --sort-by=.metadata.creationTimestamp
+  kubectl get pods -o custom-columns=NAME:.metadata.name,IMAGE:.spec.containers[0].image
+  ```
+
 - **Objective**: 10 rapid exam challenges practicing `-o jsonpath`, filter queries `[?(@...)]`, range loops, `--sort-by`, and custom columns.
 - **Artifacts**:
   - JSONPath directory: `/home/vagrant/cka/jsonpath/`

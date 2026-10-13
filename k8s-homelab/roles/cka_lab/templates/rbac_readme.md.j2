@@ -3,12 +3,32 @@
 Hands-on exercise for defining Role-Based Access Control (RBAC) in Kubernetes.
 Follows the exercise pattern from [bmuschko/cka-crash-course (04-rbac)](https://github.com/bmuschko/cka-crash-course/tree/master/exercises/04-rbac).
 
-## Quick Reference
+## Official Exam References & Quick Lookups
 
-- **Namespace**: `default`
-- **User**: `{{ cka_lab_rbac_user | default('vagrant') }}`
-- **Context**: `{{ cka_lab_rbac_user | default('vagrant') }}`
-- **Documentation**: [Using RBAC Authorization](https://kubernetes.io/docs/reference/access-authn-authz/rbac/) & [Certificate Signing Requests](https://kubernetes.io/docs/reference/access-authn-authz/certificate-signing-requests/#normal-user)
+### Permitted Exam Documentation
+
+- **RBAC Authorization**: [Using RBAC Authorization](https://kubernetes.io/docs/reference/access-authn-authz/rbac/) `[EXAM ALLOWED]`
+- **CertificateSigningRequests**: [Certificate Signing Requests](https://kubernetes.io/docs/reference/access-authn-authz/certificate-signing-requests/#normal-user) `[EXAM ALLOWED]`
+- **Service Accounts Management**: [Managing Service Accounts](https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/) `[EXAM ALLOWED]`
+
+### In-Exam Search Keywords
+>
+> *Type these exact phrases into the kubernetes.io search bar to jump directly to copy-pasteable YAML templates:*
+
+- `"using rbac authorization"`
+- `"certificate signing request"`
+- `"service account token"`
+
+### Terminal Fast Lookups (`kubectl`)
+
+```bash
+# Rapid command-line RBAC generation
+kubectl create role pod-reader --verb=get,list,watch --resource=pods --dry-run=client -o yaml
+kubectl create rolebinding pod-reader-binding --role=pod-reader --user={{ cka_lab_rbac_user | default('vagrant') }} --dry-run=client -o yaml
+kubectl auth can-i create pods --as={{ cka_lab_rbac_user | default('vagrant') }}
+kubectl explain role.rules
+kubectl explain clusterrolebinding.subjects
+```
 
 ---
 
@@ -25,9 +45,9 @@ Run the provided script to generate private keys, issue a client certificate via
 This performs the following actions:
 
 1. Generates an RSA private key (`{{ cka_lab_rbac_user | default('vagrant') }}.key`).
-2. Creates and approves a Kubernetes `CertificateSigningRequest` for Subject `/CN={{ cka_lab_rbac_user | default('vagrant') }}`.
-3. Retrieves and saves the signed client certificate (`{{ cka_lab_rbac_user | default('vagrant') }}.crt`).
-4. Adds credentials and context `{{ cka_lab_rbac_user | default('vagrant') }}` to `~/.kube/config`.
+1. Creates and approves a Kubernetes `CertificateSigningRequest` for Subject `/CN={{ cka_lab_rbac_user | default('vagrant') }}`.
+1. Retrieves and saves the signed client certificate (`{{ cka_lab_rbac_user | default('vagrant') }}.crt`).
+1. Adds credentials and context `{{ cka_lab_rbac_user | default('vagrant') }}` to `~/.kube/config`.
 
 ---
 

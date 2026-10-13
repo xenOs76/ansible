@@ -16,6 +16,30 @@ Practice creating ServiceAccounts, assigning scoped RBAC roles, generating short
 
 ---
 
+## Official Exam References & Quick Lookups
+
+### Permitted Exam Documentation
+
+- **Service Accounts Management**: [Managing Service Accounts](https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/) `[EXAM ALLOWED]`
+- **RBAC Authorization**: [Using RBAC Authorization](https://kubernetes.io/docs/reference/access-authn-authz/rbac/) `[EXAM ALLOWED]`
+
+### In-Exam Search Keywords
+
+- `"managing service accounts"`
+- `"service account token"`
+- `"using rbac authorization"`
+
+### Terminal Fast Lookups (`kubectl`)
+
+```bash
+# Rapid serviceaccount generation & token retrieval
+kubectl create serviceaccount deploy-bot -n default
+kubectl create token deploy-bot --duration=1h
+kubectl auth can-i get pods --as=system:serviceaccount:default:deploy-bot
+```
+
+---
+
 ## Step-by-Step Procedure
 
 1. **Create ServiceAccount, Role, and RoleBinding**:
@@ -24,14 +48,14 @@ Practice creating ServiceAccounts, assigning scoped RBAC roles, generating short
    kubectl apply -f sa-rbac-drill.yaml
    ```
 
-2. **Generate Bounded Token**:
+1. **Generate Bounded Token**:
 
    ```bash
    TOKEN=$(kubectl create token deploy-bot --duration=1h)
    echo "Generated Token: ${TOKEN:0:20}..."
    ```
 
-3. **Verify API Permissions via Impersonation**:
+1. **Verify API Permissions via Impersonation**:
 
    ```bash
    ./test-sa-rbac.sh

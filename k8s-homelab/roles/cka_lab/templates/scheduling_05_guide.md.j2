@@ -2,11 +2,33 @@
 
 Learn how kube-scheduler handles resource contention and preempts low-priority pods in favor of mission-critical workloads.
 
+## Official Exam References & Quick Lookups
+
+### Permitted Exam Documentation
+
+- **Pod Priority & Preemption**: [Pod Priority and Preemption](https://kubernetes.io/docs/concepts/scheduling-eviction/pod-priority-preemption/) `[EXAM ALLOWED]`
+
+### In-Exam Search Keywords
+
+- `"pod priority preemption"`
+- `"priorityclass"`
+
+### Terminal Fast Lookups (`kubectl explain`)
+
+```bash
+kubectl explain priorityclass
+kubectl explain priorityclass.value
+kubectl explain priorityclass.preemptionPolicy
+kubectl explain pod.spec.priorityClassName
+```
+
+---
+
 ## Concepts
 
 1. **PriorityClass Resource**: Non-namespaced object defining a priority value (e.g., `value: 1000000`).
-2. **Preemption Policy**: Defaults to `PreemptionPolicy: PreemptLowerPriority`.
-3. **Preemption Flow**: When high-priority pods cannot be scheduled due to insufficient CPU/memory on any node, kube-scheduler evicts pods with lower priority to free resources.
+1. **Preemption Policy**: Defaults to `PreemptionPolicy: PreemptLowerPriority`.
+1. **Preemption Flow**: When high-priority pods cannot be scheduled due to insufficient CPU/memory on any node, kube-scheduler evicts pods with lower priority to free resources.
 
 ---
 

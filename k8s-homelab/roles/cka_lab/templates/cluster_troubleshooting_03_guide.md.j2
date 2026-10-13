@@ -4,6 +4,28 @@ Worker node failures and `NotReady` states in the CKA exam typically stem from k
 
 ---
 
+## Official Exam References & Quick Lookups
+
+### Permitted Exam Documentation
+
+- **Worker Node Troubleshooting**: [Troubleshoot Clusters](https://kubernetes.io/docs/tasks/debug/debug-cluster/#troubleshooting-worker-nodes) `[EXAM ALLOWED]`
+- **kubelet Configuration**: [kubelet Configuration](https://kubernetes.io/docs/reference/config-api/kubelet-config.v1beta1/) `[EXAM ALLOWED]`
+
+### In-Exam Search Keywords
+
+- `"troubleshoot worker nodes"`
+- `"kubelet configuration"`
+
+### Terminal Fast Lookups (`systemctl` / `journalctl`)
+
+```bash
+sudo systemctl status kubelet
+sudo journalctl -u kubelet -e --no-pager
+sudo systemctl restart kubelet
+```
+
+---
+
 ## 1. Systemd Service Diagnostics
 
 1. **Check Service Status**:

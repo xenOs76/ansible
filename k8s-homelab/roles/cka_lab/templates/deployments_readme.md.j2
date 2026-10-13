@@ -32,6 +32,37 @@ Hands-on training scenarios for mastering Kubernetes Deployment primitives, Repl
 
 ---
 
+## Official Exam References & Quick Lookups
+
+### Permitted Exam Documentation
+
+- **Deployments Architecture**: [Deployments](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/) `[EXAM ALLOWED]`
+- **ReplicaSets**: [ReplicaSets](https://kubernetes.io/docs/concepts/workloads/controllers/replicaset/) `[EXAM ALLOWED]`
+- **Rolling Updates Tutorial**: [Performing a Rolling Update](https://kubernetes.io/docs/tutorials/kubernetes-basics/update/update-intro/) `[EXAM ALLOWED]`
+- **kubectl Cheat Sheet**: [kubectl Cheat Sheet - Updating Resources](https://kubernetes.io/docs/reference/kubectl/cheatsheet/#updating-resources) `[EXAM ALLOWED]`
+
+### In-Exam Search Keywords
+>
+> *Type these exact phrases into the kubernetes.io search bar to jump directly to copy-pasteable YAML templates:*
+
+- `"deployment"`
+- `"rolling update"`
+- `"rollout undo"`
+- `"maxsurge"`
+
+### Terminal Fast Lookups (`kubectl explain`)
+
+```bash
+# Rapid schema discovery without leaving terminal
+kubectl explain deployment.spec.strategy.rollingUpdate
+kubectl explain deployment.spec.template.spec.containers
+kubectl rollout status deployment/<name>
+kubectl rollout history deployment/<name>
+kubectl rollout undo deployment/<name> --to-revision=1
+```
+
+---
+
 ## Hands-on Drills
 
 ### Drill 1: Manifest Creation and Scaling
@@ -45,7 +76,7 @@ Hands-on training scenarios for mastering Kubernetes Deployment primitives, Repl
    kubectl get pods -l app.kubernetes.io/name=cka-lab-web-frontend
    ```
 
-2. **Imperative Generation with Dry-Run**:
+1. **Imperative Generation with Dry-Run**:
 
    Rapidly generate a production-ready manifest without creating the resource:
 
@@ -57,7 +88,7 @@ Hands-on training scenarios for mastering Kubernetes Deployment primitives, Repl
      --dry-run=client -o yaml > cache-service.yaml
    ```
 
-3. **Imperative Scaling**:
+1. **Imperative Scaling**:
 
    ```bash
    kubectl scale deployment cka-lab-web-frontend --replicas=5
@@ -77,14 +108,14 @@ Hands-on training scenarios for mastering Kubernetes Deployment primitives, Repl
 
    Observe the API server error explaining that `spec.selector` does not match `spec.template.metadata.labels`.
 
-2. **Apply the Resolution**:
+1. **Apply the Resolution**:
 
    ```bash
    kubectl apply -f fixed-deployment.yaml
    kubectl get deployment cka-lab-order-processor
    ```
 
-3. Review the troubleshooting principles in [`02-troubleshooting-labels/README.md`](02-troubleshooting-labels/README.md).
+1. Review the troubleshooting principles in [`02-troubleshooting-labels/README.md`](02-troubleshooting-labels/README.md).
 
 ---
 
@@ -106,27 +137,27 @@ Or execute the steps manually:
    kubectl rollout status deployment/cka-lab-catalog-service
    ```
 
-2. Apply version 2:
+1. Apply version 2:
 
    ```bash
    kubectl apply -f 02-catalog-v2.yaml
    kubectl rollout status deployment/cka-lab-catalog-service
    ```
 
-3. Inspect rollout history and recorded change causes:
+1. Inspect rollout history and recorded change causes:
 
    ```bash
    kubectl rollout history deployment/cka-lab-catalog-service
    ```
 
-4. Roll back to revision 1:
+1. Roll back to revision 1:
 
    ```bash
    kubectl rollout undo deployment/cka-lab-catalog-service --to-revision=1
    kubectl rollout status deployment/cka-lab-catalog-service
    ```
 
-5. Confirm container image is reverted:
+1. Confirm container image is reverted:
 
    ```bash
    kubectl get deployment cka-lab-catalog-service -o jsonpath='{.spec.template.spec.containers[0].image}'
@@ -145,13 +176,13 @@ Or execute the steps manually:
 
    Setting `maxUnavailable: 0` ensures available pods never fall below the replica target during rolling upgrades.
 
-2. **Percentage-Based Bounds**:
+1. **Percentage-Based Bounds**:
 
    ```bash
    kubectl apply -f rolling-update-percent.yaml
    ```
 
-3. **Recreate Strategy**:
+1. **Recreate Strategy**:
 
    ```bash
    kubectl apply -f recreate-strategy.yaml

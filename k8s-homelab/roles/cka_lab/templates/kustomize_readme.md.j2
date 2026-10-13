@@ -4,6 +4,26 @@ This directory contains a complete, self-contained Kustomize lab designed for ha
 
 Kustomize is natively integrated into `kubectl` (`kubectl kustomize` and `kubectl apply -k`). It allows you to customize raw, template-free YAML files for multiple environments without altering original base manifests.
 
+## Official Exam References & Quick Lookups
+
+### Permitted Exam Documentation
+
+- [Declarative Management Using Kustomize](https://kubernetes.io/docs/tasks/manage-kubernetes-objects/kustomization/) `[EXAM ALLOWED]`
+- [ConfigMaps](https://kubernetes.io/docs/concepts/configuration/configmap/) `[EXAM ALLOWED]`
+- [Configure a Pod to Use a ConfigMap](https://kubernetes.io/docs/tasks/configure-pod-container/configure-pod-configmap/) `[EXAM ALLOWED]`
+
+### In-Exam Search Keywords
+
+- `"kustomize"`
+- `"declarative management using kustomize"`
+- `"configmapgenerator"`
+
+### Terminal Fast Lookups (kubectl explain / CLI)
+
+- `kubectl kustomize --help`
+- `kubectl apply -k --help`
+- `kubectl explain configmap`
+
 ---
 
 ## 1. Directory Structure
@@ -146,20 +166,20 @@ kubectl delete -k overlays/production
 ### Drill 1: Add a New ConfigMap Key via configMapGenerator
 
 1. Edit `overlays/development/kustomization.yaml`.
-2. Under `configMapGenerator[0].literals`, add `- NEW_FEATURE_ENABLED=true`.
-3. Run `kubectl kustomize overlays/development | grep -A 5 "data:"`.
-4. Verify the new key appears in the generated manifest.
+1. Under `configMapGenerator[0].literals`, add `- NEW_FEATURE_ENABLED=true`.
+1. Run `kubectl kustomize overlays/development | grep -A 5 "data:"`.
+1. Verify the new key appears in the generated manifest.
 
 ### Drill 2: Modify Resource Limits via Strategic Merge Patch
 
 1. Edit `overlays/production/replica-patch.yaml`.
-2. Change `replicas: 3` to `replicas: 5`.
-3. Increase memory limit to `512Mi`.
-4. Run `kubectl kustomize overlays/production | grep replicas:` to verify.
+1. Change `replicas: 3` to `replicas: 5`.
+1. Increase memory limit to `512Mi`.
+1. Run `kubectl kustomize overlays/production | grep replicas:` to verify.
 
 ### Drill 3: Enable Content Hash Suffixes
 
 1. Edit `overlays/development/kustomization.yaml`.
-2. Change `disableNameSuffixHash: true` to `disableNameSuffixHash: false` (or remove the line).
-3. Run `kubectl kustomize overlays/development`.
-4. Notice how `dev-webapp-config-<HASH>` is generated and how `dev-webapp-deployment` automatically updates its `envFrom.configMapRef.name` to match the exact hash!
+1. Change `disableNameSuffixHash: true` to `disableNameSuffixHash: false` (or remove the line).
+1. Run `kubectl kustomize overlays/development`.
+1. Notice how `dev-webapp-config-<HASH>` is generated and how `dev-webapp-deployment` automatically updates its `envFrom.configMapRef.name` to match the exact hash!

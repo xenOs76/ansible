@@ -60,7 +60,47 @@ Troubleshooting makes up the largest scoring weight (30%) of the CKA exam:
 
 ---
 
-## 2. Walkthrough & Exam Drills
+## 2. Official Exam References & Quick Lookups
+
+### Permitted Exam Documentation
+
+- **Node Drain & Maintenance**: [Safely Drain a Node](https://kubernetes.io/docs/tasks/administer-cluster/safely-drain-node/) `[EXAM ALLOWED]`
+- **Static Pod Provisioning**: [Create Static Pods](https://kubernetes.io/docs/tasks/configure-pod-container/static-pod/) `[EXAM ALLOWED]`
+- **Cluster Component Debugging**: [Troubleshoot Clusters](https://kubernetes.io/docs/tasks/debug/debug-cluster/) `[EXAM ALLOWED]`
+- **CoreDNS Troubleshooting**: [Debugging DNS Resolution](https://kubernetes.io/docs/tasks/administer-cluster/dns-debugging-resolution/) `[EXAM ALLOWED]`
+- **Service Endpoints Triage**: [Debug Services](https://kubernetes.io/docs/tasks/debug/debug-application/debug-service/) `[EXAM ALLOWED]`
+
+### In-Exam Search Keywords
+>
+> *Type these exact phrases into the kubernetes.io search bar to jump directly to copy-pasteable YAML templates:*
+
+- `"safely drain node"`
+- `"static pod"`
+- `"troubleshoot cluster"`
+- `"dns debugging"`
+- `"debug services"`
+
+### Terminal Fast Lookups (CLI / Systemd / crictl)
+
+```bash
+# Node maintenance
+kubectl cordon <node>
+kubectl drain <node> --ignore-daemonsets --delete-emptydir-data
+kubectl uncordon <node>
+
+# Node daemon diagnosis
+sudo systemctl status kubelet
+sudo journalctl -u kubelet -e --no-pager
+
+# Container runtime inspection
+crictl ps
+crictl pods
+crictl logs <container-id>
+```
+
+---
+
+## 3. Walkthrough & Exam Drills
 
 ### Drill 1: Node Cordon & Drain (`01-node-maintenance/`)
 

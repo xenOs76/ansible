@@ -35,7 +35,37 @@ In production Kubernetes clusters, administrators avoid manually provisioning st
 
 ---
 
-## 2. Walkthrough & Exam Drills
+## 2. Official Exam References & Quick Lookups
+
+### Permitted Exam Documentation
+
+- **Storage Classes**: [Storage Classes](https://kubernetes.io/docs/concepts/storage/storage-classes/) `[EXAM ALLOWED]`
+- **Dynamic Volume Provisioning**: [Dynamic Volume Provisioning](https://kubernetes.io/docs/concepts/storage/dynamic-provisioning/) `[EXAM ALLOWED]`
+- **Expanding Persistent Volumes**: [Expanding Persistent Volumes](https://kubernetes.io/docs/concepts/storage/persistent-volumes/#expanding-persistent-volumes-claims) `[EXAM ALLOWED]`
+
+### In-Exam Search Keywords
+>
+> *Type these exact phrases into the kubernetes.io search bar to jump directly to copy-pasteable YAML templates:*
+
+- `"storage class"`
+- `"volume binding mode"`
+- `"allow volume expansion"`
+- `"reclaim policy delete"`
+
+### Terminal Fast Lookups (`kubectl explain`)
+
+```bash
+# Rapid schema discovery without leaving terminal
+kubectl explain storageclass
+kubectl explain storageclass.provisioner
+kubectl explain storageclass.volumeBindingMode
+kubectl explain storageclass.reclaimPolicy
+kubectl explain storageclass.allowVolumeExpansion
+```
+
+---
+
+## 3. Walkthrough & Exam Drills
 
 ### Drill 1: Deploy Storage Provisioner (`01-provisioners/`)
 

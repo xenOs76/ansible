@@ -17,6 +17,26 @@ Master rapid resource queries and custom formatting under exam time limits using
   - Custom column syntax alternative: `-o custom-columns=NAME:.metadata.name,IP:.status.podIP`
   - Sorting: `--sort-by=.status.containerStatuses[0].restartCount` or `--sort-by=.metadata.creationTimestamp`
 
+## Official Exam References & Quick Lookups
+
+### Permitted Exam Documentation
+
+- [JSONPath Support](https://kubernetes.io/docs/reference/kubectl/jsonpath/) `[EXAM ALLOWED]`
+- [kubectl Cheat Sheet - Formatting Output](https://kubernetes.io/docs/reference/kubectl/cheatsheet/#formatting-output) `[EXAM ALLOWED]`
+- [Overview of kubectl](https://kubernetes.io/docs/reference/kubectl/overview/) `[EXAM ALLOWED]`
+
+### In-Exam Search Keywords
+
+- `"jsonpath support"`
+- `"formatting output"`
+- `"jsonpath template"`
+
+### Terminal Fast Lookups (kubectl explain / CLI)
+
+- `kubectl get --help | grep -A 10 "jsonpath"`
+- `kubectl explain <resource>.<field>` (to find the exact JSON hierarchy to query)
+- `kubectl get <resource> <name> -o json` (inspect actual schema tree before writing filter)
+
 ---
 
 ## High-Frequency Query Patterns

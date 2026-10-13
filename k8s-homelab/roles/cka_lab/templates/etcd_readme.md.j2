@@ -11,6 +11,38 @@ Practice the etcd v3 snapshot lifecycle, TLS credential discovery, and data-dir 
 
 ---
 
+## Official Exam References & Quick Lookups
+
+### Permitted Exam Documentation
+
+- **Operating etcd Clusters (Backup & Restore)**: [Operating etcd clusters for Kubernetes](https://kubernetes.io/docs/tasks/administer-cluster/configure-upgrade-etcd/) `[EXAM ALLOWED]`
+
+### In-Exam Search Keywords
+
+- `"backup etcd"`
+- `"restore etcd"`
+- `"etcd snapshot"`
+
+### Terminal Fast Lookups (`etcdctl`)
+
+```bash
+# Save snapshot
+ETCDCTL_API=3 etcdctl --endpoints=https://127.0.0.1:2379 \
+  --cacert=/etc/kubernetes/pki/etcd/ca.crt \
+  --cert=/etc/kubernetes/pki/etcd/server.crt \
+  --key=/etc/kubernetes/pki/etcd/server.key \
+  snapshot save /tmp/snapshot.db
+
+# Inspect snapshot status
+ETCDCTL_API=3 etcdctl --write-out=table snapshot status /tmp/snapshot.db
+
+# Restore to new data-dir
+ETCDCTL_API=3 etcdctl snapshot restore /tmp/snapshot.db \
+  --data-dir=/var/lib/etcd-restored
+```
+
+---
+
 ## Step-by-Step Procedure
 
 ### 1. Identify etcd Parameters

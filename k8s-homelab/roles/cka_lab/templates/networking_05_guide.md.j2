@@ -2,14 +2,37 @@
 
 Master complex pod-to-pod microsegmentation combining `namespaceSelector`, `podSelector`, and egress port restrictions.
 
+## Official Exam References & Quick Lookups
+
+### Permitted Exam Documentation
+
+- **Network Policies**: [Network Policies](https://kubernetes.io/docs/concepts/services-networking/network-policies/) `[EXAM ALLOWED]`
+- **Declare Network Policy Task**: [Declare Network Policy](https://kubernetes.io/docs/tasks/administer-cluster/declare-network-policy/) `[EXAM ALLOWED]`
+
+### In-Exam Search Keywords
+
+- `"network policies"`
+- `"declare network policy"`
+- `"namespaceselector podselector"`
+
+### Terminal Fast Lookups (`kubectl explain`)
+
+```bash
+kubectl explain networkpolicy.spec.ingress.from.namespaceSelector
+kubectl explain networkpolicy.spec.ingress.from.podSelector
+kubectl explain networkpolicy.spec.egress.ports
+```
+
+---
+
 ## Exam Rules & Principles
 
 1. **Default Deny vs Allow Rules**: As soon as a NetworkPolicy selects a pod (`spec.podSelector`), that pod enters an **isolated** state for the defined policyTypes (Ingress, Egress). Any traffic not explicitly allowed is dropped.
-2. **Namespace Matching**: To allow traffic from another namespace, the target namespace **must** have a matching label (e.g., `kubernetes.io/metadata.name: portal` or custom label `project: portal`).
-3. **Combining namespaceSelector and podSelector**:
+1. **Namespace Matching**: To allow traffic from another namespace, the target namespace **must** have a matching label (e.g., `kubernetes.io/metadata.name: portal` or custom label `project: portal`).
+1. **Combining namespaceSelector and podSelector**:
    - Placed in the **same list item** (`- namespaceSelector: ... \n podSelector: ...`): Logical **AND** (must be from selected namespace AND matching pod label).
    - Placed in **separate list items**: Logical **OR** (all pods in selected namespace OR matching pods anywhere).
-4. **DNS Egress Requirement**: When implementing default-deny Egress, you **must** allow UDP and TCP egress to port 53 (CoreDNS), otherwise DNS resolution fails completely.
+1. **DNS Egress Requirement**: When implementing default-deny Egress, you **must** allow UDP and TCP egress to port 53 (CoreDNS), otherwise DNS resolution fails completely.
 
 ---
 

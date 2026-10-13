@@ -2,6 +2,28 @@
 
 Troubleshoot the underlying container runtime when pods fail to start or the node reports `NotReady`.
 
+## Official Exam References & Quick Lookups
+
+### Permitted Exam Documentation
+
+- **Debugging Kubernetes Nodes With crictl**: [Debugging Kubernetes Nodes With crictl](https://kubernetes.io/docs/tasks/debug/debug-cluster/crictl/) `[EXAM ALLOWED]`
+- **Container Runtimes**: [Container Runtimes](https://kubernetes.io/docs/setup/production-environment/container-runtimes/) `[EXAM ALLOWED]`
+
+### In-Exam Search Keywords
+
+- `"crictl"`
+- `"container runtimes"`
+
+### Terminal Fast Lookups (`crictl`)
+
+```bash
+sudo crictl ps -a
+sudo crictl pods
+sudo crictl logs <container-id>
+```
+
+---
+
 ## Common Commands
 
 ```bash

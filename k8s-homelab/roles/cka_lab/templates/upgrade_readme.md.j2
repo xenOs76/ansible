@@ -12,6 +12,28 @@ Hands-on rehearsal of the manual Kubernetes node and cluster upgrade sequence us
   - Version skew: `kubelet` must never be newer than `kube-apiserver`, and can be at most 1 minor version older.
   - Always `drain` before upgrading `kubelet` on worker nodes; unhold packages before running `apt-get install`.
 
+## Official Exam References & Quick Lookups
+
+### Permitted Exam Documentation
+
+- [Upgrading kubeadm clusters](https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-upgrade/) `[EXAM ALLOWED]`
+- [kubeadm upgrade](https://kubernetes.io/docs/reference/setup-tools/kubeadm/kubeadm-upgrade/) `[EXAM ALLOWED]`
+- [Safely Drain a Node](https://kubernetes.io/docs/tasks/administer-cluster/safely-drain-node/) `[EXAM ALLOWED]`
+
+### In-Exam Search Keywords
+
+- `"upgrading kubeadm clusters"`
+- `"kubeadm upgrade apply"`
+- `"safely drain a node"`
+
+### Terminal Fast Lookups (kubectl explain / CLI)
+
+- `kubeadm upgrade plan --help`
+- `kubeadm upgrade apply --help`
+- `kubeadm upgrade node --help`
+- `kubectl drain --help`
+- `apt-cache madison kubeadm`
+
 ---
 
 ## 1. Control Plane Node Upgrade Procedure

@@ -4,6 +4,28 @@ Control plane components (`etcd`, `kube-apiserver`, `kube-controller-manager`, a
 
 ---
 
+## Official Exam References & Quick Lookups
+
+### Permitted Exam Documentation
+
+- **Static Pod Creation**: [Create Static Pods](https://kubernetes.io/docs/tasks/configure-pod-container/static-pod/) `[EXAM ALLOWED]`
+- **Control Plane Troubleshooting**: [Troubleshoot Clusters](https://kubernetes.io/docs/tasks/debug/debug-cluster/) `[EXAM ALLOWED]`
+
+### In-Exam Search Keywords
+
+- `"static pod"`
+- `"troubleshoot cluster"`
+
+### Terminal Fast Lookups (`crictl` / `journalctl`)
+
+```bash
+sudo crictl ps -a
+sudo crictl logs <container-id>
+sudo journalctl -u kubelet -e --no-pager
+```
+
+---
+
 ## 1. Key Diagnostic Techniques
 
 1. **Check Manifest Location**:
