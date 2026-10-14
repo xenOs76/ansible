@@ -1,0 +1,271 @@
+# CKA Exam Drill: Manual User Authentication & Kubeconfig Context Creation
+
+Hands-on step-by-step exercise to manually perform all actions handled by the `create-user-context.sh` script.
+
+---
+
+## Directory Structure
+
+```text
+/home/vagrant/cka/rbac/manual-user/
+├── README.md                 # Complete manual drill guide (this file)
+├── csr-template.yaml         # Reference CertificateSigningRequest manifest
+├── verify-manual-user.sh     # Automated validation suite
+└── cleanup-manual-user.sh    # Teardown and reset script
+```
+
+---
+
+## Exam Relevance & Objectives
+
+In the Certified Kubernetes Administrator (CKA) exam, candidates are frequently tasked with configuring new human users:
+
+1. Generating private keys and CSRs with specific Common Names (`CN`) and Groups (`O`).
+1. Submitting a Kubernetes `CertificateSigningRequest` (`certificates.k8s.io/v1`).
+1. Approving the request with `kubectl certificate approve`.
+1. Extracting and decoding the issued certificate from `.status.certificate`.
+1. Registering credentials (`kubectl config set-credentials`) and contexts (`kubectl config set-context`) in `~/.kube/config`.
+1. Verifying authorization failures and binding targeted `Role` or `ClusterRole` objects.
+
+---
+
+## Official Exam References & Quick Lookups
+
+### Permitted Documentation
+
+- **Certificate Signing Requests**: [Normal User Certificates](https://kubernetes.io/docs/reference/access-authn-authz/certificate-signing-requests/#normal-user) `[EXAM ALLOWED]`
+- **RBAC Authorization**: [Using RBAC Authorization](https://kubernetes.io/docs/reference/access-authn-authz/rbac/) `[EXAM ALLOWED]`
+- **Kubeconfig Contexts**: [Configure Access to Multiple Clusters](https://kubernetes.io/docs/tasks/access-application-cluster/configure-access-multiple-clusters/) `[EXAM ALLOWED]`
+
+### In-Exam Search Keywords
+
+- `"certificate signing request"`
+- `"normal user"`
+- `"using rbac authorization"`
+
+### Terminal Fast Lookups
+
+```bash
+kubectl explain csr.spec
+kubectl explain role.rules
+kubectl explain rolebinding.subjects
+kubectl config --help
+kubectl config set-credentials --help
+kubectl config set-context --help
+```
+
+---
+
+## Step-by-Step Exercise Procedure
+
+Practice creating user `{{ cka_lab_rbac_manual_user | default('developer') }}` (or substitute with any exam-specified username).
+
+### Step 1: Generate Private Key and CSR (`openssl`)
+
+1. Navigate to the exercise directory:
+
+   ```bash
+   cd /home/vagrant/cka/rbac/manual-user
+   ```
+
+1. Generate a 2048-bit RSA private key:
+
+   ```bash
+   openssl genrsa -out {{ cka_lab_rbac_manual_user | default('developer') }}.key 2048
+   chmod 0600 {{ cka_lab_rbac_manual_user | default('developer') }}.key
+   ```
+
+1. Generate a Certificate Signing Request (CSR) with Subject `/CN={{ cka_lab_rbac_manual_user | default('developer') }}/O={{ cka_lab_rbac_manual_group | default('developers') }}`:
+
+   ```bash
+   openssl req -new -key {{ cka_lab_rbac_manual_user | default('developer') }}.key \
+     -out {{ cka_lab_rbac_manual_user | default('developer') }}.csr \
+     -subj "/CN={{ cka_lab_rbac_manual_user | default('developer') }}/O={{ cka_lab_rbac_manual_group | default('developers') }}"
+   ```
+
+1. Verify the CSR contents:
+
+   ```bash
+   openssl req -in {{ cka_lab_rbac_manual_user | default('developer') }}.csr -noout -subject
+   ```
+
+---
+
+### Step 2: Create and Submit the Kubernetes CSR Resource
+
+1. Encode the CSR in base64 as a single line:
+
+   ```bash
+   CSR_BASE64=$(base64 < {{ cka_lab_rbac_manual_user | default('developer') }}.csr | tr -d "\r\n")
+   ```
+
+1. Submit the `CertificateSigningRequest` manifest directly to the Kubernetes API:
+
+   ```bash
+   cat <<EOF | kubectl apply -f -
+   apiVersion: certificates.k8s.io/v1
+   kind: CertificateSigningRequest
+   metadata:
+     name: {{ cka_lab_rbac_manual_user | default('developer') }}
+   spec:
+     request: ${CSR_BASE64}
+     signerName: kubernetes.io/kube-apiserver-client
+     expirationSeconds: 86400
+     usages:
+     - client auth
+   EOF
+   ```
+
+1. Verify the CSR status is `Pending`:
+
+   ```bash
+   kubectl get csr {{ cka_lab_rbac_manual_user | default('developer') }}
+   ```
+
+---
+
+### Step 3: Approve CSR and Extract Signed Certificate
+
+1. Approve the pending request:
+
+   ```bash
+   kubectl certificate approve {{ cka_lab_rbac_manual_user | default('developer') }}
+   ```
+
+1. Verify that the condition shows `Approved,Issued`:
+
+   ```bash
+   kubectl get csr {{ cka_lab_rbac_manual_user | default('developer') }}
+   ```
+
+   > **CKA Architecture Note**: `kubectl certificate approve` only updates the status condition to `Approved`. The certificate itself is signed asynchronously by the `csrsigning` controller inside `kube-controller-manager`. Once signed, the condition transitions to `Approved,Issued` and `.status.certificate` is populated. If the condition remains stuck at `Approved` without `Issued`, check `kubectl get pods -n kube-system -l component=kube-controller-manager` and review controller logs.
+
+1. Extract the signed client certificate from the CSR status field and decode it:
+
+   ```bash
+   kubectl get csr {{ cka_lab_rbac_manual_user | default('developer') }} \
+     -o jsonpath='{.status.certificate}' | base64 -d > {{ cka_lab_rbac_manual_user | default('developer') }}.crt
+   chmod 0644 {{ cka_lab_rbac_manual_user | default('developer') }}.crt
+   ```
+
+1. Inspect the certificate subject and issuer:
+
+   ```bash
+   openssl x509 -in {{ cka_lab_rbac_manual_user | default('developer') }}.crt -noout -subject -issuer
+   ```
+
+---
+
+### Step 4: Configure Kubeconfig Credentials and Context
+
+1. Detect the active cluster name (or use `kubernetes`):
+
+   ```bash
+   CLUSTER_NAME=$(kubectl config view --minify -o jsonpath='{.clusters[0].name}')
+   CLUSTER_NAME="${CLUSTER_NAME:-kubernetes}"
+   echo "Target cluster: ${CLUSTER_NAME}"
+   ```
+
+1. Register user credentials into `~/.kube/config` with embedded certificate data:
+
+   ```bash
+   kubectl config set-credentials {{ cka_lab_rbac_manual_user | default('developer') }} \
+     --client-key={{ cka_lab_rbac_manual_user | default('developer') }}.key \
+     --client-certificate={{ cka_lab_rbac_manual_user | default('developer') }}.crt \
+     --embed-certs=true
+   ```
+
+1. Register a new context pointing to the cluster and user:
+
+   ```bash
+   kubectl config set-context {{ cka_lab_rbac_manual_user | default('developer') }}@${CLUSTER_NAME} \
+     --cluster="${CLUSTER_NAME}" \
+     --user={{ cka_lab_rbac_manual_user | default('developer') }}
+   ```
+
+1. List available contexts to confirm registration:
+
+   ```bash
+   kubectl config get-contexts
+   ```
+
+---
+
+### Step 5: Verify Minimal Access (Zero Roles Bound)
+
+1. Switch to the newly created user context:
+
+   ```bash
+   kubectl config use-context {{ cka_lab_rbac_manual_user | default('developer') }}@${CLUSTER_NAME}
+   ```
+
+1. Test API access (expected to fail with HTTP 403 Forbidden):
+
+   ```bash
+   kubectl get pods
+   kubectl auth can-i get pods
+   kubectl auth can-i create deployments
+   ```
+
+---
+
+### Step 6: Grant Scoped RBAC Permissions
+
+1. Switch back to the cluster administrator context:
+
+   ```bash
+   kubectl config use-context kubernetes-admin@kubernetes
+   ```
+
+1. Create a `Role` granting pod reading rights in the `default` namespace:
+
+   ```bash
+   kubectl create role pod-reader \
+     --verb=get,list,watch \
+     --resource=pods \
+     --namespace=default
+   ```
+
+1. Bind the role to user `{{ cka_lab_rbac_manual_user | default('developer') }}`:
+
+   ```bash
+   kubectl create rolebinding {{ cka_lab_rbac_manual_user | default('developer') }}-pod-reader \
+     --role=pod-reader \
+     --user={{ cka_lab_rbac_manual_user | default('developer') }} \
+     --namespace=default
+   ```
+
+1. Switch back to the user context and confirm access is now granted:
+
+   ```bash
+   kubectl config use-context {{ cka_lab_rbac_manual_user | default('developer') }}@${CLUSTER_NAME}
+   kubectl get pods -n default
+   kubectl auth can-i get pods -n default
+   kubectl auth can-i delete pods -n default
+   ```
+
+1. Return to administrator context:
+
+   ```bash
+   kubectl config use-context kubernetes-admin@kubernetes
+   ```
+
+---
+
+### Step 7: Automated Validation
+
+Execute the automated verification script to validate all keys, CSR status, certificates, and kubeconfig entries:
+
+```bash
+./verify-manual-user.sh
+```
+
+---
+
+### Step 8: Teardown & Reset
+
+When finished or before repeating the exercise, clean up all generated resources:
+
+```bash
+./cleanup-manual-user.sh
+```

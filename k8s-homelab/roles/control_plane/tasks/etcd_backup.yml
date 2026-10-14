@@ -1,0 +1,59 @@
+---
+- name: Ensure etcd backup directory exists
+  ansible.builtin.file:
+    path: "{{ control_plane_etcd_backup_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  tags:
+    - control_plane
+    - etcd
+    - backup
+
+- name: Deploy automated etcd backup script
+  ansible.builtin.template:
+    src: etcd-backup.sh.j2
+    dest: "{{ control_plane_etcd_backup_script_path }}"
+    owner: root
+    group: root
+    mode: "0755"
+  tags:
+    - control_plane
+    - etcd
+    - backup
+
+- name: Deploy etcd backup systemd service unit
+  ansible.builtin.template:
+    src: etcd-backup.service.j2
+    dest: /etc/systemd/system/etcd-backup.service
+    owner: root
+    group: root
+    mode: "0644"
+  tags:
+    - control_plane
+    - etcd
+    - backup
+
+- name: Deploy etcd backup systemd timer unit
+  ansible.builtin.template:
+    src: etcd-backup.timer.j2
+    dest: /etc/systemd/system/etcd-backup.timer
+    owner: root
+    group: root
+    mode: "0644"
+  tags:
+    - control_plane
+    - etcd
+    - backup
+
+- name: Enable and start etcd backup systemd timer
+  ansible.builtin.systemd:
+    name: etcd-backup.timer
+    enabled: true
+    state: started
+    daemon_reload: true
+  tags:
+    - control_plane
+    - etcd
+    - backup

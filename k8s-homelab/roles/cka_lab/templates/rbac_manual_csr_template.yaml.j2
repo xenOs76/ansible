@@ -1,0 +1,27 @@
+# ==============================================================================
+# Kubernetes CertificateSigningRequest (CSR) Manifest Template
+# Reference: https://kubernetes.io/docs/reference/access-authn-authz/certificate-signing-requests/#normal-user
+#
+# Steps:
+#   1. Generate private key:
+#      openssl genrsa -out {{ cka_lab_rbac_manual_user | default('developer') }}.key 2048
+#   2. Generate CSR:
+#      openssl req -new -key {{ cka_lab_rbac_manual_user | default('developer') }}.key \
+#        -out {{ cka_lab_rbac_manual_user | default('developer') }}.csr \
+#        -subj "/CN={{ cka_lab_rbac_manual_user | default('developer') }}/O={{ cka_lab_rbac_manual_group | default('developers') }}"
+#   3. Populate 'request' field with base64 encoded CSR (single line):
+#      cat {{ cka_lab_rbac_manual_user | default('developer') }}.csr | base64 | tr -d "\r\n"
+#   4. Apply manifest:
+#      kubectl apply -f csr-template.yaml
+# ==============================================================================
+apiVersion: certificates.k8s.io/v1
+kind: CertificateSigningRequest
+metadata:
+  name: {{ cka_lab_rbac_manual_user | default('developer') }}
+spec:
+  # Replace <PASTE_BASE64_CSR_HERE> with: base64 < {{ cka_lab_rbac_manual_user | default('developer') }}.csr | tr -d "\r\n"
+  request: <PASTE_BASE64_CSR_HERE>
+  signerName: kubernetes.io/kube-apiserver-client
+  expirationSeconds: 86400
+  usages:
+    - client auth

@@ -9,6 +9,7 @@
   loop:
     - "{{ cka_lab_etcd_dir }}"
     - "{{ cka_lab_etcd_dir }}/01-backup-restore"
+    - "{{ cka_lab_etcd_dir }}/02-automated-backup"
   tags:
     - cka_lab
     - etcd
@@ -26,8 +27,71 @@
     - {src: "etcd_01_backup.sh.j2", dest: "01-backup-restore/backup-etcd.sh", mode: "0755"}
     - {src: "etcd_01_restore.sh.j2", dest: "01-backup-restore/restore-etcd.sh", mode: "0755"}
     - {src: "etcd_01_simulate_loss.sh.j2", dest: "01-backup-restore/simulate-loss-drill.sh", mode: "0755"}
+    - {src: "etcd_02_daily_backup.sh.j2", dest: "02-automated-backup/backup-etcd-daily.sh", mode: "0755"}
+    - {src: "etcd_02_backup.service.j2", dest: "02-automated-backup/etcd-backup.service", mode: "0644"}
+    - {src: "etcd_02_backup.timer.j2", dest: "02-automated-backup/etcd-backup.timer", mode: "0644"}
+    - {src: "etcd_02_install_timer.sh.j2", dest: "02-automated-backup/install-timer.sh", mode: "0755"}
   loop_control:
     label: "etcd/{{ item.dest }}"
   tags:
     - cka_lab
     - etcd
+
+- name: Ensure etcd backup directory exists on control plane
+  ansible.builtin.file:
+    path: "{{ cka_lab_etcd_backup_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  tags:
+    - cka_lab
+    - etcd
+    - backup
+
+- name: Deploy system-wide automated etcd backup script
+  ansible.builtin.template:
+    src: etcd_02_daily_backup.sh.j2
+    dest: /usr/local/bin/etcd-backup.sh
+    owner: root
+    group: root
+    mode: "0755"
+  tags:
+    - cka_lab
+    - etcd
+    - backup
+
+- name: Deploy systemd service unit for etcd daily backup
+  ansible.builtin.template:
+    src: etcd_02_backup.service.j2
+    dest: /etc/systemd/system/etcd-backup.service
+    owner: root
+    group: root
+    mode: "0644"
+  tags:
+    - cka_lab
+    - etcd
+    - backup
+
+- name: Deploy systemd timer unit for etcd daily backup
+  ansible.builtin.template:
+    src: etcd_02_backup.timer.j2
+    dest: /etc/systemd/system/etcd-backup.timer
+    owner: root
+    group: root
+    mode: "0644"
+  tags:
+    - cka_lab
+    - etcd
+    - backup
+
+- name: Enable and start etcd backup systemd timer
+  ansible.builtin.systemd:
+    name: etcd-backup.timer
+    enabled: true
+    state: started
+    daemon_reload: true
+  tags:
+    - cka_lab
+    - etcd
+    - backup

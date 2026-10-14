@@ -2,7 +2,7 @@
 # ==============================================================================
 # Script: control-plane-tools.sh
 # Purpose: Install essential Kubernetes administration and operations CLI tools
-#          (Helm v3, k9s, etcdctl, and etcdutl) on the control plane node.
+#          (Helm v3, k9s, etcdctl, etcdutl, and glow) on the control plane node.
 #
 # Context:
 #   Executed inside the 'kube-control-plane' VM with superuser privileges
@@ -37,6 +37,9 @@
 #        version-matched binaries are installed from official GitHub releases.
 #      - Installs binaries to /usr/local/bin with mode 0755.
 #      - Exports ETCDCTL_API=3 in /etc/profile.d/etcd.sh for all shells.
+#   4. glow Markdown CLI reader:
+#      - Downloads and installs official architecture-specific .deb package.
+#      - Configures 'alias glow="glow -s tokyo-night -w 150"' in /etc/profile.d/glow.sh and user .bashrc.
 #
 # Manual Verification:
 #   helm version --short
@@ -51,7 +54,7 @@
 # ==============================================================================
 set -euo pipefail
 
-echo "=== Installing Control Plane Tools (Helm, k9s, etcdctl, etcdutl) ==="
+echo "=== Installing Control Plane Tools (Helm, k9s, etcdctl, etcdutl, glow) ==="
 
 # ------------------------------------------------------------------------------
 # 1. Install Helm via official APT repository with GPG fingerprint verification
@@ -275,6 +278,28 @@ if ! command -v glow >/dev/null 2>&1; then
   rm -f "$TMP_GLOW_DEB"
 else
   echo "glow is already installed."
+fi
+
+# Configure glow alias system-wide and in user .bashrc
+cat <<'EOF' > /etc/profile.d/glow.sh
+alias glow="glow -s tokyo-night -w 150"
+EOF
+chmod 0644 /etc/profile.d/glow.sh
+
+if [ -f /home/vagrant/.bashrc ]; then
+  if grep -q '^alias glow=' /home/vagrant/.bashrc; then
+    sed -i 's|^alias glow=.*|alias glow="glow -s tokyo-night -w 150"|' /home/vagrant/.bashrc
+  else
+    echo 'alias glow="glow -s tokyo-night -w 150"' >> /home/vagrant/.bashrc
+  fi
+fi
+
+if [ -f /root/.bashrc ]; then
+  if grep -q '^alias glow=' /root/.bashrc; then
+    sed -i 's|^alias glow=.*|alias glow="glow -s tokyo-night -w 150"|' /root/.bashrc
+  else
+    echo 'alias glow="glow -s tokyo-night -w 150"' >> /root/.bashrc
+  fi
 fi
 
 echo "=== Control Plane Tools Installed Successfully ==="

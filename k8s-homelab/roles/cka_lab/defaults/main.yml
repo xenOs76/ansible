@@ -48,6 +48,9 @@ cka_lab_user_rbac_context_name: "{{ cka_lab_user_rbac_name }}@kubernetes"
 cka_lab_rbac_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/rbac"
 cka_lab_rbac_user: "{{ ansible_user | default('vagrant') }}"
 cka_lab_rbac_csr_expiration_seconds: 86400
+cka_lab_rbac_manual_dir: "{{ cka_lab_rbac_dir }}/manual-user"
+cka_lab_rbac_manual_user: "developer"
+cka_lab_rbac_manual_group: "developers"
 
 # Scenario: secrets (Kubernetes Secrets Drill)
 # Reference: https://kubernetes.io/docs/concepts/configuration/secret/
@@ -270,6 +273,10 @@ cka_lab_litmus_operator_version: "v3.0.0"
 
 # Scenario: etcd (etcd Snapshot Backup & Restore)
 cka_lab_etcd_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/etcd"
+cka_lab_etcd_backup_dir: "/var/lib/etcd-backup"
+cka_lab_etcd_backup_prefix: "etcd-snapshot-"
+cka_lab_etcd_backup_retention_days: 7
+cka_lab_etcd_backup_calendar: "daily"
 
 # Scenario: upgrade_drill (Manual Kubeadm Node & Cluster Upgrade)
 cka_lab_upgrade_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/upgrade"

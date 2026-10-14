@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# Script: cleanup-manual-user.sh
+# Purpose: Tear down resources created during the manual user context drill
+#          so candidates can repeat the exercise from a clean slate.
+# Usage: ./cleanup-manual-user.sh [USER_NAME]
+# ==============================================================================
+set -euo pipefail
+
+USER_NAME="${1:-{{ cka_lab_rbac_manual_user | default('developer') }}}"
+WORK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Ensure proper KUBECONFIG discovery
+if [[ -z "${KUBECONFIG:-}" ]]; then
+  if [[ -f "${HOME}/.kube/config" ]]; then
+    export KUBECONFIG="${HOME}/.kube/config"
+  elif [[ -f "/home/vagrant/.kube/config" ]]; then
+    export KUBECONFIG="/home/vagrant/.kube/config"
+  elif [[ -f "/etc/kubernetes/admin.conf" ]]; then
+    export KUBECONFIG="/etc/kubernetes/admin.conf"
+  fi
+fi
+
+echo "=== Cleaning Up Manual User Context Drill for '${USER_NAME}' ==="
+
+# 1. Switch back to admin context
+ADMIN_CONTEXT="$(kubectl config get-contexts -o name 2>/dev/null | grep -E "admin" | head -n 1 || true)"
+ADMIN_CONTEXT="${ADMIN_CONTEXT:-kubernetes-admin@kubernetes}"
+echo "[1/5] Switching active context to '${ADMIN_CONTEXT}'..."
+kubectl config use-context "${ADMIN_CONTEXT}" >/dev/null 2>&1 || true
+
+# 2. Remove contexts and credentials for the user
+echo "[2/5] Removing kubeconfig context and user credentials..."
+for ctx in "${USER_NAME}" "${USER_NAME}@kubernetes"; do
+  kubectl config delete-context "${ctx}" >/dev/null 2>&1 || true
+done
+kubectl config unset "users.${USER_NAME}" >/dev/null 2>&1 || true
+kubectl config delete-user "${USER_NAME}" >/dev/null 2>&1 || true
+
+# 3. Delete CertificateSigningRequest
+echo "[3/5] Deleting Kubernetes CertificateSigningRequest..."
+kubectl delete csr "${USER_NAME}" --ignore-not-found=true >/dev/null 2>&1 || true
+
+# 4. Delete RBAC resources created during testing
+echo "[4/5] Removing test RBAC Roles and RoleBindings..."
+kubectl delete rolebinding "${USER_NAME}-pod-reader" -n default --ignore-not-found=true >/dev/null 2>&1 || true
+kubectl delete rolebinding "read-pods" -n default --ignore-not-found=true >/dev/null 2>&1 || true
+kubectl delete role "pod-reader" -n default --ignore-not-found=true >/dev/null 2>&1 || true
+
+# 5. Remove locally generated certificates and keys
+echo "[5/5] Removing locally generated keys and certificate files..."
+rm -f "${WORK_DIR}/${USER_NAME}.key" \
+      "${WORK_DIR}/${USER_NAME}.csr" \
+      "${WORK_DIR}/${USER_NAME}.crt" \
+      "${WORK_DIR}/${USER_NAME}-csr.yaml"
+
+echo ""
+echo "=== Cleanup completed successfully for '${USER_NAME}'. Ready for another run! ==="

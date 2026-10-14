@@ -1,0 +1,119 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# Script: verify-manual-user.sh
+# Purpose: Verify that all manual steps for Kubernetes user authentication &
+#          context configuration have been successfully completed.
+# Usage: ./verify-manual-user.sh [USER_NAME]
+# ==============================================================================
+set -euo pipefail
+
+USER_NAME="${1:-{{ cka_lab_rbac_manual_user | default('developer') }}}"
+WORK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Ensure proper KUBECONFIG discovery
+if [[ -z "${KUBECONFIG:-}" ]]; then
+  if [[ -f "${HOME}/.kube/config" ]]; then
+    export KUBECONFIG="${HOME}/.kube/config"
+  elif [[ -f "/home/vagrant/.kube/config" ]]; then
+    export KUBECONFIG="/home/vagrant/.kube/config"
+  elif [[ -f "/etc/kubernetes/admin.conf" ]]; then
+    export KUBECONFIG="/etc/kubernetes/admin.conf"
+  fi
+fi
+
+FAILED=0
+
+pass() {
+  echo -e "\e[32m[PASS]\e[0m $1"
+}
+
+fail() {
+  echo -e "\e[31m[FAIL]\e[0m $1"
+  FAILED=1
+}
+
+echo "=== Verifying Manual User Context Setup for '${USER_NAME}' ==="
+
+# 1. Private Key Verification
+KEY_FILE="${WORK_DIR}/${USER_NAME}.key"
+if [[ -f "${KEY_FILE}" ]]; then
+  if openssl rsa -in "${KEY_FILE}" -check -noout >/dev/null 2>&1; then
+    pass "Private key exists and is valid RSA format: ${KEY_FILE}"
+  else
+    fail "Private key exists but is not a valid RSA key: ${KEY_FILE}"
+  fi
+else
+  fail "Private key file not found: ${KEY_FILE}"
+fi
+
+# 2. CSR Verification
+CSR_FILE="${WORK_DIR}/${USER_NAME}.csr"
+if [[ -f "${CSR_FILE}" ]]; then
+  CSR_SUBJ="$(openssl req -in "${CSR_FILE}" -noout -subject 2>/dev/null || true)"
+  if echo "${CSR_SUBJ}" | grep -q "CN.*=.*${USER_NAME}"; then
+    pass "CSR exists with matching Subject Common Name: ${CSR_SUBJ}"
+  else
+    fail "CSR Subject does not contain CN=${USER_NAME} (got: ${CSR_SUBJ})"
+  fi
+else
+  fail "CSR file not found: ${CSR_FILE}"
+fi
+
+# 3. Kubernetes CSR Resource Verification
+if kubectl get csr "${USER_NAME}" >/dev/null 2>&1; then
+  CSR_APPROVED="$(kubectl get csr "${USER_NAME}" -o jsonpath='{.status.conditions[?(@.type=="Approved")].type}' 2>/dev/null || true)"
+  if [[ "${CSR_APPROVED}" == "Approved" ]]; then
+    pass "Kubernetes CertificateSigningRequest '${USER_NAME}' exists and is Approved."
+  else
+    fail "Kubernetes CertificateSigningRequest '${USER_NAME}' exists but is not Approved yet."
+  fi
+else
+  fail "Kubernetes CertificateSigningRequest '${USER_NAME}' was not found in the cluster."
+fi
+
+# 4. Signed Certificate Verification
+CRT_FILE="${WORK_DIR}/${USER_NAME}.crt"
+if [[ -f "${CRT_FILE}" ]]; then
+  CRT_SUBJ="$(openssl x509 -in "${CRT_FILE}" -noout -subject 2>/dev/null || true)"
+  if echo "${CRT_SUBJ}" | grep -q "CN.*=.*${USER_NAME}"; then
+    pass "Signed client certificate exists with valid Subject: ${CRT_SUBJ}"
+  else
+    fail "Certificate Subject does not match CN=${USER_NAME} (got: ${CRT_SUBJ})"
+  fi
+else
+  fail "Signed certificate file not found: ${CRT_FILE}"
+fi
+
+# 5. Kubeconfig Credentials Verification
+if kubectl config get-users 2>/dev/null | grep -q -E "^${USER_NAME}$"; then
+  pass "Kubeconfig credentials entry '${USER_NAME}' is registered."
+else
+  fail "Kubeconfig credentials entry '${USER_NAME}' not found in active kubeconfig."
+fi
+
+# 6. Kubeconfig Context Verification
+MATCHING_CONTEXT="$(kubectl config get-contexts -o name 2>/dev/null | grep -E "(^|@)${USER_NAME}(@|$)" | head -n 1 || true)"
+if [[ -n "${MATCHING_CONTEXT}" ]]; then
+  pass "Kubeconfig context '${MATCHING_CONTEXT}' is registered."
+else
+  fail "No kubeconfig context found for user '${USER_NAME}'."
+fi
+
+# 7. Identity & Authentication Probe
+if [[ -n "${MATCHING_CONTEXT}" ]]; then
+  AUTH_TEST="$(kubectl --context="${MATCHING_CONTEXT}" auth can-i --list 2>&1 || true)"
+  if echo "${AUTH_TEST}" | grep -iq "error.*unauthorized\|bad certificate\|certificate signed by unknown authority"; then
+    fail "API authentication failed with context '${MATCHING_CONTEXT}': ${AUTH_TEST}"
+  else
+    pass "API server successfully recognized and authenticated identity '${USER_NAME}' via context '${MATCHING_CONTEXT}'."
+  fi
+fi
+
+echo ""
+if [[ "${FAILED}" -eq 0 ]]; then
+  echo -e "\e[32m=== ALL MANUAL USER CONTEXT CHECKS PASSED FOR '${USER_NAME}'! ===\e[0m"
+  exit 0
+else
+  echo -e "\e[31m=== VERIFICATION FAILED FOR '${USER_NAME}'. Review above failures. ===\e[0m"
+  exit 1
+fi

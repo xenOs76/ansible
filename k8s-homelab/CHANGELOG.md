@@ -8,23 +8,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.3] - 2026-10-14
+
 ### Added
 
-- **Ceph NFS & CephFS Dynamic StorageClasses (`roles/cka_lab`)**: Provided cloud-native alternatives to the Kubernetes NFS CSI StorageClass for shared ReadWriteMany volumes, adding manifests (`03-ceph-nfs-sc.yaml`, `03-cephfs-sc.yaml`), dynamic claims, multi-replica workloads, and automated verification suites (`test-ceph-nfs-drills.sh`).
-- **Dual RBD & NFS Ceph Cloud-Native Storage (`roles/rook_ceph`, `roles/nfs_server`, `playbooks/ceph.yml`)**: Expanded Rook-Ceph orchestrator to serve both RBD block storage and CephFS shared filesystem + CephNFS daemon (NFS-Ganesha) bound to host port 2049 on the control plane, acting as a drop-in alternative to Linux kernel `nfs-server` with configurable `storage_nfs_provider` toggle and end-to-end verification tooling.
-- **CKA Exam Documentation & Canonical Reference Mapping (`roles/cka_lab`)**: Comprehensive audit and enrichment of all 18 CKA practice scenarios and on-node training guides with officially permitted CKA exam documentation links (`kubernetes.io/docs/`, `helm.sh/docs/`, `gateway-api.sigs.k8s.io`), in-exam search keywords, fast `kubectl explain` terminal lookups, and explicit boundaries between allowed browser resources and homelab auxiliary components.
-- **etcd Snapshot Backup & Restore (`~/cka/etcd`)**: Static pod TLS discovery, snapshot verification, and data-dir restore with hostPath manifest updates.
-- **Manual Kubeadm Cluster Upgrade (`~/cka/upgrade`)**: Step-by-step control plane and worker node upgrade procedures with drain/uncordon drills.
-- **Speed JSONPath Challenges (`~/cka/jsonpath`)**: Rapid query evaluation harness and cheatsheets covering high-frequency exam questions.
-- **CoreDNS & Service Troubleshooting (`~/cka/cluster-troubleshooting`)**: Native Corefile break-fix, Service-to-Endpoints selector triage, worker node static pod provisioning, and container runtime (`crictl`) diagnostics.
-- **Advanced Multi-Namespace NetworkPolicies (`~/cka/networking`)**: Cross-namespace microsegmentation (`namespaceSelector` + `podSelector`) and headless service DNS SRV discovery.
-- **Pod Quarantine & Autopsy Pattern (`~/cka/pods`)**: Zero-downtime faulty pod isolation and rapid CLI generation cheatsheet.
-- **ServiceAccount RBAC & Token Management (`~/cka/rbac/serviceaccounts`)**: Modern bounded token generation and API impersonation testing.
-- **PriorityClass & Preemption (`~/cka/scheduling`)**: Workload priority classes and scheduler eviction drills under node contention.
+- **Automated Daily etcd Backup & Retention (`roles/control_plane`, `roles/cka_lab`, `scripts/etcd-backup.sh`)**: Added automated daily etcd snapshot backups scheduled via systemd timer (`etcd-backup.timer`, `OnCalendar=daily`, `Persistent=true`) with health validation, endpoint TLS extraction, timestamped filenames, `etcdctl` status verification, and automated 7-day retention pruning, backed by a dedicated practice scenario (`02-automated-backup/`) with automated test validation.
+- **Hands-on CKA Exam Practice Scenarios & Curricula (`roles/cka_lab`, `~/cka/`)**: Expanded exam training suite with manual client certificate and context creation drills (`~/cka/rbac/manual-user/`), static pod TLS discovery and etcd restore workflows, kubeadm node maintenance drills, speed JSONPath challenge harnesses, CoreDNS break-fix scenarios, multi-namespace microsegmentation NetworkPolicies, faulty pod isolation autopsy patterns, and PriorityClass preemption testing, all cross-referenced with official CNCF exam documentation links.
+- **Ceph Cloud-Native Storage & Dynamic StorageClasses (`roles/rook_ceph`, `roles/nfs_server`, `roles/cka_lab`, `playbooks/ceph.yml`)**: Added dual Ceph block (RBD) and shared filesystem (CephFS / CephNFS) provisioning for multi-replica ReadWriteMany workloads with dynamic StorageClasses (`03-ceph-nfs-sc.yaml`, `03-cephfs-sc.yaml`) and verification suites.
+- **Control Plane CLI & Terminal Ergonomics (`roles/control_plane_tools`, `scripts/control-plane-tools.sh`)**: Configured system-wide and user bash alias (`glow="glow -s tokyo-night -w 150"`) for styled Tokyo-Night 150-column markdown rendering across `/etc/profile.d/glow.sh` and user `.bashrc`.
 
 ### Fixed
 
-- **Rook-Ceph CSI Provisioner Scheduling (`roles/rook_ceph`, `group_vars/all.yml`)**: Added control-plane tolerations (`node-role.kubernetes.io/control-plane:NoSchedule`) and tuned CSI provisioner replicas (`rook_ceph_csi_provisioner_replicas: 1`) to prevent memory exhaustion and unschedulable pod warnings on resource-constrained homelab worker nodes.
+- **Kustomize Deprecated `commonLabels` Warning (`roles/cka_lab`)**: Migrated overlay `kustomization.yaml` templates to Kustomize v5 `labels` transformer directive (`includeSelectors: true`), eliminating deprecation warnings during `kubectl apply -k` and `kubectl kustomize`.
+- **Vagrant Secondary Storage Volume Collisions (`Vagrantfile`)**: Configured `allow_existing: true` on the secondary disk definition (`/dev/vdb`) for `kube-control-plane` to prevent `virStorageVolCreateXML` collisions during cluster recreation.
+- **Rook-Ceph CSI Provisioner Scheduling (`roles/rook_ceph`, `group_vars/all.yml`)**: Added control-plane tolerations and tuned provisioner replica counts to prevent memory exhaustion and unschedulable pod warnings on worker nodes.
 
 ## [1.4.2] - 2026-10-11
 

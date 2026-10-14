@@ -5,6 +5,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKUP_SCRIPT="${SCRIPT_DIR}/01-backup-restore/backup-etcd.sh"
 RESTORE_SCRIPT="${SCRIPT_DIR}/01-backup-restore/restore-etcd.sh"
+DAILY_BACKUP_SCRIPT="${SCRIPT_DIR}/02-automated-backup/backup-etcd-daily.sh"
 
 echo "=========================================================="
 echo " Running Automated Validation: CKA etcd Backup & Restore"
@@ -33,7 +34,7 @@ run_test "etcd static pod manifest exists" "test -f /etc/kubernetes/manifests/et
 # 3. Check endpoint health query
 run_test "etcd cluster endpoint health" "bash -c 'ETCDCTL_API=3 sudo etcdctl --endpoints=https://127.0.0.1:2379 --cacert=/etc/kubernetes/pki/etcd/ca.crt --cert=/etc/kubernetes/pki/etcd/server.crt --key=/etc/kubernetes/pki/etcd/server.key endpoint health'"
 
-# 4. Run backup script
+# 4. Run manual backup script
 run_test "Execute backup-etcd.sh" "sudo ${BACKUP_SCRIPT} /tmp/etcd-test-backup"
 
 # 5. Verify generated snapshot file
@@ -48,8 +49,30 @@ run_test "Execute restore-etcd.sh" "sudo ${RESTORE_SCRIPT} /tmp/etcd-test-backup
 # 8. Check restored member data directory
 run_test "Restored member directory exists" "test -d /tmp/etcd-test-restored/member"
 
+# 9. Test automated daily backup script
+run_test "Execute backup-etcd-daily.sh" "sudo ${DAILY_BACKUP_SCRIPT} /tmp/etcd-daily-test-backup"
+
+# 10. Verify daily snapshot with common prefix and timestamp
+run_test "Timestamped snapshot file exists" "bash -c 'compgen -G /tmp/etcd-daily-test-backup/etcd-snapshot-[0-9]*_[0-9]*.db >/dev/null'"
+
+# 11. Verify daily snapshot status
+run_test "Verify daily snapshot integrity" "bash -c 'FIRST_SNAP=\$(compgen -G \"/tmp/etcd-daily-test-backup/etcd-snapshot-*.db\" | head -n1); ETCDCTL_API=3 sudo etcdctl --write-out=table snapshot status \"\${FIRST_SNAP}\"'"
+
+# 12. Test 7-day retention pruning
+sudo touch -d "10 days ago" /tmp/etcd-daily-test-backup/etcd-snapshot-old-expired.db
+run_test "Expired snapshot pruning test" "bash -c 'sudo ${DAILY_BACKUP_SCRIPT} /tmp/etcd-daily-test-backup 7 etcd-snapshot- && test ! -f /tmp/etcd-daily-test-backup/etcd-snapshot-old-expired.db'"
+
+# 13. Verify recent snapshot was retained during pruning
+run_test "Recent snapshot retained after pruning" "bash -c 'compgen -G /tmp/etcd-daily-test-backup/etcd-snapshot-[0-9]*_[0-9]*.db >/dev/null'"
+
+# 14. Verify systemd timer is active
+run_test "systemd timer etcd-backup.timer is active" "systemctl is-active etcd-backup.timer"
+
+# 15. Verify systemd service unit exists
+run_test "systemd service etcd-backup.service exists" "systemctl list-unit-files etcd-backup.service"
+
 # Cleanup temporary files
-sudo rm -rf /tmp/etcd-test-backup /tmp/etcd-test-restored
+sudo rm -rf /tmp/etcd-test-backup /tmp/etcd-test-restored /tmp/etcd-daily-test-backup
 
 echo "=========================================================="
 if [[ ${FAILED} -eq 0 ]]; then

@@ -6,9 +6,11 @@ namespace: {{ cka_lab_configmaps_dev_namespace }}
 
 namePrefix: dev-
 
-commonLabels:
-  environment: {{ cka_lab_configmaps_dev_namespace }}
-  cka.practice/layer: overlay
+labels:
+  - includeSelectors: true
+    pairs:
+      environment: {{ cka_lab_configmaps_dev_namespace }}
+      cka.practice/layer: overlay
 
 resources:
   - ../../base

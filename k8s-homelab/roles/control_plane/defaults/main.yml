@@ -10,3 +10,11 @@ control_plane_apiserver_cert_extra_sans: >-
         + (ansible_all_ipv4_addresses | default([])))
        | map('trim') | select('truthy') | unique | join(',')
      ) }}
+
+# Automated daily etcd backup
+control_plane_etcd_backup_enabled: true
+control_plane_etcd_backup_script_path: "/usr/local/bin/etcd-backup.sh"
+control_plane_etcd_backup_dir: "/var/lib/etcd-backup"
+control_plane_etcd_backup_prefix: "etcd-snapshot-"
+control_plane_etcd_backup_retention_days: 7
+control_plane_etcd_backup_calendar: "daily"

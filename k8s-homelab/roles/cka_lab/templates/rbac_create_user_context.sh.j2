@@ -54,9 +54,10 @@ EOF
 echo "==> [4/5] Approving CertificateSigningRequest '${USER_NAME}'..."
 kubectl certificate approve "${USER_NAME}"
 
-# Wait up to 5 seconds for the controller to issue the certificate
+# Wait up to 15 seconds for the controller to issue the certificate
 CERT=""
-for _ in {1..10}; do
+echo "Waiting for kube-controller-manager to sign certificate..."
+for _ in {1..30}; do
   CERT="$(kubectl get csr "${USER_NAME}" -o jsonpath='{.status.certificate}' 2>/dev/null || true)"
   if [[ -n "${CERT}" ]]; then
     break
@@ -65,12 +66,45 @@ for _ in {1..10}; do
 done
 
 if [[ -z "${CERT}" ]]; then
+  CSR_COND="$(kubectl get csr "${USER_NAME}" -o jsonpath='{.status.conditions[*].type}' 2>/dev/null || true)"
+  echo "" >&2
   echo "Error: Certificate for '${USER_NAME}' was not issued in time." >&2
-  exit 1
+  echo "Current CSR condition: ${CSR_COND:-None}" >&2
+  echo "" >&2
+  echo "Root Cause Analysis:" >&2
+  echo "  'kubectl certificate approve' only approves the CSR; the actual signing and" >&2
+  echo "  issuance is performed asynchronously by the 'csrsigning' controller in" >&2
+  echo "  kube-controller-manager." >&2
+  echo "" >&2
+  echo "Troubleshooting Steps:" >&2
+  echo "  1. Check if kube-controller-manager is running:" >&2
+  echo "     kubectl get pods -n kube-system -l component=kube-controller-manager" >&2
+  echo "  2. Check kube-controller-manager logs for signing errors:" >&2
+  echo "     kubectl logs -n kube-system -l component=kube-controller-manager --tail=50" >&2
+  echo "  3. Check /etc/kubernetes/manifests/kube-controller-manager.yaml for CA flags:" >&2
+  echo "     --cluster-signing-cert-file=/etc/kubernetes/pki/ca.crt" >&2
+  echo "     --cluster-signing-key-file=/etc/kubernetes/pki/ca.key" >&2
+  echo "" >&2
+  # Fallback: if running on control plane where CA key is accessible (e.g. via sudo)
+  if sudo test -f "/etc/kubernetes/pki/ca.crt" -a -f "/etc/kubernetes/pki/ca.key" 2>/dev/null; then
+    echo "Notice: Detected local cluster CA keys in /etc/kubernetes/pki/." >&2
+    echo "Attempting fallback manual signing using cluster CA..." >&2
+    sudo openssl x509 -req -in "${WORK_DIR}/${USER_NAME}.csr" \
+      -CA /etc/kubernetes/pki/ca.crt \
+      -CAkey /etc/kubernetes/pki/ca.key \
+      -CAcreateserial \
+      -out "${WORK_DIR}/${USER_NAME}.crt" \
+      -days 1 2>/dev/null
+    sudo chown "$(id -u):$(id -g)" "${WORK_DIR}/${USER_NAME}.crt"
+    chmod 0644 "${WORK_DIR}/${USER_NAME}.crt"
+    echo "Successfully generated certificate via cluster CA fallback!" >&2
+  else
+    exit 1
+  fi
+else
+  echo "${CERT}" | base64 -d > "${WORK_DIR}/${USER_NAME}.crt"
+  chmod 0644 "${WORK_DIR}/${USER_NAME}.crt"
 fi
-
-echo "${CERT}" | base64 -d > "${WORK_DIR}/${USER_NAME}.crt"
-chmod 0644 "${WORK_DIR}/${USER_NAME}.crt"
 
 echo "==> [5/5] Configuring credentials and context in active kubeconfig..."
 # Extract active cluster name from kubeconfig, falling back to 'kubernetes'

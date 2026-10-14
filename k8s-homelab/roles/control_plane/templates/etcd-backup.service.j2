@@ -1,0 +1,16 @@
+# ==============================================================================
+# Managed by Ansible - role control_plane
+# Systemd unit for Automated Daily etcd Backup
+# ==============================================================================
+[Unit]
+Description=Daily backup of etcd database
+Documentation=https://kubernetes.io/docs/tasks/administer-cluster/configure-upgrade-etcd/
+ConditionPathExists=/etc/kubernetes/manifests/etcd.yaml
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+ExecStart={{ control_plane_etcd_backup_script_path }} {{ control_plane_etcd_backup_dir }} {{ control_plane_etcd_backup_retention_days }} {{ control_plane_etcd_backup_prefix }}
+StandardOutput=journal
+StandardError=journal

@@ -1,0 +1,15 @@
+# ==============================================================================
+# Managed by Ansible - role control_plane
+# Systemd timer for Automated Daily etcd Backup
+# ==============================================================================
+[Unit]
+Description=Daily backup timer for etcd database
+Documentation=https://kubernetes.io/docs/tasks/administer-cluster/configure-upgrade-etcd/
+
+[Timer]
+OnCalendar={{ control_plane_etcd_backup_calendar }}
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

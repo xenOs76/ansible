@@ -127,9 +127,46 @@ kubectl get pods -A
 
 ---
 
+## Automated Daily etcd Backup & Systemd Timer (`02-automated-backup`)
+
+In enterprise and production clusters, taking daily automated snapshots of the etcd database is essential for disaster recovery.
+
+### Automation Mechanics
+
+1. **Service Check**: Verifies `/etc/kubernetes/manifests/etcd.yaml` exists, TLS credentials are valid, and etcd endpoint health returns OK. If etcd is not running, it skips execution gracefully without triggering systemd service failures.
+1. **Timestamped Naming**: Snapshots are saved to `/var/lib/etcd-backup` with a common prefix and timestamp: `etcd-snapshot-YYYYMMDD_HHMMSS.db`.
+1. **Integrity Status**: Verifies the newly written snapshot using `etcdctl snapshot status`.
+1. **Retention Pruning**: Automatically prunes snapshot files older than 7 days (`find /var/lib/etcd-backup -maxdepth 1 -type f -name "etcd-snapshot-*.db" -mtime +7 -delete`).
+1. **Systemd Timer Scheduling**: Managed by systemd timer unit `etcd-backup.timer` (`OnCalendar=daily`, `Persistent=true`) triggering `etcd-backup.service`.
+
+### Inspection & Management Commands
+
+```bash
+# Check timer schedule and next trigger time
+systemctl list-timers etcd-backup.timer
+
+# Check systemd timer status
+systemctl status etcd-backup.timer
+
+# Manually trigger immediate backup execution via systemd service
+sudo systemctl start etcd-backup.service
+
+# Inspect service run logs
+sudo journalctl -u etcd-backup.service -n 50 --no-pager
+
+# List retained snapshots in backup repository
+sudo ls -lh /var/lib/etcd-backup/
+```
+
+---
+
 ## Included Practice Scripts
 
-- `01-backup-restore/backup-etcd.sh`: Automated snapshot creation and verification.
-- `01-backup-restore/restore-etcd.sh`: Automated snapshot restoration to new data-dir.
+- `01-backup-restore/backup-etcd.sh`: Manual snapshot creation and verification.
+- `01-backup-restore/restore-etcd.sh`: Manual snapshot restoration to new data-dir.
 - `01-backup-restore/simulate-loss-drill.sh`: Complete end-to-end rehearsal drill creating test data, backing up, simulating loss, and restoring.
-- `test-etcd-drills.sh`: Automated test suite checking etcdctl connectivity, snapshot integrity, and restore logic.
+- `02-automated-backup/backup-etcd-daily.sh`: Automated daily backup script with health checks, timestamped naming, and 7-day retention pruning.
+- `02-automated-backup/etcd-backup.service`: Systemd service unit executing the daily backup script.
+- `02-automated-backup/etcd-backup.timer`: Systemd timer unit running the backup service on a daily schedule.
+- `02-automated-backup/install-timer.sh`: Setup script installing the binary, systemd units, and activating the timer.
+- `test-etcd-drills.sh`: Automated test suite checking etcdctl connectivity, manual snapshot/restore logic, daily automated backups, 7-day retention pruning, and systemd timer state.

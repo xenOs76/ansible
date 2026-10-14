@@ -83,6 +83,16 @@ Under official Linux Foundation / CNCF candidate policies, candidates may access
      - Provisions `/home/vagrant/cka/rbac/create-user-context.sh` (with convenience symlink at `/home/vagrant/cka/create-user-context.sh`).
      - Dynamically generates private key, submits and approves CSR, and registers credentials and context `vagrant` in the vagrant user's `~/.kube/config` with minimal permissions (zero initial RBAC roles bound).
      - Includes a step-by-step drill guide at `/home/vagrant/cka/rbac/README.md`.
+  1. **Manual User Context Creation Drills (`manual-user/`)**:
+     - Hands-on manual execution of all operations automated by `create-user-context.sh` for CKA exam preparedness.
+     - Located at `/home/vagrant/cka/rbac/manual-user/` with master walkthrough `README.md` and reference manifest `csr-template.yaml`.
+     - Covers manual OpenSSL 2048-bit RSA private key and CSR creation (`/CN=developer/O=developers`).
+     - Covers manual single-line base64 encoding and submission of Kubernetes `CertificateSigningRequest` (`certificates.k8s.io/v1`).
+     - Covers manual CSR inspection and approval (`kubectl certificate approve developer`).
+     - Covers manual certificate extraction and base64 decoding via jsonpath (`kubectl get csr developer -o jsonpath='{.status.certificate}' | base64 -d`).
+     - Covers manual credential embedding (`kubectl config set-credentials`) and context configuration (`kubectl config set-context`).
+     - Covers authorization verification, Role and RoleBinding creation, and context switching.
+     - Includes end-to-end automated test validation script (`verify-manual-user.sh`) and reset/teardown tooling (`cleanup-manual-user.sh`).
   1. **ServiceAccount Token & RBAC Scenarios**:
      - Dedicated ServiceAccount RBAC guide at `/home/vagrant/cka/rbac/serviceaccounts/README.md`.
 
@@ -508,12 +518,15 @@ Under official Linux Foundation / CNCF candidate policies, candidates may access
     --data-dir=/var/lib/etcd-restored
   ```
 
-- **Objective**: Discover TLS parameters directly from static pod manifest `/etc/kubernetes/manifests/etcd.yaml`, take verified snapshot, restore to new data-dir, update static pod hostPath, and verify API server restoration:
+- **Objective**: Discover TLS parameters directly from static pod manifest `/etc/kubernetes/manifests/etcd.yaml`, take verified snapshot, restore to new data-dir, update static pod hostPath, verify API server restoration, and manage automated daily backup systemd timers:
   1. `backup-etcd.sh`: Discovers TLS flags and saves snapshot to `/var/lib/etcd-backup/etcd-snapshot.db`.
   1. `restore-etcd.sh`: Restores snapshot into `/var/lib/etcd-restored`.
   1. `simulate-loss-drill.sh`: End-to-end drill testing canary namespace persistence across backup/loss/restore cycles.
+  1. `backup-etcd-daily.sh`: Automated daily snapshot with health verification, `etcd-snapshot-` prefix and timestamp naming, and 7-day retention deletion.
+  1. `etcd-backup.timer` & `etcd-backup.service`: Systemd daily timer automation (`OnCalendar=daily`, `Persistent=true`) and management tooling.
 - **Artifacts**:
   - etcd drill directory: `/home/vagrant/cka/etcd/`
+  - Automated daily backup directory: `/home/vagrant/cka/etcd/02-automated-backup/`
   - Automated test suite: `test-etcd-drills.sh`
   - Master practice guide: `README.md`
 

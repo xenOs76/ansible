@@ -201,3 +201,11 @@
   tags:
     - control_plane
     - join_token
+
+- name: Configure automated daily etcd backup service and systemd timer
+  ansible.builtin.include_tasks: etcd_backup.yml
+  when: control_plane_etcd_backup_enabled | default(true)
+  tags:
+    - control_plane
+    - etcd
+    - backup

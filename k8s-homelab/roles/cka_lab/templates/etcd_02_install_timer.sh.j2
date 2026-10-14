@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# Managed by Ansible - role cka_lab
+# Script: install-timer.sh
+# Purpose: Install and activate the systemd timer and service for automated
+#          daily etcd backups on the Kubernetes control plane.
+# ==============================================================================
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BACKUP_SCRIPT="${SCRIPT_DIR}/backup-etcd-daily.sh"
+SERVICE_UNIT="${SCRIPT_DIR}/etcd-backup.service"
+TIMER_UNIT="${SCRIPT_DIR}/etcd-backup.timer"
+TARGET_BIN="/usr/local/bin/etcd-backup.sh"
+SYSTEMD_DIR="/etc/systemd/system"
+
+echo "=== Installing etcd Automated Daily Backup Systemd Timer ==="
+
+# 1. Elevate with sudo if running as non-root
+SUDO=""
+if [[ "${EUID}" -ne 0 ]]; then
+    if command -v sudo >/dev/null 2>&1; then
+        SUDO="sudo"
+    else
+        echo "ERROR: This script requires root privileges or sudo." >&2
+        exit 1
+    fi
+fi
+
+# 2. Install executable backup script to /usr/local/bin
+echo "[1/4] Installing backup script to ${TARGET_BIN}..."
+${SUDO} cp -f "${BACKUP_SCRIPT}" "${TARGET_BIN}"
+${SUDO} chmod 0755 "${TARGET_BIN}"
+${SUDO} chown root:root "${TARGET_BIN}"
+
+# 3. Install systemd service and timer units
+echo "[2/4] Installing systemd units into ${SYSTEMD_DIR}..."
+${SUDO} cp -f "${SERVICE_UNIT}" "${SYSTEMD_DIR}/etcd-backup.service"
+${SUDO} cp -f "${TIMER_UNIT}" "${SYSTEMD_DIR}/etcd-backup.timer"
+${SUDO} chmod 0644 "${SYSTEMD_DIR}/etcd-backup.service" "${SYSTEMD_DIR}/etcd-backup.timer"
+${SUDO} chown root:root "${SYSTEMD_DIR}/etcd-backup.service" "${SYSTEMD_DIR}/etcd-backup.timer"
+
+# 4. Reload systemd daemon
+echo "[3/4] Reloading systemd daemon..."
+${SUDO} systemctl daemon-reload
+
+# 5. Enable and start timer
+echo "[4/4] Enabling and activating etcd-backup.timer..."
+${SUDO} systemctl enable --now etcd-backup.timer
+
+echo ""
+echo "=== Systemd Timer Status ==="
+${SUDO} systemctl status etcd-backup.timer --no-pager || true
+echo ""
+echo "Active Timers:"
+${SUDO} systemctl list-timers etcd-backup.timer --no-pager || true
+
+echo ""
+echo "✔ Setup complete! To test manual execution immediately:"
+echo "    sudo systemctl start etcd-backup.service"
+echo "    sudo journalctl -u etcd-backup.service -n 50 --no-pager"

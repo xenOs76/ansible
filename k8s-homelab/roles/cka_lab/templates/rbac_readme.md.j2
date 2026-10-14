@@ -3,6 +3,27 @@
 Hands-on exercise for defining Role-Based Access Control (RBAC) in Kubernetes.
 Follows the exercise pattern from [bmuschko/cka-crash-course (04-rbac)](https://github.com/bmuschko/cka-crash-course/tree/master/exercises/04-rbac).
 
+---
+
+## Directory Structure
+
+```text
+/home/vagrant/cka/rbac/
+├── README.md                      # Master RBAC exercise guide (this file)
+├── create-user-context.sh         # Automated user context creation script
+├── manual-user/                   # Hands-on manual user creation drill (CKA Exam)
+│   ├── README.md                  # Step-by-step manual procedure walkthrough
+│   ├── csr-template.yaml          # Reference CSR manifest template
+│   ├── verify-manual-user.sh      # Automated validation test suite
+│   └── cleanup-manual-user.sh     # Teardown and reset script
+└── serviceaccounts/               # ServiceAccount RBAC & bounded token drill
+    ├── README.md                  # ServiceAccount RBAC walkthrough
+    ├── sa-rbac-drill.yaml         # ServiceAccount, Role & RoleBinding manifest
+    └── test-sa-rbac.sh            # Token creation and impersonation test
+```
+
+---
+
 ## Official Exam References & Quick Lookups
 
 ### Permitted Exam Documentation
@@ -36,6 +57,10 @@ kubectl explain clusterrolebinding.subjects
 
 ### Step 1: Create the User Context
 
+Choose one of two approaches:
+
+#### Option A: Automated Fast Path (`./create-user-context.sh`)
+
 Run the provided script to generate private keys, issue a client certificate via Kubernetes CSR, and register credentials and context in `~/.kube/config`:
 
 ```bash
@@ -48,6 +73,22 @@ This performs the following actions:
 1. Creates and approves a Kubernetes `CertificateSigningRequest` for Subject `/CN={{ cka_lab_rbac_user | default('vagrant') }}`.
 1. Retrieves and saves the signed client certificate (`{{ cka_lab_rbac_user | default('vagrant') }}.crt`).
 1. Adds credentials and context `{{ cka_lab_rbac_user | default('vagrant') }}` to `~/.kube/config`.
+
+#### Option B: Hands-on Manual Exam Drill (`manual-user/`)
+
+In the actual CKA exam, helper scripts are not available. Practice executing every step manually:
+
+```bash
+cd {{ cka_lab_rbac_dir }}/manual-user
+```
+
+Follow `manual-user/README.md` to:
+
+1. Generate private key and CSR with OpenSSL (`openssl genrsa`, `openssl req -new`).
+1. Base64-encode the CSR and submit a Kubernetes `CertificateSigningRequest` (`certificates.k8s.io/v1`).
+1. Approve the CSR (`kubectl certificate approve`) and extract the issued certificate (`kubectl get csr ... -o jsonpath='{.status.certificate}' | base64 -d`).
+1. Register credentials and context in `~/.kube/config` (`kubectl config set-credentials`, `kubectl config set-context`).
+1. Run `./verify-manual-user.sh` to validate the setup.
 
 ---
 
@@ -84,27 +125,27 @@ kubectl config use-context kubernetes-admin@kubernetes
 
 1. Create a `Role` named `pod-reader` granting permissions to `get`, `watch`, and `list` pods in namespace `default`:
 
-```bash
-kubectl create role pod-reader \
-  --verb=get,list,watch \
-  --resource=pods \
-  --namespace=default
-```
+   ```bash
+   kubectl create role pod-reader \
+     --verb=get,list,watch \
+     --resource=pods \
+     --namespace=default
+   ```
 
 1. Create a `RoleBinding` named `read-pods` binding user `{{ cka_lab_rbac_user | default('vagrant') }}` to role `pod-reader`:
 
-```bash
-kubectl create rolebinding read-pods \
-  --role=pod-reader \
-  --user={{ cka_lab_rbac_user | default('vagrant') }} \
-  --namespace=default
-```
+   ```bash
+   kubectl create rolebinding read-pods \
+     --role=pod-reader \
+     --user={{ cka_lab_rbac_user | default('vagrant') }} \
+     --namespace=default
+   ```
 
 1. Verify both objects exist:
 
-```bash
-kubectl get role,rolebinding -n default
-```
+   ```bash
+   kubectl get role,rolebinding -n default
+   ```
 
 ---
 
@@ -118,22 +159,21 @@ kubectl config use-context {{ cka_lab_rbac_user | default('vagrant') }}
 
 1. Verify that listing pods now succeeds:
 
-```bash
-kubectl get pods
-```
+   ```bash
+   kubectl get pods
+   ```
 
 1. Test authorization queries via `kubectl auth can-i`:
 
-```bash
-# Should return 'yes'
+   ```bash
+   # Should return 'yes'
+   kubectl auth can-i get pods
 
-kubectl auth can-i get pods
-
-# Should return 'no'
-kubectl auth can-i create pods
-kubectl auth can-i delete pods
-kubectl auth can-i get deployments
-```
+   # Should return 'no'
+   kubectl auth can-i create pods
+   kubectl auth can-i delete pods
+   kubectl auth can-i get deployments
+   ```
 
 ---
 

@@ -1,0 +1,16 @@
+# ==============================================================================
+# Managed by Ansible - role cka_lab
+# Systemd unit for Automated Daily etcd Backup
+# ==============================================================================
+[Unit]
+Description=Daily backup of etcd database
+Documentation=https://kubernetes.io/docs/tasks/administer-cluster/configure-upgrade-etcd/
+ConditionPathExists=/etc/kubernetes/manifests/etcd.yaml
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+ExecStart=/usr/local/bin/etcd-backup.sh {{ cka_lab_etcd_backup_dir }} {{ cka_lab_etcd_backup_retention_days }} {{ cka_lab_etcd_backup_prefix }}
+StandardOutput=journal
+StandardError=journal

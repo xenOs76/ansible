@@ -6,9 +6,11 @@ namespace: {{ cka_lab_configmaps_default_namespace }}
 
 namePrefix: prod-
 
-commonLabels:
-  environment: production
-  cka.practice/layer: overlay
+labels:
+  - includeSelectors: true
+    pairs:
+      environment: production
+      cka.practice/layer: overlay
 
 resources:
   - ../../base

@@ -54,7 +54,7 @@ Kustomize is natively integrated into `kubectl` (`kubectl kustomize` and `kubect
 | **Base Resources** | `base/kustomization.yaml` | Declares raw YAML files (`resources: [...]`) shared across environments. |
 | **Namespace Override** | `overlays/*/kustomization.yaml` | Sets `namespace: development` or `namespace: default` on all generated objects. |
 | **Name Prefix** | `namePrefix: dev-` / `prod-` | Prefixes names of all resources to avoid collision across teams or stages. |
-| **Common Labels** | `commonLabels: { ... }` | Injects metadata labels into all resources and pod template selectors. |
+| **Labels Transformer** | `labels: [{ includeSelectors: true, pairs: { ... } }]` | Injects metadata labels into all resources and pod template selectors (replaces deprecated `commonLabels`). |
 | **configMapGenerator** | `configMapGenerator: [...]` | Generates ConfigMaps from literals, key-value files, or merges with existing base configs. |
 | **Merge Behavior** | `behavior: merge` | Overwrites existing keys and appends new keys into the base ConfigMap. |
 | **Hash Suffix Control** | `disableNameSuffixHash: true` | Disables random content-hash suffix (e.g. `webapp-config-4k58m279b9`) for predictable drill names. |

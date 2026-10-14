@@ -1,0 +1,124 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# Managed by Ansible - role control_plane
+# Script: etcd-backup.sh
+# Purpose: Automated daily backup of the etcd database with timestamped
+#          snapshots and automatic pruning of backups older than 7 days.
+#
+# Context:
+#   Managed by systemd timer (etcd-backup.timer / etcd-backup.service) on the
+#   Kubernetes control plane node, and executable directly by operators / drills.
+#
+# Usage:
+#   sudo /usr/local/bin/etcd-backup.sh [BACKUP_DIR] [RETENTION_DAYS] [PREFIX]
+#
+# Arguments:
+#   $1 - BACKUP_DIR     (Optional) Destination directory for snapshots.
+#                       Default: {{ control_plane_etcd_backup_dir }}
+#   $2 - RETENTION_DAYS (Optional) Retention period in days. Older files pruned.
+#                       Default: {{ control_plane_etcd_backup_retention_days }}
+#   $3 - PREFIX         (Optional) Filename prefix for snapshot files.
+#                       Default: {{ control_plane_etcd_backup_prefix }}
+# ==============================================================================
+set -euo pipefail
+
+BACKUP_DIR="${1:-{{ control_plane_etcd_backup_dir }}}"
+RETENTION_DAYS="${2:-{{ control_plane_etcd_backup_retention_days }}}"
+PREFIX="${3:-{{ control_plane_etcd_backup_prefix }}}"
+MANIFEST="/etc/kubernetes/manifests/etcd.yaml"
+
+echo "=== Kubernetes etcd Automated Backup ==="
+echo "Backup Directory: ${BACKUP_DIR}"
+echo "Retention Days:   ${RETENTION_DAYS}"
+echo "Filename Prefix:  ${PREFIX}"
+
+# 1. Elevate with sudo if running as non-root user
+SUDO=""
+if [[ "${EUID}" -ne 0 ]]; then
+    if command -v sudo >/dev/null 2>&1; then
+        SUDO="sudo"
+    else
+        echo "ERROR: This script requires root privileges or sudo." >&2
+        exit 1
+    fi
+fi
+
+# 2. Check if etcd static pod manifest exists
+if [[ ! -f "${MANIFEST}" ]]; then
+    echo "NOTICE: etcd static pod manifest not found at ${MANIFEST}."
+    echo "etcd is not running on this host. Skipping backup."
+    exit 0
+fi
+
+# 3. Extract TLS parameters and endpoint from static pod manifest
+CACERT=$(grep -m1 -- "--trusted-ca-file=" "${MANIFEST}" | cut -d= -f2 || true)
+CERT=$(grep -m1 -- "--cert-file=" "${MANIFEST}" | cut -d= -f2 || true)
+KEY=$(grep -m1 -- "--key-file=" "${MANIFEST}" | cut -d= -f2 || true)
+ENDPOINT="https://127.0.0.1:2379"
+
+if [[ -z "${CACERT}" || -z "${CERT}" || -z "${KEY}" ]]; then
+    echo "ERROR: Could not extract all required TLS flags from ${MANIFEST}." >&2
+    echo "  CA:   ${CACERT:-<missing>}" >&2
+    echo "  Cert: ${CERT:-<missing>}" >&2
+    echo "  Key:  ${KEY:-<missing>}" >&2
+    exit 1
+fi
+
+# Verify TLS certificates exist on filesystem
+if ! ${SUDO} test -f "${CACERT}" || ! ${SUDO} test -f "${CERT}" || ! ${SUDO} test -f "${KEY}"; then
+    echo "NOTICE: etcd TLS certificate or key file missing on filesystem. Skipping backup."
+    exit 0
+fi
+
+# 4. Check if etcdctl is available in PATH
+if ! command -v etcdctl >/dev/null 2>&1; then
+    echo "ERROR: 'etcdctl' binary not found in PATH." >&2
+    exit 1
+fi
+
+# 5. Check if etcd is actively running and endpoint is healthy
+echo "Checking etcd endpoint health at ${ENDPOINT}..."
+if ! ETCDCTL_API=3 ${SUDO} etcdctl \
+    --endpoints="${ENDPOINT}" \
+    --cacert="${CACERT}" \
+    --cert="${CERT}" \
+    --key="${KEY}" \
+    endpoint health >/dev/null 2>&1; then
+    echo "NOTICE: etcd endpoint is not responding or cluster is unhealthy. Skipping backup."
+    exit 0
+fi
+echo "✔ etcd cluster is running and healthy."
+
+# 6. Ensure backup directory exists with restricted permissions
+${SUDO} mkdir -p "${BACKUP_DIR}"
+${SUDO} chmod 0700 "${BACKUP_DIR}"
+
+# 7. Generate snapshot filename with common prefix and timestamp
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+SNAPSHOT_FILE="${BACKUP_DIR}/${PREFIX}${TIMESTAMP}.db"
+
+echo "Saving etcd snapshot to ${SNAPSHOT_FILE}..."
+ETCDCTL_API=3 ${SUDO} etcdctl \
+    --endpoints="${ENDPOINT}" \
+    --cacert="${CACERT}" \
+    --cert="${CERT}" \
+    --key="${KEY}" \
+    snapshot save "${SNAPSHOT_FILE}"
+
+# 8. Verify snapshot integrity
+echo "Verifying snapshot integrity..."
+ETCDCTL_API=3 ${SUDO} etcdctl --write-out=table snapshot status "${SNAPSHOT_FILE}"
+echo "✔ Snapshot verification successful: ${SNAPSHOT_FILE}"
+
+# 9. Prune snapshots older than RETENTION_DAYS
+echo "Pruning backup snapshots older than ${RETENTION_DAYS} days..."
+PRUNED_COUNT=0
+while IFS= read -r file; do
+    if [[ -n "${file}" ]]; then
+        echo "  Pruned expired backup: ${file}"
+        PRUNED_COUNT=$(( PRUNED_COUNT + 1 ))
+    fi
+done < <(${SUDO} find "${BACKUP_DIR}" -maxdepth 1 -type f -name "${PREFIX}*.db" -mtime "+${RETENTION_DAYS}" -print -delete)
+
+echo "Pruning complete. Total files removed: ${PRUNED_COUNT}"
+echo "=== etcd backup completed successfully ==="

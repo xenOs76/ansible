@@ -16,3 +16,60 @@
     - bootstrap
     - tools
     - glow
+
+- name: Configure glow bash alias in profile.d
+  ansible.builtin.copy:
+    dest: /etc/profile.d/glow.sh
+    content: |
+      alias glow="glow -s tokyo-night -w 150"
+    owner: root
+    group: root
+    mode: "0644"
+  tags:
+    - bootstrap
+    - tools
+    - glow
+
+- name: Check if user .bashrc exists
+  ansible.builtin.stat:
+    path: "/home/{{ control_plane_tools_user }}/.bashrc"
+  register: control_plane_tools_user_bashrc_stat
+  tags:
+    - bootstrap
+    - tools
+    - glow
+
+- name: Ensure glow alias in user .bashrc
+  ansible.builtin.lineinfile:
+    path: "/home/{{ control_plane_tools_user }}/.bashrc"
+    line: 'alias glow="glow -s tokyo-night -w 150"'
+    regexp: '^alias glow='
+    state: present
+  when:
+    - control_plane_tools_user != 'root'
+    - control_plane_tools_user_bashrc_stat.stat.exists
+  tags:
+    - bootstrap
+    - tools
+    - glow
+
+- name: Check if root .bashrc exists
+  ansible.builtin.stat:
+    path: /root/.bashrc
+  register: control_plane_tools_root_bashrc_stat
+  tags:
+    - bootstrap
+    - tools
+    - glow
+
+- name: Ensure glow alias in root .bashrc
+  ansible.builtin.lineinfile:
+    path: /root/.bashrc
+    line: 'alias glow="glow -s tokyo-night -w 150"'
+    regexp: '^alias glow='
+    state: present
+  when: control_plane_tools_root_bashrc_stat.stat.exists
+  tags:
+    - bootstrap
+    - tools
+    - glow
