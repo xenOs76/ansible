@@ -26,9 +26,9 @@ kubectl rollout restart deployment coredns -n kube-system
 
 ## Common CoreDNS Failure Modes
 
-1. **Syntax Error in Corefile**: Malformed directives in the `coredns` ConfigMap in `kube-system` cause CoreDNS pods to CrashLoopBackOff.
-1. **Upstream Forward Loop / Port Conflict**: Improper `/etc/resolv.conf` loops or forward plugin configuration.
-1. **Kube-DNS Service Selector Mismatch**: The `kube-dns` service (`10.96.0.10`) must select `k8s-app: kube-dns`.
+- **Syntax Error in Corefile**: Malformed directives in the `coredns` ConfigMap in `kube-system` cause CoreDNS pods to CrashLoopBackOff.
+- **Upstream Forward Loop / Port Conflict**: Improper `/etc/resolv.conf` loops or forward plugin configuration.
+- **Kube-DNS Service Selector Mismatch**: The `kube-dns` service (`10.96.0.10`) must select `k8s-app: kube-dns`.
 
 ---
 

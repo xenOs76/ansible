@@ -41,28 +41,11 @@ if [[ "${INJECTED_CPU_REQ}" != "50m" ]]; then
 fi
 
 echo "3. Testing LimitRange max rejection on oversized pod (expect REJECTION)..."
-cat <<'EOF' > /tmp/cka-lab-oversized-pod.yaml
-apiVersion: v1
-kind: Pod
-metadata:
-  name: cka-lab-oversized-pod
-spec:
-  containers:
-    - name: worker
-      image: busybox:1.36.1
-      command: ["/bin/sh", "-c", "sleep 3600"]
-      resources:
-        limits:
-          cpu: 500m
-EOF
-
-if kubectl apply -f /tmp/cka-lab-oversized-pod.yaml -n "${CAPACITY_NS}" >/dev/null 2>&1; then
+if kubectl apply -f "${SCRIPT_DIR}/cka-lab-oversized-pod.yaml" -n "${CAPACITY_NS}" >/dev/null 2>&1; then
   echo "    ERROR: Oversized pod was accepted when LimitRange max is 250m!"
-  rm -f /tmp/cka-lab-oversized-pod.yaml
   exit 1
 else
   echo "    OK: Admission controller rejected oversized pod exceeding LimitRange max."
-  rm -f /tmp/cka-lab-oversized-pod.yaml
 fi
 
 echo "4. Inspecting ResourceQuota consumption:"

@@ -65,71 +65,71 @@ kubectl explain pv.spec.csi
 
 ### Drill 1: Dynamic RBD Filesystem Volume
 
-1. **Deploy Claim & Consumer Pod**:
+#### Step 1: Deploy Claim & Consumer Pod
 
-   ```bash
-   kubectl apply -f 01-rbd-dynamic-filesystem.yaml
-   kubectl wait --for=condition=Ready pod/rbd-fs-consumer-pod --timeout=120s
-   ```
+```bash
+kubectl apply -f 01-rbd-dynamic-filesystem.yaml
+kubectl wait --for=condition=Ready pod/rbd-fs-consumer-pod --timeout=120s
+```
 
-1. **Verify Storage Attachment**:
+#### Step 2: Verify Storage Attachment
 
-   ```bash
-   kubectl get pvc rbd-claim-fs
-   kubectl get pv
-   kubectl exec rbd-fs-consumer-pod -- df -h /mnt/storage
-   kubectl exec rbd-fs-consumer-pod -- cat /mnt/storage/data.txt
-   ```
+```bash
+kubectl get pvc rbd-claim-fs
+kubectl get pv
+kubectl exec rbd-fs-consumer-pod -- df -h /mnt/storage
+kubectl exec rbd-fs-consumer-pod -- cat /mnt/storage/data.txt
+```
 
 ### Drill 2: Raw Block Device Mode (`volumeMode: Block`)
 
 In advanced database or raw IO scenarios, containers consume unformatted block devices without a host filesystem layer.
 
-1. **Deploy Raw Block PVC & Consumer Pod**:
+#### Step 1: Deploy Raw Block PVC & Consumer Pod
 
-   ```bash
-   kubectl apply -f 02-rbd-raw-block.yaml
-   kubectl wait --for=condition=Ready pod/rbd-raw-block-consumer-pod --timeout=120s
-   ```
+```bash
+kubectl apply -f 02-rbd-raw-block.yaml
+kubectl wait --for=condition=Ready pod/rbd-raw-block-consumer-pod --timeout=120s
+```
 
-1. **Verify Raw Block Device Inside Container**:
+#### Step 2: Verify Raw Block Device Inside Container
 
-   ```bash
-   kubectl exec rbd-raw-block-consumer-pod -- ls -l /dev/rbdblock
-   # Test raw I/O write with dd
-   kubectl exec rbd-raw-block-consumer-pod -- dd if=/dev/urandom of=/dev/rbdblock bs=1M count=10 conv=fsync
-   ```
+```bash
+kubectl exec rbd-raw-block-consumer-pod -- ls -l /dev/rbdblock
+# Test raw I/O write with dd
+kubectl exec rbd-raw-block-consumer-pod -- dd if=/dev/urandom of=/dev/rbdblock bs=1M count=10 conv=fsync
+```
 
 ### Drill 3: Online Volume Expansion
 
-1. **Patch the PVC Capacity**:
+#### Step 1: Patch the PVC Capacity
 
-   ```bash
-   kubectl patch pvc rbd-claim-fs -p '{"spec":{"resources":{"requests":{"storage":"2Gi"}}}}'
-   kubectl get pvc rbd-claim-fs
-   ```
+```bash
+kubectl patch pvc rbd-claim-fs -p '{"spec":{"resources":{"requests":{"storage":"2Gi"}}}}'
+kubectl get pvc rbd-claim-fs
+```
 
-1. **Confirm Filesystem Resizing Inside the Running Pod**:
+#### Step 2: Confirm Filesystem Resizing Inside the Running Pod
 
-   ```bash
-   kubectl exec rbd-fs-consumer-pod -- df -h /mnt/storage
-   ```
+```bash
+kubectl exec rbd-fs-consumer-pod -- df -h /mnt/storage
+```
 
 ### Drill 4: Static CSI PersistentVolume
 
 When mapping an existing Ceph RBD image into Kubernetes without dynamic provisioning:
 
-1. **Review and Apply Static Definitions**:
+#### Step 1: Review and Apply Static Definitions
 
-   ```bash
-   kubectl apply -f 03-rbd-static-pv-pvc-pod.yaml
-   kubectl get pv static-ceph-rbd-pv
-   kubectl get pvc static-ceph-rbd-pvc
-   ```
+```bash
+kubectl apply -f 03-rbd-static-pv-pvc-pod.yaml
+kubectl get pv static-ceph-rbd-pv
+kubectl get pvc static-ceph-rbd-pvc
+```
 
 ---
 
-## 4. Automated Verification
+## 5. Automated Verification
 
 Run the automated validation script to test filesystem and raw block operations:
 

@@ -29,6 +29,10 @@ cluster_admin_users:
   - root
   - "{{ ansible_user | default('vagrant') }}"
 
+# Default system editor configuration
+default_editor: "vim"
+default_editor_path: "/usr/bin/vim.basic"
+
 # OS76 Custom APT Repository (kubectl-netdrill, https-wrench, etc.)
 os76_apt_repo_enabled: true
 os76_apt_repo: "deb [trusted=yes] https://repo.os76.xyz/apt stable main"

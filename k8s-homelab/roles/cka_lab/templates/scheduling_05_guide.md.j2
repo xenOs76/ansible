@@ -26,9 +26,9 @@ kubectl explain pod.spec.priorityClassName
 
 ## Concepts
 
-1. **PriorityClass Resource**: Non-namespaced object defining a priority value (e.g., `value: 1000000`).
-1. **Preemption Policy**: Defaults to `PreemptionPolicy: PreemptLowerPriority`.
-1. **Preemption Flow**: When high-priority pods cannot be scheduled due to insufficient CPU/memory on any node, kube-scheduler evicts pods with lower priority to free resources.
+- **PriorityClass Resource**: Non-namespaced object defining a priority value (e.g., `value: 1000000`).
+- **Preemption Policy**: Defaults to `PreemptionPolicy: PreemptLowerPriority`.
+- **Preemption Flow**: When high-priority pods cannot be scheduled due to insufficient CPU/memory on any node, kube-scheduler evicts pods with lower priority to free resources.
 
 ---
 

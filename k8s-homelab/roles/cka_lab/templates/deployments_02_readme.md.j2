@@ -10,10 +10,10 @@ A Kubernetes Deployment does not manage Pods directly; it delegates pod lifecycl
 
 The ReplicaSet controller identifies which Pods belong to its control loop exclusively by querying the API server using label selectors:
 
-1. **`spec.selector.matchLabels`**:
-   Specifies the exact key-value pairs required for a Pod to be claimed and managed by this Deployment's ReplicaSet.
-1. **`spec.template.metadata.labels`**:
-   Defines the labels stamped onto each new Pod created by this Deployment.
+- **`spec.selector.matchLabels`**:
+  Specifies the exact key-value pairs required for a Pod to be claimed and managed by this Deployment's ReplicaSet.
+- **`spec.template.metadata.labels`**:
+  Defines the labels stamped onto each new Pod created by this Deployment.
 
 ### The Validation Rule
 
@@ -91,7 +91,7 @@ kubectl get pods -l app=cka-lab-order-processor,env=production
 
 ---
 
-## 3. Critical Exam Rule: Selector Immutability
+## 4. Critical Exam Rule: Selector Immutability
 
 Once a Deployment object is successfully created in the cluster, its `spec.selector` field is **immutable**:
 

@@ -8,6 +8,7 @@ metadata:
     app.kubernetes.io/part-of: cka-lab
     cka.practice/scenario: networking
   annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
     nginx.org/rewrites: "serviceName=cka-lab-ingress-web-svc rewrite=/;serviceName=cka-lab-ingress-api-svc rewrite=/"
 spec:
   ingressClassName: nginx

@@ -26,28 +26,28 @@ kubectl describe svc <service-name>
 
 ## Diagnostic Steps
 
-1. **Check Service and Endpoints**:
+### Step 1: Check Service and Endpoints
 
-   ```bash
-   kubectl get svc <service-name>
-   kubectl get endpoints <service-name>
-   kubectl get endpointslices -l kubernetes.io/service-name=<service-name>
-   ```
+```bash
+kubectl get svc <service-name>
+kubectl get endpoints <service-name>
+kubectl get endpointslices -l kubernetes.io/service-name=<service-name>
+```
 
-   If Endpoints show `<none>`, the Service's `spec.selector` does not match the target Pod's `metadata.labels`.
+If Endpoints show `<none>`, the Service's `spec.selector` does not match the target Pod's `metadata.labels`.
 
-1. **Compare Labels**:
+### Step 2: Compare Labels
 
-   ```bash
-   # Check service selector:
-   kubectl get svc <service-name> -o jsonpath='{.spec.selector}'
-   # Check pod labels:
-   kubectl get pods --show-labels
-   ```
+```bash
+# Check service selector:
+kubectl get svc <service-name> -o jsonpath='{.spec.selector}'
+# Check pod labels:
+kubectl get pods --show-labels
+```
 
-1. **Check Target Port**:
+### Step 3: Check Target Port
 
-   Verify that `spec.ports[*].targetPort` matches the container's listening port.
+Verify that `spec.ports[*].targetPort` matches the container's listening port.
 
 ---
 

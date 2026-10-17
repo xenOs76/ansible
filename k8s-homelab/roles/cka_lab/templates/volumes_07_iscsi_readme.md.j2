@@ -81,74 +81,74 @@ sudo iscsiadm -m discovery -t sendtargets -p {{ cka_lab_iscsi_portal }}
 
 Mounts LUN 1 directly without an intermediary PersistentVolume:
 
-1. **Deploy the Pod**:
+#### Step 1: Deploy the Pod
 
-   ```bash
-   kubectl apply -f 01-iscsi-direct-pod.yaml
-   kubectl wait --for=condition=Ready pod/iscsi-direct-pod --timeout=120s
-   ```
+```bash
+kubectl apply -f 01-iscsi-direct-pod.yaml
+kubectl wait --for=condition=Ready pod/iscsi-direct-pod --timeout=120s
+```
 
-2. **Verify Storage Attachment**:
+#### Step 2: Verify Storage Attachment
 
-   ```bash
-   kubectl exec iscsi-direct-pod -- df -h /mnt/storage
-   kubectl exec iscsi-direct-pod -- cat /mnt/storage/direct-test.txt
-   ```
+```bash
+kubectl exec iscsi-direct-pod -- df -h /mnt/storage
+kubectl exec iscsi-direct-pod -- cat /mnt/storage/direct-test.txt
+```
 
-3. **Cleanup**:
+#### Step 3: Cleanup
 
-   ```bash
-   kubectl delete -f 01-iscsi-direct-pod.yaml
-   ```
+```bash
+kubectl delete -f 01-iscsi-direct-pod.yaml
+```
 
 ### Drill 2: Static PersistentVolume & PersistentVolumeClaim
 
 Standard CKA exam pattern: declare an administrator-managed PV with `ReadWriteOnce` access mode, bind it with a PVC, and mount it inside a workload:
 
-1. **Deploy PV, PVC, and Consumer Pod**:
+#### Step 1: Deploy PV, PVC, and Consumer Pod
 
-   ```bash
-   kubectl apply -f 02-iscsi-pv-pvc-pod.yaml
-   kubectl wait --for=condition=Ready pod/iscsi-pvc-consumer-pod --timeout=120s
-   ```
+```bash
+kubectl apply -f 02-iscsi-pv-pvc-pod.yaml
+kubectl wait --for=condition=Ready pod/iscsi-pvc-consumer-pod --timeout=120s
+```
 
-2. **Inspect Binding & Mount**:
+#### Step 2: Inspect Binding & Mount
 
-   ```bash
-   kubectl get pv iscsi-static-pv
-   kubectl get pvc iscsi-claim
-   kubectl exec iscsi-pvc-consumer-pod -- df -h /mnt/storage
-   ```
+```bash
+kubectl get pv iscsi-static-pv
+kubectl get pvc iscsi-claim
+kubectl exec iscsi-pvc-consumer-pod -- df -h /mnt/storage
+```
 
-3. **Cleanup**:
+#### Step 3: Cleanup
 
-   ```bash
-   kubectl delete -f 02-iscsi-pv-pvc-pod.yaml
-   ```
+```bash
+kubectl delete -f 02-iscsi-pv-pvc-pod.yaml
+```
 
 ### Drill 3: Raw Block Device Mode (`volumeMode: Block`)
 
 When workloads (such as raw databases or storage operators) bypass host filesystems and consume block devices directly:
 
-1. **Deploy Raw Block Definitions**:
+#### Step 1: Deploy Raw Block Definitions
 
-   ```bash
-   kubectl apply -f 03-iscsi-raw-block.yaml
-   kubectl wait --for=condition=Ready pod/iscsi-raw-block-consumer-pod --timeout=120s
-   ```
+```bash
+kubectl apply -f 03-iscsi-raw-block.yaml
+kubectl wait --for=condition=Ready pod/iscsi-raw-block-consumer-pod --timeout=120s
+```
 
-2. **Verify Block Device Inside Container**:
+#### Step 2: Verify Block Device Inside Container
 
-   ```bash
-   kubectl exec iscsi-raw-block-consumer-pod -- ls -l /dev/iscsiblock
-   kubectl exec iscsi-raw-block-consumer-pod -- dd if=/dev/urandom of=/dev/iscsiblock bs=1M count=5 conv=fsync
-   ```
+```bash
+kubectl exec iscsi-raw-block-consumer-pod -- ls -l /dev/iscsiblock
+kubectl exec iscsi-raw-block-consumer-pod -- dd if=/dev/urandom of=/dev/iscsiblock bs=1M count=5 conv=fsync
+```
 
-3. **Cleanup**:
+#### Step 3: Cleanup
 
-   ```bash
-   kubectl delete -f 03-iscsi-raw-block.yaml
-   ```
+```bash
+kubectl delete -f 03-iscsi-raw-block.yaml
+```
 
 ### Drill 4: ReadWriteOnce Fencing & Multi-Node Conflicts
 

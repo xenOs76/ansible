@@ -102,67 +102,440 @@ crictl logs <container-id>
 
 ## 3. Walkthrough & Exam Drills
 
-### Drill 1: Node Cordon & Drain (`01-node-maintenance/`)
+### Drill 1: Safe Node Evacuation & Maintenance (`01-node-maintenance/`)
+
+In the CKA exam, maintenance tasks (such as host OS patching, kernel upgrades, or hardware maintenance) require safely taking worker nodes offline without causing downtime for scheduled workloads.
+
+#### The Cordon vs Drain Distinction
+
+- **`kubectl cordon <node>`**: Marks the node as unschedulable (`SchedulingDisabled`). Existing running pods are left untouched; only new pod scheduling is blocked.
+- **`kubectl drain <node>`**: Cordons the node and simultaneously evicts all non-DaemonSet workloads gracefully to other available nodes.
+- **`kubectl uncordon <node>`**: Removes the unschedulable restriction and restores the node to active scheduling.
+
+#### Mandatory Drain Flags (Avoid CKA Exam Traps)
+
+1. `--ignore-daemonsets`: DaemonSet-managed pods cannot be evicted by draining because their controller immediately recreates them on the same node. You **must** supply this flag or `kubectl drain` will abort.
+2. `--delete-emptydir-data`: If any pod utilizes `emptyDir` volumes, Kubernetes refuses to evict it by default because local ephemeral data will be destroyed. This flag explicitly authorizes data loss.
+3. `--force`: Required if standalone pods (pods created directly via `kubectl run` without a Deployment, ReplicaSet, or Job controller) reside on the node.
+
+#### Step 1: Cordon the Node
 
 ```bash
-{{ cka_lab_cluster_troubleshooting_dir }}/01-node-maintenance/drain-cordon-drill.sh
+kubectl cordon kube-worker-1
+kubectl get nodes
 ```
 
-### Drill 2: Static Pod Recovery (`02-static-pod-recovery/`)
+Notice the status changes to `Ready,SchedulingDisabled`.
+
+#### Step 2: Drain Workload Pods
+
+```bash
+kubectl drain kube-worker-1 --ignore-daemonsets --delete-emptydir-data --force
+```
+
+Watch the eviction events as pods are gracefully terminated on `kube-worker-1` and rescheduled on other cluster nodes.
+
+#### Step 3: Uncordon the Node After Maintenance
+
+```bash
+kubectl uncordon kube-worker-1
+kubectl get nodes
+```
+
+The node status returns to `Ready`.
+
+---
+
+### Drill 2: Control Plane Static Pod Recovery (`02-static-pod-recovery/`)
+
+Control plane components (`etcd`, `kube-apiserver`, `kube-controller-manager`, and `kube-scheduler`) are managed directly by the local `kubelet` daemon as **Static Pods** defined in `/etc/kubernetes/manifests/`.
+
+#### Exam Symptom: Applications Stuck in Pending
+
+When the scheduler fails, new Deployments or Pods remain stuck in `Pending` indefinitely with zero scheduling events recorded in `kubectl describe pod`.
+
+#### Step 1: Simulate Scheduler Manifest Corruption
 
 ```bash
 cd {{ cka_lab_cluster_troubleshooting_dir }}/02-static-pod-recovery
 sudo ./break-scheduler.sh
-# Observe failure:
+```
+
+#### Step 2: Investigate Control Plane Pod Status
+
+Check the health of core components in `kube-system`:
+
+```bash
 kubectl get pods -n kube-system -l component=kube-scheduler
-# Restore healthy state:
+```
+
+Notice the status shows `CrashLoopBackOff` or `Error`.
+
+#### Step 3: Extract Autopsy Logs
+
+```bash
+kubectl logs -n kube-system -l component=kube-scheduler --tail=50
+```
+
+Notice the error message pointing to an invalid configuration flag or bad file path (e.g. `--authentication-kubeconfig` or bad volume mount).
+
+> [!TIP]
+> **What if `kube-apiserver` is down?**
+> If the API server itself is broken, `kubectl` commands fail with `The connection to the server was refused`. In this scenario, you must inspect the container runtime directly on the host using `crictl`:
+>
+> ```bash
+> sudo crictl ps -a | grep -E "apiserver|scheduler"
+> sudo crictl logs <container-id>
+> ```
+
+#### Step 4: Fix the Static Pod Manifest
+
+Static pod manifests are located at `/etc/kubernetes/manifests/`. Edit the corrupted manifest:
+
+```bash
+# Locate and edit the scheduler manifest
+sudo vim /etc/kubernetes/manifests/kube-scheduler.yaml
+
+# Alternatively, execute the automated restoration script
 sudo ./fix-scheduler.sh
 ```
 
-### Drill 3: Kubelet Diagnostics (`03-kubelet-diagnostics/`)
+Upon saving the file, the local `kubelet` detects the change via inotify file watchers and automatically recreates the static pod within seconds.
+
+#### Step 5: Verify Recovery
+
+```bash
+kubectl get pods -n kube-system -l component=kube-scheduler
+```
+
+Confirm that the scheduler returns to `1/1 Running`. Any previously `Pending` workloads will now be scheduled immediately.
+
+---
+
+### Drill 3: Worker Node Kubelet Diagnostics (`03-kubelet-diagnostics/`)
+
+Worker node failures in the CKA exam almost always manifest as nodes transitioning into `NotReady` status.
+
+#### Step 1: Simulate Kubelet Configuration Failure
 
 ```bash
 cd {{ cka_lab_cluster_troubleshooting_dir }}/03-kubelet-diagnostics
 sudo ./break-kubelet.sh
-sudo systemctl status kubelet
-sudo ./fix-kubelet.sh
 ```
 
-### Drill 4: Resource Telemetry (`04-metrics-monitoring/`)
+#### Step 2: Diagnose the NotReady Node
 
 ```bash
-{{ cka_lab_cluster_troubleshooting_dir }}/04-metrics-monitoring/test-metrics-top.sh
+kubectl get nodes
+kubectl describe node $(hostname)
 ```
 
-### Drill 5: CoreDNS Recovery (`05-coredns-recovery/`)
+In the conditions block, notice:
+
+```text
+Ready: Unknown - Kubelet stopped posting node status.
+```
+
+#### Step 3: Inspect Systemd Service and Journal Logs
+
+SSH into the failing node and inspect the systemd daemon:
+
+```bash
+sudo systemctl status kubelet
+sudo journalctl -u kubelet -e --no-pager -n 50
+```
+
+Look for fatal exit reasons, such as:
+
+- Inability to load certificate authority (`unable to load client CA file ... no such file or directory`).
+- Invalid configuration flags or wrong cluster DNS IP.
+- Mismatched swap settings (`running with swap on is not supported`).
+
+#### Step 4: Locate Kubelet Configuration Files
+
+Inspect the systemd drop-in configuration to find where kubelet arguments and config files originate:
+
+```bash
+cat /etc/systemd/system/kubelet.service.d/10-kubeadm.conf
+```
+
+Notice the line:
+
+```text
+Environment="KUBELET_CONFIG_ARGS=--config=/var/lib/kubelet/config.yaml"
+```
+
+#### Step 5: Fix the Configuration and Restart Kubelet
+
+```bash
+# Edit the configuration file to resolve the broken parameter
+sudo vim /var/lib/kubelet/config.yaml
+
+# Or use the repair script
+sudo ./fix-kubelet.sh
+
+# Reload systemd manager configuration and restart kubelet
+sudo systemctl daemon-reload
+sudo systemctl restart kubelet
+```
+
+#### Step 6: Verify Node Returns to Ready
+
+```bash
+kubectl get nodes
+```
+
+Confirm that the node transitions back to `Ready` status.
+
+---
+
+### Drill 4: Cluster Resource Telemetry (`04-metrics-monitoring/`)
+
+A recurring CKA exam requirement is querying node and pod resource consumption (CPU and memory) to identify capacity bottlenecks.
+
+#### Step 1: Verify Metrics Server API
+
+Ensure Metrics Server is collecting resource telemetry (if not deployed, run `/home/vagrant/cka/helm/install-kube-metrics.sh`):
+
+```bash
+kubectl top nodes
+kubectl top pods -A
+```
+
+#### Step 2: Sort by CPU and Memory Consumption
+
+In the exam, quickly identify high-utilization workloads using the `--sort-by` flag:
+
+```bash
+# Find node with highest CPU utilization
+kubectl top nodes --sort-by=cpu
+
+# Find node with highest memory utilization
+kubectl top nodes --sort-by=memory
+
+# Identify top CPU-consuming pods cluster-wide
+kubectl top pods -A --sort-by=cpu
+
+# Identify top memory-consuming pods in a specific namespace
+kubectl top pods -n kube-system --sort-by=memory
+```
+
+#### Step 3: Run Resource Telemetry Validation
+
+```bash
+cd {{ cka_lab_cluster_troubleshooting_dir }}/04-metrics-monitoring
+./test-metrics-top.sh
+```
+
+---
+
+### Drill 5: CoreDNS Diagnostics & Recovery (`05-coredns-recovery/`)
+
+Cluster-wide DNS failures cause applications to fail with `cannot resolve host` or connection timeouts when resolving service names (e.g. `service.namespace.svc.cluster.local`).
+
+#### Step 1: Simulate CoreDNS Syntax Error
 
 ```bash
 cd {{ cka_lab_cluster_troubleshooting_dir }}/05-coredns-recovery
 ./break-coredns.sh
+```
+
+#### Step 2: Observe DNS Resolution Failure
+
+```bash
 kubectl get pods -n kube-system -l k8s-app=kube-dns
+```
+
+Notice that CoreDNS pods are restarting or reporting errors. Launch a test query:
+
+```bash
+kubectl run dns-test --image=busybox:1.36 --restart=Never --rm -i -- nslookup kubernetes.default.svc.cluster.local || echo "DNS query failed!"
+```
+
+#### Step 3: Inspect CoreDNS Logs
+
+```bash
+kubectl logs -n kube-system -l k8s-app=kube-dns --tail=30
+```
+
+Observe Corefile parsing errors or forwarder syntax issues.
+
+#### Step 4: Repair the Corefile ConfigMap
+
+CoreDNS configuration is stored in the `coredns` ConfigMap in `kube-system`:
+
+```bash
+# Inspect the live configuration
+kubectl get configmap coredns -n kube-system -o yaml
+
+# Edit or restore the clean Corefile
 ./fix-coredns.sh
+
+# Restart the deployment to pick up the corrected ConfigMap
+kubectl rollout restart deployment coredns -n kube-system
+kubectl rollout status deployment coredns -n kube-system --timeout=60s
+```
+
+#### Step 5: Verify DNS Resolution
+
+```bash
 ./test-dns-resolution.sh
 ```
 
-### Drill 6: Service & Endpoints Recovery (`06-service-endpoints-recovery/`)
+---
+
+### Drill 6: Service & Endpoints Triage (`06-service-endpoints-recovery/`)
+
+When a Service is created but traffic cannot reach the backend pods, the root cause is almost always:
+
+1. **Selector Mismatch**: `spec.selector` on the Service does not match `metadata.labels` on the target Pods, causing `Endpoints` to remain `<none>`.
+2. **Port Mismatch**: `spec.ports[*].targetPort` does not match the port the container application is actually listening on.
+
+#### Step 1: Deploy Broken Service Scenario
 
 ```bash
 cd {{ cka_lab_cluster_troubleshooting_dir }}/06-service-endpoints-recovery
 ./setup-broken-service.sh
+```
+
+#### Step 2: Diagnose Missing Endpoints
+
+```bash
+kubectl get svc cka-order-svc
 kubectl get endpoints cka-order-svc
+kubectl get endpointslices -l kubernetes.io/service-name=cka-order-svc
+```
+
+Notice that `ENDPOINTS` displays `<none>`, even though backend pods are `Running`.
+
+#### Step 3: Compare Selectors vs Pod Labels
+
+```bash
+# Inspect what the Service is searching for
+kubectl get svc cka-order-svc -o jsonpath='{.spec.selector}'
+echo ""
+
+# Inspect labels actually assigned to backend pods
+kubectl get pods -l app.kubernetes.io/part-of=cka-lab --show-labels
+```
+
+Notice the mismatch: the Service looks for `app: order-svc`, but pods are labeled with `app: cka-order-backend`.
+
+#### Step 4: Check Target Port Alignment
+
+```bash
+kubectl describe svc cka-order-svc
+```
+
+Verify whether `TargetPort` matches the container's listening port (e.g. `8080` vs `80`).
+
+#### Step 5: Repair the Service
+
+```bash
+# Correct selector and port definitions
 ./fix-service.sh
+
+# Confirm that endpoints are now populated with pod IP addresses
+kubectl get endpoints cka-order-svc
+```
+
+#### Step 6: Test Connectivity
+
+```bash
 ./test-service-endpoints.sh
 ```
 
-### Drill 7: Worker Static Pod (`07-worker-static-pods/`)
+---
+
+### Drill 7: Worker Node Static Pods (`07-worker-static-pods/`)
+
+In the CKA exam, you may be instructed to deploy a static pod specifically on a **worker node** rather than the control plane.
+
+#### Critical Exam Principle: Static Pods Bypass the API Server
+
+Static pods are managed exclusively by the node's local `kubelet`. You do **not** run `kubectl apply` to create a static pod! Instead, you place a Pod manifest file into the directory configured by `staticPodPath` on the host node.
+
+#### Step 1: Discover the Worker Node's `staticPodPath`
+
+SSH into the target worker node and inspect its kubelet configuration:
+
+```bash
+# Check staticPodPath in kubelet config
+grep -i "staticPodPath" /var/lib/kubelet/config.yaml
+```
+
+If `staticPodPath` is set (e.g. `/etc/kubernetes/manifests`), files placed in that directory become static pods. If unset, add `staticPodPath: /etc/kubernetes/manifests` to `/var/lib/kubelet/config.yaml` and restart kubelet.
+
+#### Step 2: Generate the Static Pod Manifest
+
+Generate a clean manifest skeleton:
 
 ```bash
 cd {{ cka_lab_cluster_troubleshooting_dir }}/07-worker-static-pods
-./setup-worker-static-pod.sh
+
+kubectl run static-web \
+  --image=nginx:alpine \
+  --restart=Always \
+  --dry-run=client -o yaml > static-web.yaml
+```
+
+#### Step 3: Place the Manifest into `staticPodPath`
+
+Copy the manifest into the node's static pod directory:
+
+```bash
+sudo cp static-web.yaml /etc/kubernetes/manifests/
+```
+
+#### Step 4: Verify the Mirror Pod on the Control Plane
+
+Return to the control plane and list pods:
+
+```bash
+kubectl get pods -o wide
+```
+
+Notice that a mirror pod named `static-web-<node-name>` automatically appears in the API server with its node set to the target worker node.
+
+#### Step 5: Test and Validate
+
+```bash
 ./test-worker-static-pod.sh
 ```
 
-### Drill 8: Container Runtime Diagnostics (`08-containerd-diagnostics/`)
+---
+
+### Drill 8: Container Runtime (CRI) Diagnostics (`08-containerd-diagnostics/`)
+
+When Kubernetes daemons (`kubelet` or API server) cannot provide telemetry, you must diagnose container lifecycle directly via `crictl`.
+
+#### Step 1: Configure `crictl` Endpoints
+
+Verify that `crictl` communicates with containerd:
+
+```bash
+sudo crictl info
+```
+
+Ensure `/etc/crictl.yaml` points to `unix:///run/containerd/containerd.sock`.
+
+#### Step 2: Inspect Containers and Pod Sandboxes
+
+```bash
+# List all active pods at the CRI level
+sudo crictl pods
+
+# List running containers
+sudo crictl ps
+
+# List all containers, including exited/crashed ones
+sudo crictl ps -a
+
+# View container logs directly from the runtime engine
+sudo crictl logs <container-id>
+```
+
+#### Step 3: Run Runtime Verification Suite
 
 ```bash
 cd {{ cka_lab_cluster_troubleshooting_dir }}/08-containerd-diagnostics
@@ -171,9 +544,9 @@ cd {{ cka_lab_cluster_troubleshooting_dir }}/08-containerd-diagnostics
 
 ---
 
-## 3. Automated Validation
+## 4. Automated Validation
 
-Execute the automated non-interactive verification suite:
+Execute the comprehensive automated non-interactive verification suite:
 
 ```bash
 {{ cka_lab_cluster_troubleshooting_dir }}/test-cluster-troubleshooting.sh

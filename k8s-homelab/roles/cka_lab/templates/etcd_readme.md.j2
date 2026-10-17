@@ -133,11 +133,11 @@ In enterprise and production clusters, taking daily automated snapshots of the e
 
 ### Automation Mechanics
 
-1. **Service Check**: Verifies `/etc/kubernetes/manifests/etcd.yaml` exists, TLS credentials are valid, and etcd endpoint health returns OK. If etcd is not running, it skips execution gracefully without triggering systemd service failures.
-1. **Timestamped Naming**: Snapshots are saved to `/var/lib/etcd-backup` with a common prefix and timestamp: `etcd-snapshot-YYYYMMDD_HHMMSS.db`.
-1. **Integrity Status**: Verifies the newly written snapshot using `etcdctl snapshot status`.
-1. **Retention Pruning**: Automatically prunes snapshot files older than 7 days (`find /var/lib/etcd-backup -maxdepth 1 -type f -name "etcd-snapshot-*.db" -mtime +7 -delete`).
-1. **Systemd Timer Scheduling**: Managed by systemd timer unit `etcd-backup.timer` (`OnCalendar=daily`, `Persistent=true`) triggering `etcd-backup.service`.
+- **Service Check**: Verifies `/etc/kubernetes/manifests/etcd.yaml` exists, TLS credentials are valid, and etcd endpoint health returns OK. If etcd is not running, it skips execution gracefully without triggering systemd service failures.
+- **Timestamped Naming**: Snapshots are saved to `/var/lib/etcd-backup` with a common prefix and timestamp: `etcd-snapshot-YYYYMMDD_HHMMSS.db`.
+- **Integrity Status**: Verifies the newly written snapshot using `etcdctl snapshot status`.
+- **Retention Pruning**: Automatically prunes snapshot files older than 7 days (`find /var/lib/etcd-backup -maxdepth 1 -type f -name "etcd-snapshot-*.db" -mtime +7 -delete`).
+- **Systemd Timer Scheduling**: Managed by systemd timer unit `etcd-backup.timer` (`OnCalendar=daily`, `Persistent=true`) triggering `etcd-backup.service`.
 
 ### Inspection & Management Commands
 

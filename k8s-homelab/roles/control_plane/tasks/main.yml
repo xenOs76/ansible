@@ -180,6 +180,8 @@
         complete -o default -F __start_kubectl k
       fi
       export koyaml="--dry-run=client -o yaml"
+      export EDITOR={{ default_editor | default('vim') }}
+      export VISUAL={{ default_editor | default('vim') }}
     owner: root
     group: root
     mode: '0644'

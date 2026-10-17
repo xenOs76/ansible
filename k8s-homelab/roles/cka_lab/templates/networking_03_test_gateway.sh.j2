@@ -21,6 +21,19 @@ if ! kubectl get crd nginxgateways.gateway.nginx.org >/dev/null 2>&1; then
   kubectl apply --server-side -f "https://raw.githubusercontent.com/nginx/nginx-gateway-fabric/{{ cka_lab_helm_ngf_crd_version | default('v1.6.1') }}/deploy/crds.yaml"
 fi
 
+if ! kubectl get gatewayclass nginx >/dev/null 2>&1; then
+  echo "    Notice: GatewayClass 'nginx' is not registered."
+  echo "    Please deploy NGINX Gateway Fabric first:"
+  echo "      /home/vagrant/cka/helm/install-nginx-gateway-fabric.sh"
+  echo "    (If Ingress-NGINX is active on port 30080, run 'helm uninstall ingress-nginx -n ingress-nginx' first)."
+fi
+
+if ! kubectl get svc httpbingo -n "${NAMESPACE}" >/dev/null 2>&1; then
+  echo "    Notice: Service 'httpbingo' not found in namespace '${NAMESPACE}'."
+  echo "    Please deploy httpbin-go backend first:"
+  echo "      /home/vagrant/cka/helm/install-httpbin-go.sh"
+fi
+
 echo "==> Applying Gateway and HTTPRoute manifests..."
 kubectl apply -f "${SCRIPT_DIR}/cka-lab-gateway.yaml" -n "${NAMESPACE}"
 kubectl apply -f "${SCRIPT_DIR}/cka-lab-httproute.yaml" -n "${NAMESPACE}"

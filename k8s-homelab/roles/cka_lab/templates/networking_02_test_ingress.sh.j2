@@ -8,6 +8,14 @@ NAMESPACE="{{ cka_lab_networking_namespace | default('default') }}"
 DOMAIN="{{ cka_lab_networking_domain | default('cka-lab.example.local') }}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+echo "==> [Ingress Drill] Checking Ingress controller prerequisites..."
+if ! kubectl get ingressclass nginx >/dev/null 2>&1; then
+  echo "    Notice: IngressClass 'nginx' is not registered."
+  echo "    Please deploy the deprecated community Ingress-NGINX controller first:"
+  echo "      /home/vagrant/cka/helm/install-deprecated-nginx-ingress.sh"
+  echo "    (If NGINX Gateway Fabric is active on port 30080, run 'helm uninstall ngf -n nginx-gateway' first)."
+fi
+
 echo "==> [Ingress Drill] Deploying Ingress backends and routing rules..."
 kubectl apply -f "${SCRIPT_DIR}/cka-lab-ingress-backends.yaml" -n "${NAMESPACE}"
 kubectl apply -f "${SCRIPT_DIR}/cka-lab-ingress.yaml" -n "${NAMESPACE}"

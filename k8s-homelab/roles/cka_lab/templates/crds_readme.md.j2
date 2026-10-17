@@ -53,24 +53,24 @@ kubectl explain crd.spec.names
 
 ### Drill 1: Apply CRD & Inspect Established State (`01-crd-schema/`)
 
-1. **Deploy CRD**:
+#### Step 1: Deploy CRD
 
-   ```bash
-   kubectl apply -f {{ cka_lab_crds_dir }}/01-crd-schema/cka-lab-backup-crd.yaml
-   kubectl wait --for=condition=established crd/backupschedules.automation.cka.priv
-   kubectl get crd backupschedules.automation.cka.priv
-   ```
+```bash
+kubectl apply -f {{ cka_lab_crds_dir }}/01-crd-schema/cka-lab-backup-crd.yaml
+kubectl wait --for=condition=established crd/backupschedules.automation.cka.priv
+kubectl get crd backupschedules.automation.cka.priv
+```
 
-1. **Deploy Custom Resource & Query via ShortName**:
+#### Step 2: Deploy Custom Resource & Query via ShortName
 
-   ```bash
-   kubectl apply -f {{ cka_lab_crds_dir }}/01-crd-schema/cka-lab-backup-custom-resource.yaml
-   kubectl get bs
-   ```
+```bash
+kubectl apply -f {{ cka_lab_crds_dir }}/01-crd-schema/cka-lab-backup-custom-resource.yaml
+kubectl get bs
+```
 
 ---
 
-## 3. Automated Validation
+## 4. Automated Validation
 
 Execute the automated non-interactive verification suite:
 

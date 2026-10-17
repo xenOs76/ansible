@@ -27,12 +27,12 @@ kubectl explain networkpolicy.spec.egress.ports
 
 ## Exam Rules & Principles
 
-1. **Default Deny vs Allow Rules**: As soon as a NetworkPolicy selects a pod (`spec.podSelector`), that pod enters an **isolated** state for the defined policyTypes (Ingress, Egress). Any traffic not explicitly allowed is dropped.
-1. **Namespace Matching**: To allow traffic from another namespace, the target namespace **must** have a matching label (e.g., `kubernetes.io/metadata.name: portal` or custom label `project: portal`).
-1. **Combining namespaceSelector and podSelector**:
-   - Placed in the **same list item** (`- namespaceSelector: ... \n podSelector: ...`): Logical **AND** (must be from selected namespace AND matching pod label).
-   - Placed in **separate list items**: Logical **OR** (all pods in selected namespace OR matching pods anywhere).
-1. **DNS Egress Requirement**: When implementing default-deny Egress, you **must** allow UDP and TCP egress to port 53 (CoreDNS), otherwise DNS resolution fails completely.
+- **Default Deny vs Allow Rules**: As soon as a NetworkPolicy selects a pod (`spec.podSelector`), that pod enters an **isolated** state for the defined policyTypes (Ingress, Egress). Any traffic not explicitly allowed is dropped.
+- **Namespace Matching**: To allow traffic from another namespace, the target namespace **must** have a matching label (e.g., `kubernetes.io/metadata.name: portal` or custom label `project: portal`).
+- **Combining namespaceSelector and podSelector**:
+  - Placed in the **same list item** (`- namespaceSelector: ... \n podSelector: ...`): Logical **AND** (must be from selected namespace AND matching pod label).
+  - Placed in **separate list items**: Logical **OR** (all pods in selected namespace OR matching pods anywhere).
+- **DNS Egress Requirement**: When implementing default-deny Egress, you **must** allow UDP and TCP egress to port 53 (CoreDNS), otherwise DNS resolution fails completely.
 
 ---
 

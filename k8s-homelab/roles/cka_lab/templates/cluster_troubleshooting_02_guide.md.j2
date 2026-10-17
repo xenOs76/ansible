@@ -28,28 +28,30 @@ sudo journalctl -u kubelet -e --no-pager
 
 ## 1. Key Diagnostic Techniques
 
-1. **Check Manifest Location**:
-   The static pod manifest path is defined in `/var/lib/kubelet/config.yaml` under `staticPodPath: /etc/kubernetes/manifests`.
+### Step 1: Check Manifest Location
 
-1. **Inspect Control Plane Pod Status**:
+The static pod manifest path is defined in `/var/lib/kubelet/config.yaml` under `staticPodPath: /etc/kubernetes/manifests`.
 
-   ```bash
-   kubectl get pods -n kube-system
-   ```
+### Step 2: Inspect Control Plane Pod Status
 
-1. **Inspect Directly via Container Runtime (`crictl`)**:
-   When the control plane API server is down, `kubectl` commands will fail. Use `crictl` directly on the host:
+```bash
+kubectl get pods -n kube-system
+```
 
-   ```bash
-   sudo crictl ps -a
-   sudo crictl logs <container-id>
-   ```
+### Step 3: Inspect Directly via Container Runtime (`crictl`)
 
-1. **Inspect Host System Logs**:
+When the control plane API server is down, `kubectl` commands will fail. Use `crictl` directly on the host:
 
-   ```bash
-   sudo journalctl -u kubelet -e --no-pager
-   ```
+```bash
+sudo crictl ps -a
+sudo crictl logs <container-id>
+```
+
+### Step 4: Inspect Host System Logs
+
+```bash
+sudo journalctl -u kubelet -e --no-pager
+```
 
 ---
 
@@ -57,43 +59,44 @@ sudo journalctl -u kubelet -e --no-pager
 
 ### Drill A: Kube-Scheduler Manifest Corruption
 
-1. **Break the scheduler**:
+#### Step 1: Break the Scheduler
 
-   ```bash
-   sudo ./break-scheduler.sh
-   ```
+```bash
+sudo ./break-scheduler.sh
+```
 
-1. **Diagnose why it stopped**:
+#### Step 2: Diagnose Why It Stopped
 
-   ```bash
-   kubectl get pods -n kube-system
-   sudo journalctl -u kubelet | grep -i "scheduler"
-   ```
+```bash
+kubectl get pods -n kube-system
+sudo journalctl -u kubelet | grep -i "scheduler"
+```
 
-1. **Restore healthy state**:
+#### Step 3: Restore Healthy State
 
-   ```bash
-   sudo ./fix-scheduler.sh
-   ```
+```bash
+sudo ./fix-scheduler.sh
+```
 
 ### Drill B: Kube-Apiserver Certificate Path Failure
 
-1. **Break the API server**:
+#### Step 1: Break the API Server
 
-   ```bash
-   sudo ./break-apiserver.sh
-   ```
+```bash
+sudo ./break-apiserver.sh
+```
 
-1. **Diagnose connection refusal**:
-   Observe `kubectl get nodes` failing, then inspect the container runtime directly:
+#### Step 2: Diagnose Connection Refusal
 
-   ```bash
-   sudo crictl ps -a | grep apiserver
-   sudo crictl logs <container_id>
-   ```
+Observe `kubectl get nodes` failing, then inspect the container runtime directly:
 
-1. **Restore healthy state**:
+```bash
+sudo crictl ps -a | grep apiserver
+sudo crictl logs <container_id>
+```
 
-   ```bash
-   sudo ./fix-apiserver.sh
-   ```
+#### Step 3: Restore Healthy State
+
+```bash
+sudo ./fix-apiserver.sh
+```

@@ -69,69 +69,71 @@ kubectl rollout undo deployment/<name> --to-revision=1
 
 ### Drill 1: Manifest Creation and Scaling
 
-1. **Declarative Manifest Deployment**:
+#### Step 1: Declarative Manifest Deployment
 
-   ```bash
-   cd 01-basic-deployment
-   kubectl apply -f web-frontend-deployment.yaml
-   kubectl get deployment cka-lab-web-frontend -o wide
-   kubectl get pods -l app.kubernetes.io/name=cka-lab-web-frontend
-   ```
+```bash
+cd 01-basic-deployment
+kubectl apply -f web-frontend-deployment.yaml
+kubectl get deployment cka-lab-web-frontend -o wide
+kubectl get pods -l app.kubernetes.io/name=cka-lab-web-frontend
+```
 
-1. **Imperative Generation with Dry-Run**:
+#### Step 2: Imperative Generation with Dry-Run
 
-   Rapidly generate a production-ready manifest without creating the resource:
+Rapidly generate a production-ready manifest without creating the resource:
 
-   ```bash
-   kubectl create deployment cka-lab-cache-service \
-     --image=redis:7-alpine \
-     --replicas=2 \
-     --port=6379 \
-     --dry-run=client -o yaml > cache-service.yaml
-   ```
+```bash
+kubectl create deployment cka-lab-cache-service \
+  --image=redis:7-alpine \
+  --replicas=2 \
+  --port=6379 \
+  --dry-run=client -o yaml > cache-service.yaml
+```
 
-1. **Imperative Scaling & Lifecycle Drill**:
+#### Step 3: Imperative Scaling & Lifecycle Drill
 
-   ```bash
-   kubectl scale deployment cka-lab-web-frontend --replicas=5
-   kubectl rollout status deployment/cka-lab-web-frontend
-   ```
+```bash
+kubectl scale deployment cka-lab-web-frontend --replicas=5
+kubectl rollout status deployment/cka-lab-web-frontend
+```
 
-   Execute the complete automated imperative workflow drill:
+Execute the complete automated imperative workflow drill:
 
-   ```bash
-   ./run-imperative.sh
-   ```
+```bash
+./run-imperative.sh
+```
 
 ---
 
 ### Drill 2: Selector Troubleshooting and Immutability
 
-1. **Diagnose Validation Failures**:
+#### Step 1: Diagnose Validation Failures
 
-   ```bash
-   cd ../02-troubleshooting-labels
-   kubectl apply -f broken-deployment.yaml
-   ```
+```bash
+cd ../02-troubleshooting-labels
+kubectl apply -f broken-deployment.yaml
+```
 
-   Observe the API server error explaining that `spec.selector` does not match `spec.template.metadata.labels`.
+Observe the API server error explaining that `spec.selector` does not match `spec.template.metadata.labels`.
 
-1. **Apply the Resolution**:
+#### Step 2: Apply the Resolution
 
-   ```bash
-   kubectl apply -f fixed-deployment.yaml
-   kubectl get deployment cka-lab-order-processor
-   ```
+```bash
+kubectl apply -f fixed-deployment.yaml
+kubectl get deployment cka-lab-order-processor
+```
 
-1. **Execute Pod Quarantine and Autopsy Drill**:
+#### Step 3: Execute Pod Quarantine and Autopsy Drill
 
-   Isolate a misbehaving pod from its deployment replica set without deleting it to allow offline debugging:
+Isolate a misbehaving pod from its deployment replica set without deleting it to allow offline debugging:
 
-   ```bash
-   ./quarantine-drill.sh
-   ```
+```bash
+./quarantine-drill.sh
+```
 
-1. Review the troubleshooting principles in [`02-troubleshooting-labels/README.md`](02-troubleshooting-labels/README.md).
+#### Step 4: Review Troubleshooting Principles
+
+Review the troubleshooting principles in [`02-troubleshooting-labels/README.md`](02-troubleshooting-labels/README.md).
 
 ---
 
@@ -146,38 +148,38 @@ cd ../03-rolling-updates-rollbacks
 
 Or execute the steps manually:
 
-1. Deploy baseline version 1:
+#### Step 1: Deploy Baseline Version (v1)
 
-   ```bash
-   kubectl apply -f 01-catalog-v1.yaml
-   kubectl rollout status deployment/cka-lab-catalog-service
-   ```
+```bash
+kubectl apply -f 01-catalog-v1.yaml
+kubectl rollout status deployment/cka-lab-catalog-service
+```
 
-1. Apply version 2:
+#### Step 2: Apply Updated Version (v2)
 
-   ```bash
-   kubectl apply -f 02-catalog-v2.yaml
-   kubectl rollout status deployment/cka-lab-catalog-service
-   ```
+```bash
+kubectl apply -f 02-catalog-v2.yaml
+kubectl rollout status deployment/cka-lab-catalog-service
+```
 
-1. Inspect rollout history and recorded change causes:
+#### Step 3: Inspect Rollout History and Revisions
 
-   ```bash
-   kubectl rollout history deployment/cka-lab-catalog-service
-   ```
+```bash
+kubectl rollout history deployment/cka-lab-catalog-service
+```
 
-1. Roll back to revision 1:
+#### Step 4: Roll Back to Previous Revision
 
-   ```bash
-   kubectl rollout undo deployment/cka-lab-catalog-service --to-revision=1
-   kubectl rollout status deployment/cka-lab-catalog-service
-   ```
+```bash
+kubectl rollout undo deployment/cka-lab-catalog-service --to-revision=1
+kubectl rollout status deployment/cka-lab-catalog-service
+```
 
-1. Confirm container image is reverted:
+#### Step 5: Confirm Container Image Reversion
 
-   ```bash
-   kubectl get deployment cka-lab-catalog-service -o jsonpath='{.spec.template.spec.containers[0].image}'
-   ```
+```bash
+kubectl get deployment cka-lab-catalog-service -o jsonpath='{.spec.template.spec.containers[0].image}'
+```
 
 ---
 
@@ -185,36 +187,39 @@ Or execute the steps manually:
 
 Kubernetes supports two primary deployment strategies defined under `spec.strategy.type`: **`RollingUpdate`** (the default) and **`Recreate`**. In this drill, we explore how tuning these strategies alters rollout behavior and availability:
 
-1. **Zero-Downtime Rolling Update (`rolling-update-custom.yaml`)**:
-   - **Strategy Type**: `type: RollingUpdate` with `maxSurge: 1` and `maxUnavailable: 0`.
-   - **What It Means**: Guarantees that available capacity NEVER drops below the desired replica count. At all times during the rollout, at least 3 pods are actively serving traffic. Kubernetes creates a new pod first (surging to 4 pods); only after the new pod passes readiness probes is an old pod terminated.
+#### Step 1: Zero-Downtime Rolling Update (`rolling-update-custom.yaml`)
 
-   ```bash
-   cd ../04-strategies
-   kubectl apply -f rolling-update-custom.yaml
-   kubectl get deployment cka-lab-mission-critical
-   ```
+- **Strategy Type**: `type: RollingUpdate` with `maxSurge: 1` and `maxUnavailable: 0`.
+- **What It Means**: Guarantees that available capacity NEVER drops below the desired replica count. At all times during the rollout, at least 3 pods are actively serving traffic. Kubernetes creates a new pod first (surging to 4 pods); only after the new pod passes readiness probes is an old pod terminated.
 
-1. **Percentage-Based Rolling Update Bounds (`rolling-update-percent.yaml`)**:
-   - **Strategy Type**: `type: RollingUpdate` with percentage bounds (`maxSurge: 50%`, `maxUnavailable: 25%`).
-   - **What It Means**: In large clusters or high-replica deployments, specifying percentages allows proportional surge and unavailability. For a deployment with 4 replicas:
-     - `maxSurge: 50%`: Up to 2 extra pods can be created during the update ($4 \times 0.50 = 2$, allowing up to 6 total pods).
-     - `maxUnavailable: 25%`: At most 1 pod may be down ($4 \times 0.25 = 1$, guaranteeing at least 3 pods remain available).
-     This accelerates rollout completion across large replica sets while maintaining bounded capacity.
+```bash
+cd ../04-strategies
+kubectl apply -f rolling-update-custom.yaml
+kubectl get deployment cka-lab-mission-critical
+```
 
-   ```bash
-   kubectl apply -f rolling-update-percent.yaml
-   kubectl get deployment cka-lab-dynamic-scale
-   ```
+#### Step 2: Percentage-Based Rolling Update Bounds (`rolling-update-percent.yaml`)
 
-1. **Recreate Strategy (`recreate-strategy.yaml`)**:
-   - **Strategy Type**: `type: Recreate` (no `rollingUpdate` parameters).
-   - **What It Means**: All existing Pods are terminated BEFORE any new Pods are created. This causes temporary service downtime during rollouts. It is required for legacy singleton applications, exclusive database writers, or workloads with non-concurrent state (such as single-writer ReadWriteOnce persistent storage) that cannot tolerate two pod versions running simultaneously against the same data.
+- **Strategy Type**: `type: RollingUpdate` with percentage bounds (`maxSurge: 50%`, `maxUnavailable: 25%`).
+- **What It Means**: In large clusters or high-replica deployments, specifying percentages allows proportional surge and unavailability. For a deployment with 4 replicas:
+  - `maxSurge: 50%`: Up to 2 extra pods can be created during the update ($4 \times 0.50 = 2$, allowing up to 6 total pods).
+  - `maxUnavailable: 25%`: At most 1 pod may be down ($4 \times 0.25 = 1$, guaranteeing at least 3 pods remain available).
+  This accelerates rollout completion across large replica sets while maintaining bounded capacity.
 
-   ```bash
-   kubectl apply -f recreate-strategy.yaml
-   kubectl get deployment cka-lab-singleton-db-worker
-   ```
+```bash
+kubectl apply -f rolling-update-percent.yaml
+kubectl get deployment cka-lab-dynamic-scale
+```
+
+#### Step 3: Recreate Strategy (`recreate-strategy.yaml`)
+
+- **Strategy Type**: `type: Recreate` (no `rollingUpdate` parameters).
+- **What It Means**: All existing Pods are terminated BEFORE any new Pods are created. This causes temporary service downtime during rollouts. It is required for legacy singleton applications, exclusive database writers, or workloads with non-concurrent state (such as single-writer ReadWriteOnce persistent storage) that cannot tolerate two pod versions running simultaneously against the same data.
+
+```bash
+kubectl apply -f recreate-strategy.yaml
+kubectl get deployment cka-lab-singleton-db-worker
+```
 
 ---
 
@@ -229,66 +234,66 @@ cd ../05-pause-resume
 
 Or execute the steps manually:
 
-1. **Deploy Initial Baseline Deployment**:
+#### Step 1: Deploy Initial Baseline Deployment
 
-   ```bash
-   kubectl apply -f batch-change-deployment.yaml
-   kubectl rollout status deployment/cka-lab-batch-pipeline
-   ```
+```bash
+kubectl apply -f batch-change-deployment.yaml
+kubectl rollout status deployment/cka-lab-batch-pipeline
+```
 
-1. **Pause the Deployment Rollout**:
+#### Step 2: Pause Deployment Rollout
 
-   Freezes the controller so subsequent specification changes do not trigger immediate pod recreations or intermediate rollout revisions:
+Freezes the controller so subsequent specification changes do not trigger immediate pod recreations or intermediate rollout revisions:
 
-   ```bash
-   kubectl rollout pause deployment/cka-lab-batch-pipeline
-   ```
+```bash
+kubectl rollout pause deployment/cka-lab-batch-pipeline
+```
 
-1. **Stage Multiple Modifications While Paused**:
+#### Step 3: Stage Multiple Modifications While Paused
 
-   Apply multiple changes imperatively (or declaratively) without causing rolling updates for each modification:
+Apply multiple changes imperatively (or declaratively) without causing rolling updates for each modification:
 
-   ```bash
-   # Update container environment variable
-   kubectl set env deployment/cka-lab-batch-pipeline PIPELINE_STAGE=canary
+```bash
+# Update container environment variable
+kubectl set env deployment/cka-lab-batch-pipeline PIPELINE_STAGE=canary
 
-   # Tune container resource requests
-   kubectl set resources deployment/cka-lab-batch-pipeline -c=pipeline --requests=cpu=100m,memory=64Mi
-   ```
+# Tune container resource requests
+kubectl set resources deployment/cka-lab-batch-pipeline -c=pipeline --requests=cpu=100m,memory=64Mi
+```
 
-1. **Confirm Pods Remain on Current Spec During Pause**:
+#### Step 4: Confirm Pods Remain on Current Spec During Pause
 
-   Verify that running pods have not restarted and retain their initial configuration:
+Verify that running pods have not restarted and retain their initial configuration:
 
-   ```bash
-   # Check environment variable on active pod
-   POD_NAME=$(kubectl get pods -l app=cka-lab-batch-pipeline -o jsonpath='{.items[0].metadata.name}')
-   kubectl get pod "${POD_NAME}" -o jsonpath='{.spec.containers[0].env[?(@.name=="PIPELINE_STAGE")].value}'
-   ```
+```bash
+# Check environment variable on active pod
+POD_NAME=$(kubectl get pods -l app=cka-lab-batch-pipeline -o jsonpath='{.items[0].metadata.name}')
+kubectl get pod "${POD_NAME}" -o jsonpath='{.spec.containers[0].env[?(@.name=="PIPELINE_STAGE")].value}'
+```
 
-   Notice that the active pods still report `production` (or initial state) because the rollout is paused.
+Notice that the active pods still report `production` (or initial state) because the rollout is paused.
 
-1. **Resume Rollout to Execute Single Consolidated Update**:
+#### Step 5: Resume Rollout for Single Atomic Update
 
-   Unpause the deployment controller, triggering a single atomic rollout for all staged modifications:
+Unpause the deployment controller, triggering a single atomic rollout for all staged modifications:
 
-   ```bash
-   kubectl rollout resume deployment/cka-lab-batch-pipeline
-   kubectl rollout status deployment/cka-lab-batch-pipeline
-   ```
+```bash
+kubectl rollout resume deployment/cka-lab-batch-pipeline
+kubectl rollout status deployment/cka-lab-batch-pipeline
+```
 
-1. **Verify Final Consolidated State and Rollout History**:
+#### Step 6: Verify Final Consolidated State and Rollout History
 
-   Confirm the new pods reflect both staged updates and inspect the revision history:
+Confirm the new pods reflect both staged updates and inspect the revision history:
 
-   ```bash
-   # Confirm updated environment variable
-   NEW_POD=$(kubectl get pods -l app=cka-lab-batch-pipeline -o jsonpath='{.items[0].metadata.name}')
-   kubectl get pod "${NEW_POD}" -o jsonpath='{.spec.containers[0].env[?(@.name=="PIPELINE_STAGE")].value}'
+```bash
+# Confirm updated environment variable
+NEW_POD=$(kubectl get pods -l app=cka-lab-batch-pipeline -o jsonpath='{.items[0].metadata.name}')
+kubectl get pod "${NEW_POD}" -o jsonpath='{.spec.containers[0].env[?(@.name=="PIPELINE_STAGE")].value}'
 
-   # Confirm revision history generated only one new revision
-   kubectl rollout history deployment/cka-lab-batch-pipeline
-   ```
+# Confirm revision history generated only one new revision
+kubectl rollout history deployment/cka-lab-batch-pipeline
+```
 
 ---
 

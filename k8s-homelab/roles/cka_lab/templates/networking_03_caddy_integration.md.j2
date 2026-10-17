@@ -10,25 +10,25 @@ In the `k8s-homelab` cluster, edge routing separates public/edge TLS termination
 
 ```text
 External Client
-      │
-      ▼  (HTTPS :443)
+   │
+   ▼  (HTTPS :443)
 ┌────────────────────────────────────────────────────────┐
 │  Caddy Edge Ingress (kube-control-plane)               │
 │  - DNS-01 ACME automated TLS certificates (PowerDNS)   │
 │  - Handles *.k8s-pre.os76.xyz / *.k8s.os76.xyz         │
 │  - Reverse proxy upstream to Worker NodePorts          │
 └────────────────────────────────────────────────────────┘
-      │
-      ▼  (HTTP :30080 or HTTPS :30443)
+   │
+   ▼  (HTTP :30080 or HTTPS :30443)
 ┌────────────────────────────────────────────────────────┐
 │  NGINX Gateway Fabric (worker nodes)                   │
 │  - Implements Kubernetes Gateway API standard CRDs     │
 │  - Gateway: cka-lab-gateway                            │
 │  - HTTPRoute: cka-lab-httproute                        │
 └────────────────────────────────────────────────────────┘
-      │
-      ├── /httpbin/* ──► Service: httpbingo:80 (httpbin-go)
-      └── /api/*     ──► Service: cka-lab-ingress-api-svc:80
+   │
+   ├── /httpbin/* ──► Service: httpbingo:80 (httpbin-go)
+   └── /api/*     ──► Service: cka-lab-ingress-api-svc:80
 ```
 
 ---
@@ -75,12 +75,12 @@ metadata:
 spec:
   gatewayClassName: nginx
   listeners:
-    - name: http
-      port: 80
-      protocol: HTTP
-      allowedRoutes:
-        namespaces:
-          from: All
+ - name: http
+   port: 80
+   protocol: HTTP
+   allowedRoutes:
+     namespaces:
+       from: All
 ```
 
 ### The HTTPRoute Resource
@@ -94,36 +94,36 @@ metadata:
   name: cka-lab-httproute
 spec:
   parentRefs:
-    - name: cka-lab-gateway
+ - name: cka-lab-gateway
   rules:
-    - matches:
-        - path:
-            type: PathPrefix
-            value: /httpbin
-      filters:
-        - type: URLRewrite
-          urlRewrite:
-            path:
-              type: ReplacePrefixMatch
-              replacePrefixMatch: /
-      backendRefs:
-        - name: httpbingo
-          port: 80
+ - matches:
+     - path:
+         type: PathPrefix
+         value: /httpbin
+   filters:
+     - type: URLRewrite
+       urlRewrite:
+         path:
+           type: ReplacePrefixMatch
+           replacePrefixMatch: /
+   backendRefs:
+     - name: httpbingo
+       port: 80
 ```
 
 ---
 
 ## 3. Testing Gateway API Endpoints
 
-1. **Direct NodePort Verification**:
+### Step 1: Direct NodePort Verification
 
-   ```bash
-   NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
-   curl -s "http://${NODE_IP}:30080/httpbin/get"
-   ```
+```bash
+NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
+curl -s "http://${NODE_IP}:30080/httpbin/get"
+```
 
-1. **Testing Header Matches with httpbin-go**:
+### Step 2: Testing Header Matches with httpbin-go
 
-   ```bash
-   curl -s -H "X-Custom-Header: cka-lab" "http://${NODE_IP}:30080/httpbin/headers"
-   ```
+```bash
+curl -s -H "X-Custom-Header: cka-lab" "http://${NODE_IP}:30080/httpbin/headers"
+```

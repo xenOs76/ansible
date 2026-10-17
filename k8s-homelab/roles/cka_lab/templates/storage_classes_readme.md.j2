@@ -74,84 +74,299 @@ kubectl explain storageclass.allowVolumeExpansion
 
 ### Drill 1: Deploy Storage Provisioner (`01-provisioners/`)
 
-1. **Deploy Local Path Provisioner**:
+Dynamic volume provisioning in Kubernetes requires an active storage controller or Container Storage Interface (CSI) provisioner plugin. The provisioner watches for new `PersistentVolumeClaim` objects that request its `StorageClass`, dynamically provisions the backing storage, and automatically generates matching `PersistentVolume` resources.
 
-   ```bash
-   {{ cka_lab_storage_classes_dir }}/01-provisioners/install-local-path-provisioner.sh
-   kubectl get pods -n local-path-storage
-   ```
+#### Step 1: Deploy Local Path Provisioner
 
-### Drill 2: Apply StorageClasses & Dynamic PVC (`02-storage-classes/`)
+Deploy the Rancher `local-path-provisioner`, which provisions host-based storage directories on the cluster worker nodes:
 
-1. **Deploy StorageClasses**:
+```bash
+cd {{ cka_lab_storage_classes_dir }}/01-provisioners
 
-   ```bash
-   kubectl apply -f {{ cka_lab_storage_classes_dir }}/02-storage-classes/cka-lab-sc-retain.yaml
-   kubectl apply -f {{ cka_lab_storage_classes_dir }}/02-storage-classes/cka-lab-sc-delete-wait.yaml
-   kubectl get storageclass
-   ```
+./install-local-path-provisioner.sh
+kubectl get pods -n local-path-storage
+```
 
-1. **Create Dynamic PVC & Inspect Delayed Binding**:
+Verify that the provisioner pod is `Running`. It registers the `rancher.io/local-path` provisioner plugin with the Kubernetes API server.
 
-   ```bash
-   kubectl apply -f {{ cka_lab_storage_classes_dir }}/02-storage-classes/cka-lab-dynamic-pvc.yaml
-   kubectl get pvc cka-lab-dynamic-pvc
-   ```
+---
 
-1. **Create Consumer Pod & Verify Bound Phase**:
+### Drill 2: StorageClass Authoring & Parameter Mechanics (`02-storage-classes/`)
 
-   ```bash
-   kubectl apply -f {{ cka_lab_storage_classes_dir }}/02-storage-classes/cka-lab-consumer-pod.yaml
-   kubectl wait --for=condition=Ready pod/cka-lab-storage-consumer --timeout=60s
-   kubectl get pvc,pv
-   ```
+#### Critical CKA Exam Note
 
-1. **Verify Volume Expansion**:
+Kubernetes has **no** `kubectl create storageclass` or `kubectl create sc` CLI command. You must write the StorageClass manifest manually or quickly check the schema with `kubectl explain storageclass`.
 
-   ```bash
-   kubectl patch pvc cka-lab-dynamic-pvc -p '{"spec":{"resources":{"requests":{"storage":"200Mi"}}}}'
-   kubectl get pvc cka-lab-dynamic-pvc
-   ```
+#### Core StorageClass Parameters
 
-### Drill 3: Dynamic NFS CSI Driver & Shared ReadWriteMany Storage
+- **`provisioner`**: The internal or CSI driver responsible for provisioning volumes (e.g. `rancher.io/local-path`, `nfs.csi.k8s.io`, `ebs.csi.aws.com`).
+- **`reclaimPolicy`**: Determines what happens to dynamically created PVs when their PVC is deleted (`Delete` by default, or `Retain` to preserve data).
+- **`volumeBindingMode`**:
+  - `Immediate`: PV is provisioned and bound as soon as the PVC is created, regardless of whether any Pod references it.
+  - `WaitForFirstConsumer`: PV provisioning and binding are delayed until a Pod using the PVC is scheduled. This ensures the volume is provisioned on the specific node where the Pod actually runs.
+- **`allowVolumeExpansion`**: When set to `true`, permits increasing the storage capacity of bound PVCs via live manifest patching.
 
-1. **Deploy Kubernetes NFS CSI Driver**:
+#### CKA Exam Shortcut: Managing the Default StorageClass
 
-   ```bash
-   {{ cka_lab_storage_classes_dir }}/01-provisioners/install-nfs-csi-driver.sh
-   kubectl get csidrivers
-   ```
+A common CKA exam objective requires designating a StorageClass as the cluster default or switching defaults. This is controlled via the `storageclass.kubernetes.io/is-default-class` annotation:
 
-1. **Apply Dynamic NFS StorageClass**:
+```bash
+# Mark a StorageClass as the default provisioner
+kubectl patch storageclass cka-lab-sc-delete-wait -p '{"metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"true"}}}'
 
-   ```bash
-   kubectl apply -f {{ cka_lab_storage_classes_dir }}/02-storage-classes/03-nfs-csi-sc.yaml
-   kubectl get storageclass {{ cka_lab_nfs_csi_storage_class | default('nfs-csi') }}
-   ```
+# Verify the default marker (shows (default) next to the name)
+kubectl get storageclass
 
-1. **Create Dynamic ReadWriteMany PVC & Verify Immediate Binding**:
+# Remove default status from a StorageClass
+kubectl patch storageclass cka-lab-sc-delete-wait -p '{"metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"false"}}}'
+```
 
-   ```bash
-   kubectl apply -f {{ cka_lab_storage_classes_dir }}/02-storage-classes/04-nfs-dynamic-pvc.yaml
-   kubectl get pvc nfs-dynamic-claim
-   ```
+#### Step 1: Manually Author a StorageClass with `Retain` & `Immediate`
 
-1. **Deploy Multi-Replica Workload & Verify Shared Data**:
+Create a StorageClass where volumes are provisioned immediately and retained upon claim deletion:
 
-   ```bash
-   kubectl apply -f {{ cka_lab_storage_classes_dir }}/02-storage-classes/05-nfs-shared-deployment.yaml
-   kubectl rollout status deployment/nfs-shared-app --timeout=60s
-   kubectl get pods -l app=nfs-shared-app -o wide
-   ```
+```bash
+cd {{ cka_lab_storage_classes_dir }}/02-storage-classes
 
-1. **Test Online PVC Expansion (500Mi -> 1Gi)**:
+cat <<'EOF' > manual-sc-retain.yaml
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: cka-lab-sc-retain
+provisioner: rancher.io/local-path
+reclaimPolicy: Retain
+volumeBindingMode: Immediate
+allowVolumeExpansion: true
+EOF
 
-   ```bash
-   kubectl patch pvc nfs-dynamic-claim -p '{"spec":{"resources":{"requests":{"storage":"1Gi"}}}}'
-   kubectl get pvc nfs-dynamic-claim
-   ```
+kubectl apply -f manual-sc-retain.yaml
+```
 
-### Drill 4: Cloud-Native Ceph Dynamic Shared Storage Alternatives
+#### Step 2: Manually Author a StorageClass with `Delete` & `WaitForFirstConsumer`
+
+Create a StorageClass demonstrating delayed binding and automated cleanup:
+
+```bash
+cat <<'EOF' > manual-sc-delete-wait.yaml
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: cka-lab-sc-delete-wait
+provisioner: rancher.io/local-path
+reclaimPolicy: Delete
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+EOF
+
+kubectl apply -f manual-sc-delete-wait.yaml
+kubectl get storageclass
+```
+
+---
+
+### Drill 3: Dynamic PVC Lifecycle, Delayed Binding & Volume Expansion (`02-storage-classes/`)
+
+#### Step 1: Manually Create the Dynamic PVC
+
+Create a claim requesting 100Mi using the delayed-binding StorageClass:
+
+```bash
+cd {{ cka_lab_storage_classes_dir }}/02-storage-classes
+
+cat <<'EOF' > manual-dynamic-pvc.yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: cka-lab-dynamic-pvc
+  namespace: {{ cka_lab_storage_classes_namespace | default('default') }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: cka-lab-sc-delete-wait
+  resources:
+    requests:
+      storage: 100Mi
+EOF
+
+kubectl apply -f manual-dynamic-pvc.yaml
+```
+
+#### Step 2: Inspect Delayed Binding Mechanics (`Pending` Phase)
+
+Check the PVC status immediately after creation:
+
+```bash
+kubectl get pvc cka-lab-dynamic-pvc -n {{ cka_lab_storage_classes_namespace | default('default') }}
+kubectl describe pvc cka-lab-dynamic-pvc -n {{ cka_lab_storage_classes_namespace | default('default') }}
+```
+
+Notice that the PVC remains in the `Pending` phase. Look at the Events section:
+
+```text
+Waiting for first consumer to be created before binding
+```
+
+Because `volumeBindingMode: WaitForFirstConsumer` was configured on `cka-lab-sc-delete-wait`, Kubernetes deliberately postpones provisioning until a Pod using this claim is scheduled, ensuring storage is allocated on the node where the consumer will execute.
+
+#### Step 3: Create the Consumer Pod to Trigger Automatic PV Provisioning
+
+Generate a pod manifest skeleton imperatively:
+
+```bash
+kubectl run cka-lab-storage-consumer \
+  --image=busybox:1.36.1 \
+  --restart=Always \
+  --namespace={{ cka_lab_storage_classes_namespace | default('default') }} \
+  --dry-run=client -o yaml \
+  -- /bin/sh -c "echo 'DYNAMIC_STORAGE_VALIDATED=true' > /data/status.txt && sleep 3600" > consumer-pod.yaml
+```
+
+Edit `consumer-pod.yaml` in `vim` to attach the PVC:
+
+```yaml
+spec:
+  containers:
+    - name: writer
+      image: busybox:1.36.1
+      command: ["/bin/sh", "-c", "echo 'DYNAMIC_STORAGE_VALIDATED=true' > /data/status.txt && sleep 3600"]
+      volumeMounts:
+        - name: app-storage
+          mountPath: /data
+  volumes:
+    - name: app-storage
+      persistentVolumeClaim:
+        claimName: cka-lab-dynamic-pvc
+```
+
+Apply the pod and watch the dynamic binding transition:
+
+```bash
+kubectl apply -f consumer-pod.yaml
+kubectl wait --for=condition=Ready pod/cka-lab-storage-consumer -n {{ cka_lab_storage_classes_namespace | default('default') }} --timeout=60s
+
+# Verify that both PVC and dynamically generated PV are now Bound
+kubectl get pvc cka-lab-dynamic-pvc -n {{ cka_lab_storage_classes_namespace | default('default') }}
+kubectl get pv
+```
+
+Observe that a PersistentVolume named `pvc-<uuid>` was automatically created by the provisioner and bound to `cka-lab-dynamic-pvc`.
+
+Verify container storage persistence:
+
+```bash
+kubectl exec -n {{ cka_lab_storage_classes_namespace | default('default') }} cka-lab-storage-consumer -- cat /data/status.txt
+```
+
+#### Step 4: Live PVC Volume Expansion (`100Mi` -> `200Mi`)
+
+In Kubernetes, PVC storage capacity can be expanded dynamically if the backing StorageClass has `allowVolumeExpansion: true`:
+
+- **One-Way Direction**: You can only **increase** storage size; reducing PVC capacity is rejected by the API server.
+- **In-Place Mutation**: You do not need to delete the PVC or terminate the consumer Pod.
+
+Patch the PVC to request 200Mi:
+
+```bash
+kubectl patch pvc cka-lab-dynamic-pvc \
+  -n {{ cka_lab_storage_classes_namespace | default('default') }} \
+  -p '{"spec":{"resources":{"requests":{"storage":"200Mi"}}}}'
+
+# Verify the updated requested capacity
+kubectl get pvc cka-lab-dynamic-pvc -n {{ cka_lab_storage_classes_namespace | default('default') }}
+```
+
+---
+
+### Drill 4: Dynamic NFS CSI Driver & Shared ReadWriteMany Storage (`02-storage-classes/`)
+
+For distributed applications requiring shared read-write storage across multiple nodes, the Kubernetes NFS CSI driver (`nfs.csi.k8s.io`) provides dynamic provisioning of `ReadWriteMany` volumes without pre-creating static PVs.
+
+#### Step 1: Deploy Kubernetes NFS CSI Driver
+
+```bash
+cd {{ cka_lab_storage_classes_dir }}/01-provisioners
+
+./install-nfs-csi-driver.sh
+kubectl get csidrivers
+```
+
+Confirm that `nfs.csi.k8s.io` appears in the registered CSI driver list.
+
+#### Step 2: Inspect and Apply Dynamic NFS StorageClass
+
+```bash
+cd {{ cka_lab_storage_classes_dir }}/02-storage-classes
+
+cat 03-nfs-csi-sc.yaml
+kubectl apply -f 03-nfs-csi-sc.yaml
+kubectl get storageclass {{ cka_lab_nfs_csi_storage_class | default('nfs-csi') }}
+```
+
+Key StorageClass parameters:
+
+- `provisioner: nfs.csi.k8s.io`: Directs volume requests to the NFS CSI controller.
+- `parameters.server`: The NFS server hostname (`{{ cka_lab_nfs_server_hostname }}`).
+- `parameters.share`: The base export root (`{{ cka_lab_nfs_export_dir }}`).
+- `volumeBindingMode: Immediate`: Dynamically provisions directory subpaths on the NFS server immediately upon PVC creation.
+
+#### Step 3: Create Dynamic ReadWriteMany PVC & Verify Immediate Binding
+
+```bash
+cat <<'EOF' > dynamic-nfs-pvc.yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nfs-dynamic-claim
+  namespace: default
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: {{ cka_lab_nfs_csi_storage_class | default('nfs-csi') }}
+  resources:
+    requests:
+      storage: 500Mi
+EOF
+
+kubectl apply -f dynamic-nfs-pvc.yaml
+kubectl get pvc nfs-dynamic-claim
+```
+
+Because `volumeBindingMode` is `Immediate`, the PVC immediately transitions to `Bound` and an NFS PV is provisioned automatically without waiting for a pod.
+
+#### Step 4: Deploy Multi-Replica Workload & Verify Shared Data
+
+Deploy a multi-replica NGINX workload mounting the dynamic RWX claim:
+
+```bash
+cat 05-nfs-shared-deployment.yaml
+kubectl apply -f 05-nfs-shared-deployment.yaml
+kubectl rollout status deployment/nfs-shared-app --timeout=60s
+kubectl get pods -l app=nfs-shared-app -o wide
+```
+
+Verify that replicas running on different nodes (e.g. `kube-worker-1` and `kube-worker-2`) share the same dynamic NFS volume:
+
+```bash
+POD1=$(kubectl get pods -l app=nfs-shared-app -o jsonpath='{.items[0].metadata.name}')
+POD2=$(kubectl get pods -l app=nfs-shared-app -o jsonpath='{.items[1].metadata.name}')
+
+# Write from replica 1
+kubectl exec "${POD1}" -- sh -c 'echo "Dynamic NFS write from '"${POD1}"' at $(date)" > /usr/share/nginx/html/dynamic-test.txt'
+
+# Read from replica 2
+kubectl exec "${POD2}" -- cat /usr/share/nginx/html/dynamic-test.txt
+```
+
+#### Step 5: Test Online PVC Expansion (500Mi -> 1Gi)
+
+```bash
+kubectl patch pvc nfs-dynamic-claim -p '{"spec":{"resources":{"requests":{"storage":"1Gi"}}}}'
+kubectl get pvc nfs-dynamic-claim
+```
+
+---
+
+### Drill 5: Cloud-Native Ceph Dynamic Shared Storage Alternatives
 
 When using Ceph as the cluster storage backend (`storage_nfs_provider: "ceph"`), candidates and administrators have two cloud-native alternatives for dynamic ReadWriteMany shared storage:
 
@@ -159,35 +374,37 @@ When using Ceph as the cluster storage backend (`storage_nfs_provider: "ceph"`),
 
 Consumes the Ceph NFS-Ganesha daemon export (`nfs-server.local:/exports`) using the standard NFS CSI driver:
 
-1. **Apply Ceph NFS StorageClass**:
+#### Step 1: Apply Ceph NFS StorageClass
 
-   ```bash
-   kubectl apply -f {{ cka_lab_storage_classes_dir }}/02-storage-classes/03-ceph-nfs-sc.yaml
-   kubectl get storageclass {{ cka_lab_ceph_nfs_storage_class | default('ceph-nfs-csi') }}
-   ```
+```bash
+cd {{ cka_lab_storage_classes_dir }}/02-storage-classes
 
-1. **Deploy Dynamic RWX PVC & Multi-Replica Workload**:
+kubectl apply -f 03-ceph-nfs-sc.yaml
+kubectl get storageclass {{ cka_lab_ceph_nfs_storage_class | default('ceph-nfs-csi') }}
+```
 
-   ```bash
-   kubectl apply -f {{ cka_lab_storage_classes_dir }}/02-storage-classes/04-ceph-dynamic-pvc.yaml
-   kubectl apply -f {{ cka_lab_storage_classes_dir }}/02-storage-classes/05-ceph-shared-deployment.yaml
-   kubectl rollout status deployment/ceph-nfs-shared-app --timeout=60s
-   ```
+#### Step 2: Deploy Dynamic RWX PVC & Multi-Replica Workload
+
+```bash
+kubectl apply -f 04-ceph-dynamic-pvc.yaml
+kubectl apply -f 05-ceph-shared-deployment.yaml
+kubectl rollout status deployment/ceph-nfs-shared-app --timeout=60s
+```
 
 #### Approach B: Native CephFS Shared Filesystem (`03-cephfs-sc.yaml`)
 
 Directly uses Ceph's native distributed filesystem driver (`rook-ceph.cephfs.csi.ceph.com`), bypassing NFS translation layers:
 
-1. **Apply Native CephFS StorageClass**:
+#### Step 3: Apply Native CephFS StorageClass
 
-   ```bash
-   kubectl apply -f {{ cka_lab_storage_classes_dir }}/02-storage-classes/03-cephfs-sc.yaml
-   kubectl get storageclass {{ cka_lab_cephfs_storage_class | default('rook-cephfs') }}
-   ```
+```bash
+kubectl apply -f 03-cephfs-sc.yaml
+kubectl get storageclass {{ cka_lab_cephfs_storage_class | default('rook-cephfs') }}
+```
 
 ---
 
-## 3. Automated Validation
+## 4. Automated Validation
 
 Execute the automated non-interactive verification suites:
 

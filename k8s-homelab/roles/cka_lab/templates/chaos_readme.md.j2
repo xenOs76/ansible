@@ -89,104 +89,109 @@ Before running drills for the first time, install the minimal operator:
 
 ### Drill 1: OOMKilled Container Diagnosis
 
-1. **Launch the exercise**:
+#### Step 1: Launch the exercise
 
-   ```bash
-   {{ cka_lab_chaos_troubleshooting_dir }}/start-chaos-exercise.sh oom
-   ```
+```bash
+{{ cka_lab_chaos_troubleshooting_dir }}/start-chaos-exercise.sh oom
+```
 
-1. **Diagnose**:
-   Inspect pod status and container exit reasons:
+#### Step 2: Diagnose
 
-   ```bash
-   kubectl get pods -n {{ cka_lab_chaos_namespace }}
-   kubectl describe pod -l app=cka-lab-payment-svc -n {{ cka_lab_chaos_namespace }}
-   ```
+Inspect pod status and container exit reasons:
 
-   Notice `Last State: Terminated`, `Reason: OOMKilled`, and `Exit Code: 137`.
+```bash
+kubectl get pods -n {{ cka_lab_chaos_namespace }}
+kubectl describe pod -l app=cka-lab-payment-svc -n {{ cka_lab_chaos_namespace }}
+```
 
-1. **Fix**:
-   Edit the deployment to increase memory limit from 64Mi to 256Mi:
+Notice `Last State: Terminated`, `Reason: OOMKilled`, and `Exit Code: 137`.
 
-   ```bash
-   kubectl set resources deployment cka-lab-payment-svc -n {{ cka_lab_chaos_namespace }} --limits=memory=256Mi
-   ```
+#### Step 3: Fix
 
-1. **Verify**:
+Edit the deployment to increase memory limit from 64Mi to 256Mi:
 
-   ```bash
-   {{ cka_lab_chaos_troubleshooting_dir }}/verify-chaos-exercise.sh oom
-   ```
+```bash
+kubectl set resources deployment cka-lab-payment-svc -n {{ cka_lab_chaos_namespace }} --limits=memory=256Mi
+```
+
+#### Step 4: Verify
+
+```bash
+{{ cka_lab_chaos_troubleshooting_dir }}/verify-chaos-exercise.sh oom
+```
 
 ### Drill 2: Network Degradation & Ephemeral Debugging
 
-1. **Launch the exercise**:
+#### Step 1: Launch the exercise
 
-   ```bash
-   {{ cka_lab_chaos_troubleshooting_dir }}/start-chaos-exercise.sh network
-   ```
+```bash
+{{ cka_lab_chaos_troubleshooting_dir }}/start-chaos-exercise.sh network
+```
 
-1. **Diagnose**:
-   Attach an ephemeral container to a web portal pod to test HTTP connectivity to payment service:
+#### Step 2: Diagnose
 
-   ```bash
-   WEB_POD=$(kubectl get pod -l app=cka-lab-web-portal -n {{ cka_lab_chaos_namespace }} -o jsonpath='{.items[0].metadata.name}')
-   kubectl debug -it "${WEB_POD}" -n {{ cka_lab_chaos_namespace }} --image=registry.k8s.io/e2e-test-images/agnhost:2.45 -- /agnhost connect cka-lab-payment-svc:8080 --timeout=2s
-   ```
+Attach an ephemeral container to a web portal pod to test HTTP connectivity to payment service:
 
-1. **Stop / Reset**:
+```bash
+WEB_POD=$(kubectl get pod -l app=cka-lab-web-portal -n {{ cka_lab_chaos_namespace }} -o jsonpath='{.items[0].metadata.name}')
+kubectl debug -it "${WEB_POD}" -n {{ cka_lab_chaos_namespace }} --image=registry.k8s.io/e2e-test-images/agnhost:2.45 -- /agnhost connect cka-lab-payment-svc:8080 --timeout=2s
+```
 
-   ```bash
-   {{ cka_lab_chaos_troubleshooting_dir }}/stop-chaos-exercise.sh
-   ```
+#### Step 3: Stop / Reset
+
+```bash
+{{ cka_lab_chaos_troubleshooting_dir }}/stop-chaos-exercise.sh
+```
 
 ### Drill 3: CoreDNS Resolution Blackhole
 
-1. **Launch the exercise**:
+#### Step 1: Launch the exercise
 
-   ```bash
-   {{ cka_lab_chaos_troubleshooting_dir }}/start-chaos-exercise.sh dns
-   ```
+```bash
+{{ cka_lab_chaos_troubleshooting_dir }}/start-chaos-exercise.sh dns
+```
 
-1. **Diagnose**:
-   Test name resolution inside the web portal container:
+#### Step 2: Diagnose
 
-   ```bash
-   kubectl exec -n {{ cka_lab_chaos_namespace }} deploy/cka-lab-web-portal -- nslookup cka-lab-payment-svc
-   ```
+Test name resolution inside the web portal container:
 
-1. **Stop / Reset**:
+```bash
+kubectl exec -n {{ cka_lab_chaos_namespace }} deploy/cka-lab-web-portal -- nslookup cka-lab-payment-svc
+```
 
-   ```bash
-   {{ cka_lab_chaos_troubleshooting_dir }}/stop-chaos-exercise.sh
-   ```
+#### Step 3: Stop / Reset
+
+```bash
+{{ cka_lab_chaos_troubleshooting_dir }}/stop-chaos-exercise.sh
+```
 
 ### Drill 4: Node MemoryPressure & Pod Evictions
 
-1. **Launch the exercise**:
+#### Step 1: Launch the exercise
 
-   ```bash
-   {{ cka_lab_chaos_troubleshooting_dir }}/start-chaos-exercise.sh eviction
-   ```
+```bash
+{{ cka_lab_chaos_troubleshooting_dir }}/start-chaos-exercise.sh eviction
+```
 
-1. **Diagnose**:
-   Check node conditions:
+#### Step 2: Diagnose
 
-   ```bash
-   kubectl describe node kube-worker-1 | grep -A 5 "Conditions:"
-   ```
+Check node conditions:
 
-   Check Pod QoS classes to see eviction priority:
+```bash
+kubectl describe node kube-worker-1 | grep -A 5 "Conditions:"
+```
 
-   ```bash
-   kubectl get pods -A -o custom-columns=NAME:.metadata.name,NAMESPACE:.metadata.namespace,QOS:.status.qosClass
-   ```
+Check Pod QoS classes to see eviction priority:
 
-1. **Stop / Reset**:
+```bash
+kubectl get pods -A -o custom-columns=NAME:.metadata.name,NAMESPACE:.metadata.namespace,QOS:.status.qosClass
+```
 
-   ```bash
-   {{ cka_lab_chaos_troubleshooting_dir }}/stop-chaos-exercise.sh
-   ```
+#### Step 3: Stop / Reset
+
+```bash
+{{ cka_lab_chaos_troubleshooting_dir }}/stop-chaos-exercise.sh
+```
 
 ---
 

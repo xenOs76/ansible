@@ -93,43 +93,43 @@ kubectl explain pod.spec.containers.volumeMounts.subPath
 
 In the CKA exam, time is critical. Creating ConfigMaps and Secrets imperatively saves significant time over writing raw YAML:
 
-1. **From literal key-value pairs**:
+#### Step 1: Create from Literal Key-Value Pairs
 
-   ```bash
-   kubectl create configmap app-settings \
-     --from-literal=APP_ENV=production \
-     --from-literal=LOG_LEVEL=info \
-     --dry-run=client -o yaml
-   ```
+```bash
+kubectl create configmap app-settings \
+  --from-literal=APP_ENV=production \
+  --from-literal=LOG_LEVEL=info \
+  --dry-run=client -o yaml
+```
 
-1. **From individual files (custom key name optional)**:
+#### Step 2: Create from Individual Files
 
-   ```bash
-   # Stores file contents under key matching filename ('app.properties')
-   kubectl create configmap app-props --from-file=app.properties
+```bash
+# Stores file contents under key matching filename ('app.properties')
+kubectl create configmap app-props --from-file=app.properties
 
-   # Stores file contents under custom key name ('custom.conf')
-   kubectl create configmap ui-settings --from-file=custom.conf=ui.conf
-   ```
+# Stores file contents under custom key name ('custom.conf')
+kubectl create configmap ui-settings --from-file=custom.conf=ui.conf
+```
 
-1. **From environment files (`--from-env-file`)**:
+#### Step 3: Create from Environment Files (`--from-env-file`)
 
-   ```bash
-   # Unpacks each LINE in game.env as an individual ConfigMap key
-   kubectl create configmap game-env-config --from-env-file=game.env
-   ```
+```bash
+# Unpacks each LINE in game.env as an individual ConfigMap key
+kubectl create configmap game-env-config --from-env-file=game.env
+```
 
-   > [!IMPORTANT]
-   > Notice the key difference: `--from-file=game.env` creates a **single key** named `game.env` containing the entire file content, whereas `--from-env-file=game.env` parses each `KEY=VALUE` line into a **distinct top-level key**.
+> [!IMPORTANT]
+> Notice the key difference: `--from-file=game.env` creates a **single key** named `game.env` containing the entire file content, whereas `--from-env-file=game.env` parses each `KEY=VALUE` line into a **distinct top-level key**.
 
-1. **Corresponding Secret Creation**:
+#### Step 4: Corresponding Secret Creation
 
-   ```bash
-   kubectl create secret generic db-creds \
-     --from-literal=username=dbadmin \
-     --from-literal=password='S3cretP@ssword' \
-     --dry-run=client -o yaml
-   ```
+```bash
+kubectl create secret generic db-creds \
+  --from-literal=username=dbadmin \
+  --from-literal=password='S3cretP@ssword' \
+  --dry-run=client -o yaml
+```
 
 ---
 
@@ -137,40 +137,42 @@ In the CKA exam, time is critical. Creating ConfigMaps and Secrets imperatively 
 
 There are two primary patterns to pass configuration data as container environment variables:
 
-1. **Granular Injection (`valueFrom`)**:
-   Inject individual keys into container environment variables, mapping them to arbitrary environment variable names:
+#### Step 1: Granular Injection (`valueFrom`)
 
-   ```yaml
-   containers:
-     - name: app
-       image: busybox:1.36
-       env:
-         - name: RUNTIME_ENV
-           valueFrom:
-             configMapKeyRef:
-               name: sample-app-config
-               key: APP_ENV
-         - name: DB_PASSWORD
-           valueFrom:
-             secretKeyRef:
-               name: sample-app-secret
-               key: password
-   ```
+Inject individual keys into container environment variables, mapping them to arbitrary environment variable names:
 
-1. **Bulk Injection (`envFrom`)**:
-   Inject all keys from a ConfigMap or Secret as environment variables in a single declaration. Use an optional `prefix` to prevent naming collisions:
+```yaml
+containers:
+  - name: app
+    image: busybox:1.36
+    env:
+      - name: RUNTIME_ENV
+        valueFrom:
+          configMapKeyRef:
+            name: sample-app-config
+            key: APP_ENV
+      - name: DB_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: sample-app-secret
+            key: password
+```
 
-   ```yaml
-   containers:
-     - name: app
-       image: busybox:1.36
-       envFrom:
-         - prefix: CFG_
-           configMapRef:
-             name: sample-app-config
-         - secretRef:
-           name: sample-app-secret
-   ```
+#### Step 2: Bulk Injection (`envFrom`)
+
+Inject all keys from a ConfigMap or Secret as environment variables in a single declaration. Use an optional `prefix` to prevent naming collisions:
+
+```yaml
+containers:
+  - name: app
+    image: busybox:1.36
+    envFrom:
+      - prefix: CFG_
+        configMapRef:
+          name: sample-app-config
+      - secretRef:
+        name: sample-app-secret
+```
 
 ---
 
@@ -178,37 +180,39 @@ There are two primary patterns to pass configuration data as container environme
 
 When applications require structured configuration files (e.g. `nginx.conf`, `application.properties`) on disk:
 
-1. **Full Directory Volume Mount**:
-   Mounting a ConfigMap volume mounts every key as a separate file inside the target directory.
+#### Step 1: Full Directory Volume Mount
 
-   ```yaml
-   volumeMounts:
-     - name: config-vol
-       mountPath: /etc/sample-config
-       readOnly: true
-   volumes:
-     - name: config-vol
-       configMap:
-         name: sample-service-config
-         defaultMode: 0644
-   ```
+Mounting a ConfigMap volume mounts every key as a separate file inside the target directory.
 
-   > [!WARNING]
-   > Full volume directory mounts **mask (overwrite)** any existing files in `mountPath`. If you mount to `/etc/nginx`, existing default configuration files in that container directory will become inaccessible!
+```yaml
+volumeMounts:
+  - name: config-vol
+    mountPath: /etc/sample-config
+    readOnly: true
+volumes:
+  - name: config-vol
+    configMap:
+      name: sample-service-config
+      defaultMode: 0644
+```
 
-1. **Granular File Mount via `subPath`**:
-   To inject a single configuration file without obscuring other files in the destination directory, use `subPath`:
+> [!WARNING]
+> Full volume directory mounts **mask (overwrite)** any existing files in `mountPath`. If you mount to `/etc/nginx`, existing default configuration files in that container directory will become inaccessible!
 
-   ```yaml
-   volumeMounts:
-     - name: config-vol
-       mountPath: /etc/nginx/conf.d/default.conf
-       subPath: nginx.conf
-   volumes:
-     - name: config-vol
-       configMap:
-         name: sample-service-config
-   ```
+#### Step 2: Granular File Mount via `subPath`
+
+To inject a single configuration file without obscuring other files in the destination directory, use `subPath`:
+
+```yaml
+volumeMounts:
+  - name: config-vol
+    mountPath: /etc/nginx/conf.d/default.conf
+    subPath: nginx.conf
+volumes:
+  - name: config-vol
+    configMap:
+      name: sample-service-config
+```
 
 ---
 
@@ -227,11 +231,11 @@ data:
   max_connections: "50"
 ```
 
-1. **Enforcement**: Any subsequent attempt to mutate `data` or `binaryData` via `kubectl apply` or `kubectl patch` will be rejected by the API server with a `422 Forbidden / Invalid value` error.
-2. **Performance Benefit**: The kube-apiserver does not need to poll or maintain watch caches for immutable resources, reducing load on large clusters.
-3. **Live Update Behavior**:
-   - Containers consuming configuration via **environment variables** (`env`, `envFrom`) receive values only at container start; changes to the ConfigMap are **never** updated in running containers without pod recreation.
-   - Containers consuming configuration via **volume mounts** receive periodic automatic file updates from kubelet (unless mounted via `subPath`, which disables automatic live updates).
+- **Enforcement**: Any subsequent attempt to mutate `data` or `binaryData` via `kubectl apply` or `kubectl patch` will be rejected by the API server with a `422 Forbidden / Invalid value` error.
+- **Performance Benefit**: The kube-apiserver does not need to poll or maintain watch caches for immutable resources, reducing load on large clusters.
+- **Live Update Behavior**:
+- Containers consuming configuration via **environment variables** (`env`, `envFrom`) receive values only at container start; changes to the ConfigMap are **never** updated in running containers without pod recreation.
+- Containers consuming configuration via **volume mounts** receive periodic automatic file updates from kubelet (unless mounted via `subPath`, which disables automatic live updates).
 
 ---
 

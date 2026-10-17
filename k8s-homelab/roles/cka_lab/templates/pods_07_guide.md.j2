@@ -34,31 +34,36 @@ kubectl debug pod/<pod-name> -it --image=busybox:1.36 --target=<container-name>
 
 ## The Solution: Label Quarantine
 
-1. **Remove Pod from Service / ReplicaSet Selector**:
-   Mutate the Pod's selector label (e.g., from `app=web` to `app=quarantine`):
+### Step 1: Remove Pod from Service / ReplicaSet Selector
 
-   ```bash
-   kubectl label pod <pod-name> app=quarantine --overwrite
-   ```
+Mutate the Pod's selector label (e.g., from `app=web` to `app=quarantine`):
 
-1. **Controller Self-Healing**:
-   The ReplicaSet controller detects that active pods matching `app=web` dropped below desired replicas and instantly spins up a fresh replacement pod.
+```bash
+kubectl label pod <pod-name> app=quarantine --overwrite
+```
 
-1. **Endpoints Removal**:
-   The Service's Endpoints controller removes the quarantined pod's IP immediately, stopping production traffic.
+### Step 2: Controller Self-Healing
 
-1. **Live Container Autopsy**:
-   The original pod stays alive, allowing uninterrupted investigation:
+The ReplicaSet controller detects that active pods matching `app=web` dropped below desired replicas and instantly spins up a fresh replacement pod.
 
-   ```bash
-   kubectl logs <pod-name>
-   kubectl exec -it <pod-name> -- sh
-   kubectl debug <pod-name> -it --image=busybox:1.36 --target=<container-name>
-   ```
+### Step 3: Endpoints Removal
 
-1. **Teardown**:
-   Once root cause is identified, manually delete the quarantined pod:
+The Service's Endpoints controller removes the quarantined pod's IP immediately, stopping production traffic.
 
-   ```bash
-   kubectl delete pod <pod-name>
-   ```
+### Step 4: Live Container Autopsy
+
+The original pod stays alive, allowing uninterrupted investigation:
+
+```bash
+kubectl logs <pod-name>
+kubectl exec -it <pod-name> -- sh
+kubectl debug <pod-name> -it --image=busybox:1.36 --target=<container-name>
+```
+
+### Step 5: Teardown
+
+Once root cause is identified, manually delete the quarantined pod:
+
+```bash
+kubectl delete pod <pod-name>
+```

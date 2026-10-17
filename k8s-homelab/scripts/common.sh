@@ -164,13 +164,42 @@ sudo swapoff -a
 sudo sed -i '/\sswap\s/ s/^\(.*\)$/#\1/g' /etc/fstab
 
 # ------------------------------------------------------------------------------
-# 6. Diagnostic Tooling
+# 6. Diagnostic Tooling & Editor
 # ------------------------------------------------------------------------------
-echo "==> [6/7] Installing diagnostic tools..."
+echo "==> [6/7] Installing diagnostic tools and default editor (vim)..."
 echo "deb [trusted=yes] https://repo.os76.xyz/apt stable main" | sudo tee /etc/apt/sources.list.d/os76.list >/dev/null
 sudo apt-get update -y
-sudo apt-get -y install socat kubectl-netdrill bash-completion open-iscsi nfs-common
+sudo apt-get -y install socat kubectl-netdrill bash-completion open-iscsi nfs-common vim
 sudo systemctl enable --now iscsid || true
+
+# Set vim as default system editor alternative
+if command -v update-alternatives >/dev/null 2>&1; then
+  sudo update-alternatives --set editor /usr/bin/vim.basic 2>/dev/null || true
+fi
+
+# Set system-wide environment variables for login and non-login shells
+cat <<'EOF' | sudo tee /etc/profile.d/editor.sh >/dev/null
+export EDITOR=vim
+export VISUAL=vim
+EOF
+sudo chmod 0644 /etc/profile.d/editor.sh
+
+# Persist in /etc/environment
+sudo sed -i '/^EDITOR=/d' /etc/environment 2>/dev/null || true
+sudo sed -i '/^VISUAL=/d' /etc/environment 2>/dev/null || true
+echo "EDITOR=vim" | sudo tee -a /etc/environment >/dev/null
+echo "VISUAL=vim" | sudo tee -a /etc/environment >/dev/null
+
+# Configure sensible defaults for Kubernetes YAML editing in vim
+sudo mkdir -p /etc/vim
+cat <<'EOF' | sudo tee /etc/vim/vimrc.local >/dev/null
+set tabstop=2
+set shiftwidth=2
+set expandtab
+set number
+autocmd FileType yaml setlocal ts=2 sts=2 sw=2 expandtab
+EOF
+sudo chmod 0644 /etc/vim/vimrc.local
 
 # ------------------------------------------------------------------------------
 # 7. System Package Upgrade

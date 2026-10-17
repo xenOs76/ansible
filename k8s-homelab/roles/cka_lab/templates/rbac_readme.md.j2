@@ -17,9 +17,9 @@ Follows the exercise pattern from [bmuschko/cka-crash-course (04-rbac)](https://
 │   ├── verify-manual-user.sh      # Automated validation test suite
 │   └── cleanup-manual-user.sh     # Teardown and reset script
 └── serviceaccounts/               # ServiceAccount RBAC & bounded token drill
-    ├── README.md                  # ServiceAccount RBAC walkthrough
-    ├── sa-rbac-drill.yaml         # ServiceAccount, Role & RoleBinding manifest
-    └── test-sa-rbac.sh            # Token creation and impersonation test
+ ├── README.md                  # ServiceAccount RBAC walkthrough
+ ├── sa-rbac-drill.yaml         # ServiceAccount, Role & RoleBinding manifest
+ └── test-sa-rbac.sh            # Token creation and impersonation test
 ```
 
 ---
@@ -123,29 +123,33 @@ Switch back to the cluster administrator context:
 kubectl config use-context kubernetes-admin@kubernetes
 ```
 
-1. Create a `Role` named `pod-reader` granting permissions to `get`, `watch`, and `list` pods in namespace `default`:
+#### 1. Create Role (`pod-reader`)
 
-   ```bash
-   kubectl create role pod-reader \
-     --verb=get,list,watch \
-     --resource=pods \
-     --namespace=default
-   ```
+Grant permissions to `get`, `watch`, and `list` pods in namespace `default`:
 
-1. Create a `RoleBinding` named `read-pods` binding user `{{ cka_lab_rbac_user | default('vagrant') }}` to role `pod-reader`:
+```bash
+kubectl create role pod-reader \
+  --verb=get,list,watch \
+  --resource=pods \
+  --namespace=default
+```
 
-   ```bash
-   kubectl create rolebinding read-pods \
-     --role=pod-reader \
-     --user={{ cka_lab_rbac_user | default('vagrant') }} \
-     --namespace=default
-   ```
+#### 2. Create RoleBinding (`read-pods`)
 
-1. Verify both objects exist:
+Bind user `{{ cka_lab_rbac_user | default('vagrant') }}` to role `pod-reader`:
 
-   ```bash
-   kubectl get role,rolebinding -n default
-   ```
+```bash
+kubectl create rolebinding read-pods \
+  --role=pod-reader \
+  --user={{ cka_lab_rbac_user | default('vagrant') }} \
+  --namespace=default
+```
+
+#### 3. Verify Both Objects Exist
+
+```bash
+kubectl get role,rolebinding -n default
+```
 
 ---
 
@@ -157,23 +161,23 @@ Switch back to the user context:
 kubectl config use-context {{ cka_lab_rbac_user | default('vagrant') }}
 ```
 
-1. Verify that listing pods now succeeds:
+#### 1. Verify Pod Listing Succeeds
 
-   ```bash
-   kubectl get pods
-   ```
+```bash
+kubectl get pods
+```
 
-1. Test authorization queries via `kubectl auth can-i`:
+#### 2. Test Authorization Queries (`kubectl auth can-i`)
 
-   ```bash
-   # Should return 'yes'
-   kubectl auth can-i get pods
+```bash
+# Should return 'yes'
+kubectl auth can-i get pods
 
-   # Should return 'no'
-   kubectl auth can-i create pods
-   kubectl auth can-i delete pods
-   kubectl auth can-i get deployments
-   ```
+# Should return 'no'
+kubectl auth can-i create pods
+kubectl auth can-i delete pods
+kubectl auth can-i get deployments
+```
 
 ---
 

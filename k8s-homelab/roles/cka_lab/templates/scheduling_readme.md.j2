@@ -36,6 +36,7 @@ Kubernetes scheduling governs how the control plane places workloads across clus
 │   ├── cka-lab-quota-ns.yaml                  # Dedicated capacity namespace
 │   ├── cka-lab-compute-quota.yaml             # CPU/Memory/Pod hard limits
 │   ├── cka-lab-limit-range.yaml               # Default injection and min/max boundaries
+│   ├── cka-lab-oversized-pod.yaml             # Oversized Pod violating LimitRange max limit
 │   └── test-quotas.sh                         # Admission rejection verification
 └── 05-priority-preemption/                    # Section 5: PriorityClass & Preemption
     ├── 01-priority-classes.yaml               # High and low PriorityClass definitions
@@ -94,141 +95,142 @@ kubectl autoscale deployment <deployment-name> --cpu=50% --min=1 --max=4
 
 Taints and tolerations work together to ensure pods are not scheduled onto inappropriate nodes.
 
-1. **Core Mechanics & Taint Effects**:
-   - **Taints** are applied to **Nodes** to repel a set of Pods (`<key>=<value>:<effect>` or `<key>:<effect>`).
-   - **Tolerations** are declared on **Pods** under `spec.tolerations` to allow (not force) scheduling onto tainted nodes.
-   - **Effects**:
-     - `NoSchedule`: Kubernetes will not schedule new pods onto the node unless they tolerate the taint. Existing running pods remain untouched.
-     - `PreferNoSchedule`: Soft constraint; kube-scheduler tries to avoid placing intolerant pods on the node, but will do so if no alternative exists.
-     - `NoExecute`: Intolerant pods cannot be scheduled, AND any currently running pods without matching tolerations are evicted immediately (or after optional `tolerationSeconds`).
-   - **Removing Taints**: Append a minus sign `-` to the taint key and effect (e.g. `kubectl taint nodes <node> key:effect-`).
+#### Core Mechanics & Taint Effects
 
-1. **Step 1: Identify and Taint a Worker Node**:
+- **Taints** are applied to **Nodes** to repel a set of Pods (`<key>=<value>:<effect>` or `<key>:<effect>`).
+- **Tolerations** are declared on **Pods** under `spec.tolerations` to allow (not force) scheduling onto tainted nodes.
+- **Effects**:
+  - `NoSchedule`: Kubernetes will not schedule new pods onto the node unless they tolerate the taint. Existing running pods remain untouched.
+  - `PreferNoSchedule`: Soft constraint; kube-scheduler tries to avoid placing intolerant pods on the node, but will do so if no alternative exists.
+  - `NoExecute`: Intolerant pods cannot be scheduled, AND any currently running pods without matching tolerations are evicted immediately (or after optional `tolerationSeconds`).
+- **Removing Taints**: Append a minus sign `-` to the taint key and effect (e.g. `kubectl taint nodes <node> key:effect-`).
 
-   ```bash
-   cd {{ cka_lab_scheduling_dir }}/01-taints-tolerations
-   NODE=$(kubectl get nodes -l '!node-role.kubernetes.io/control-plane' -o jsonpath='{.items[0].metadata.name}')
-   echo "Target worker node: ${NODE}"
+#### Step 1: Identify and Taint a Worker Node
 
-   # Apply a NoSchedule taint
-   kubectl taint nodes "${NODE}" dedicated=analytics:NoSchedule --overwrite
+```bash
+cd {{ cka_lab_scheduling_dir }}/01-taints-tolerations
+NODE=$(kubectl get nodes -l '!node-role.kubernetes.io/control-plane' -o jsonpath='{.items[0].metadata.name}')
+echo "Target worker node: ${NODE}"
 
-   # Confirm the taint is active
-   kubectl describe node "${NODE}" | grep -A 3 Taints
-   ```
+# Apply a NoSchedule taint
+kubectl taint nodes "${NODE}" dedicated=analytics:NoSchedule --overwrite
 
-1. **Step 2: Inspect Tolerating and Intolerant Manifests**:
+# Confirm the taint is active
+kubectl describe node "${NODE}" | grep -A 3 Taints
+```
 
-   Inspect the toleration specification in `cka-lab-tolerating-pod.yaml`:
+#### Step 2: Inspect Tolerating and Intolerant Manifests
 
-   ```yaml
-   spec:
-     tolerations:
-       - key: "dedicated"
-         operator: "Equal"
-         value: "analytics"
-         effect: "NoSchedule"
-   ```
+Inspect the toleration specification in `cka-lab-tolerating-pod.yaml`:
 
-   > [!TIP]
-   > If `operator: "Exists"` is specified, the `value` field must be omitted, matching any value associated with that key.
+```yaml
+spec:
+  tolerations:
+    - key: "dedicated"
+      operator: "Equal"
+      value: "analytics"
+      effect: "NoSchedule"
+```
 
-   In contrast, `cka-lab-intolerant-pod.yaml` contains no tolerations block.
+> [!TIP]
+> If `operator: "Exists"` is specified, the `value` field must be omitted, matching any value associated with that key.
 
-1. **Step 3: Deploy Pods and Observe Node Placement**:
+In contrast, `cka-lab-intolerant-pod.yaml` contains no tolerations block.
 
-   ```bash
-   kubectl apply -f cka-lab-tolerating-pod.yaml
-   kubectl apply -f cka-lab-intolerant-pod.yaml
+#### Step 3: Deploy Pods and Observe Node Placement
 
-   # Wait for pods to transition to Ready
-   kubectl wait --for=condition=Ready pod/cka-lab-tolerating-pod pod/cka-lab-intolerant-pod --timeout=30s
+```bash
+kubectl apply -f cka-lab-tolerating-pod.yaml
+kubectl apply -f cka-lab-intolerant-pod.yaml
 
-   # Inspect placed node names
-   kubectl get pods -o wide -l app.kubernetes.io/part-of=cka-lab
-   ```
+# Wait for pods to transition to Ready
+kubectl wait --for=condition=Ready pod/cka-lab-tolerating-pod pod/cka-lab-intolerant-pod --timeout=30s
 
-   - `cka-lab-intolerant-pod` is scheduled onto an untainted worker node, avoiding `${NODE}`.
-   - `cka-lab-tolerating-pod` is eligible to run on `${NODE}` due to its matching toleration.
+# Inspect placed node names
+kubectl get pods -o wide -l app.kubernetes.io/part-of=cka-lab
+```
 
-1. **Step 4: Active Pod Eviction with `NoExecute` and `tolerationSeconds`**:
+- `cka-lab-intolerant-pod` is scheduled onto an untainted worker node, avoiding `${NODE}`.
+- `cka-lab-tolerating-pod` is eligible to run on `${NODE}` due to its matching toleration.
 
-   Unlike `NoSchedule` (which only prevents new pods from scheduling), **`NoExecute`** actively evicts currently running pods if they lack a matching toleration.
+#### Step 4: Active Pod Eviction with `NoExecute` and `tolerationSeconds`
 
-   - **Deploy an intolerant workload on the target node**:
+Unlike `NoSchedule` (which only prevents new pods from scheduling), **`NoExecute`** actively evicts currently running pods if they lack a matching toleration.
 
-     ```bash
-     kubectl run cka-lab-eviction-victim \
-       --image=busybox:1.36.1 \
-       --restart=Never \
-       --overrides='{"spec":{"nodeName":"'"${NODE}"'"}}' \
-       -- /bin/sh -c "sleep 3600"
+##### Deploy an intolerant workload on the target node
 
-     kubectl wait --for=condition=Ready pod/cka-lab-eviction-victim --timeout=30s
-     kubectl get pod cka-lab-eviction-victim -o wide
-     ```
+```bash
+kubectl run cka-lab-eviction-victim \
+  --image=busybox:1.36.1 \
+  --restart=Never \
+  --overrides='{"spec":{"nodeName":"'"${NODE}"'"}}' \
+  -- /bin/sh -c "sleep 3600"
 
-   - **Deploy a workload with `NoExecute` and `tolerationSeconds`**:
+kubectl wait --for=condition=Ready pod/cka-lab-eviction-victim --timeout=30s
+kubectl get pod cka-lab-eviction-victim -o wide
+```
 
-     Specifying `tolerationSeconds` allows the pod to remain running on the tainted node for a grace window before eviction:
+##### Deploy a workload with `NoExecute` and `tolerationSeconds`
 
-     ```bash
-     cat <<EOF | kubectl apply -f -
-     apiVersion: v1
-     kind: Pod
-     metadata:
-       name: cka-lab-graceful-pod
-     spec:
-       nodeName: ${NODE}
-       tolerations:
-         - key: "maintenance"
-           operator: "Equal"
-           value: "planned"
-           effect: "NoExecute"
-           tolerationSeconds: 30
-       containers:
-         - name: worker
-           image: busybox:1.36.1
-           command: ["/bin/sh", "-c", "sleep 3600"]
-     EOF
+Specifying `tolerationSeconds` allows the pod to remain running on the tainted node for a grace window before eviction:
 
-     kubectl wait --for=condition=Ready pod/cka-lab-graceful-pod --timeout=30s
-     ```
+```bash
+cat <<EOF | kubectl apply -f -
+apiVersion: v1
+kind: Pod
+metadata:
+  name: cka-lab-graceful-pod
+spec:
+  nodeName: ${NODE}
+  tolerations:
+    - key: "maintenance"
+      operator: "Equal"
+      value: "planned"
+      effect: "NoExecute"
+      tolerationSeconds: 30
+  containers:
+    - name: worker
+      image: busybox:1.36.1
+      command: ["/bin/sh", "-c", "sleep 3600"]
+EOF
 
-   - **Apply the `NoExecute` taint**:
+kubectl wait --for=condition=Ready pod/cka-lab-graceful-pod --timeout=30s
+```
 
-     ```bash
-     kubectl taint nodes "${NODE}" maintenance=planned:NoExecute
-     ```
+##### Apply the `NoExecute` taint
 
-   - **Observe Eviction Behavior**:
+```bash
+kubectl taint nodes "${NODE}" maintenance=planned:NoExecute
+```
 
-     ```bash
-     kubectl get pods -o wide
-     ```
+##### Observe Eviction Behavior
 
-     - `cka-lab-eviction-victim` is evicted immediately by the node controller because it lacks a toleration for `maintenance=planned:NoExecute`.
-     - `cka-lab-graceful-pod` continues running for up to 30 seconds after the taint was applied. Once the 30-second window expires, Kubernetes terminates it.
+```bash
+kubectl get pods -o wide
+```
 
-   - **Remove the `NoExecute` taint**:
+- `cka-lab-eviction-victim` is evicted immediately by the node controller because it lacks a toleration for `maintenance=planned:NoExecute`.
+- `cka-lab-graceful-pod` continues running for up to 30 seconds after the taint was applied. Once the 30-second window expires, Kubernetes terminates it.
 
-     ```bash
-     kubectl taint nodes "${NODE}" maintenance:NoExecute-
-     ```
+##### Remove the `NoExecute` taint
 
-1. **Step 5: Clean Up Workloads and Remaining Taints**:
+```bash
+kubectl taint nodes "${NODE}" maintenance:NoExecute-
+```
 
-   ```bash
-   kubectl delete pod cka-lab-tolerating-pod cka-lab-intolerant-pod cka-lab-eviction-victim cka-lab-graceful-pod --ignore-not-found=true --now
-   kubectl taint nodes "${NODE}" dedicated:NoSchedule- >/dev/null 2>&1 || true
-   kubectl taint nodes "${NODE}" maintenance:NoExecute- >/dev/null 2>&1 || true
-   ```
+#### Step 5: Clean Up Workloads and Remaining Taints
 
-1. **Step 6: Run Automated Verification Script**:
+```bash
+kubectl delete pod cka-lab-tolerating-pod cka-lab-intolerant-pod cka-lab-eviction-victim cka-lab-graceful-pod --ignore-not-found=true --now
+kubectl taint nodes "${NODE}" dedicated:NoSchedule- >/dev/null 2>&1 || true
+kubectl taint nodes "${NODE}" maintenance:NoExecute- >/dev/null 2>&1 || true
+```
 
-   ```bash
-   ./cka-lab-taint-drill.sh
-   ```
+#### Step 6: Run Automated Verification Script
+
+```bash
+./cka-lab-taint-drill.sh
+```
 
 ---
 
@@ -236,82 +238,83 @@ Taints and tolerations work together to ensure pods are not scheduled onto inapp
 
 Control pod distribution based on node labels (node affinity) and co-located workloads (pod anti-affinity).
 
-1. **Core Concepts**:
-   - **`nodeAffinity`**: Uses expressive set-based operators (`In`, `NotIn`, `Exists`, `DoesNotExist`, `Gt`, `Lt`).
-     - `requiredDuringSchedulingIgnoredDuringExecution` (**Hard**): Mandatory requirement. If no node matches the expression, the pod remains `Pending`.
-     - `preferredDuringSchedulingIgnoredDuringExecution` (**Soft**): Weighted preference (1–100). The scheduler scores candidate nodes, preferring nodes with higher scores while still scheduling elsewhere if preferred nodes are unavailable.
-   - **`podAntiAffinity`**: Prevents co-locating pods of the same service on the same node or topology domain, ensuring fault tolerance and high availability across failure boundaries.
+#### Core Concepts
 
-1. **Step 1: Label the Target Worker Node**:
+- **`nodeAffinity`**: Uses expressive set-based operators (`In`, `NotIn`, `Exists`, `DoesNotExist`, `Gt`, `Lt`).
+  - `requiredDuringSchedulingIgnoredDuringExecution` (**Hard**): Mandatory requirement. If no node matches the expression, the pod remains `Pending`.
+  - `preferredDuringSchedulingIgnoredDuringExecution` (**Soft**): Weighted preference (1–100). The scheduler scores candidate nodes, preferring nodes with higher scores while still scheduling elsewhere if preferred nodes are unavailable.
+- **`podAntiAffinity`**: Prevents co-locating pods of the same service on the same node or topology domain, ensuring fault tolerance and high availability across failure boundaries.
 
-   ```bash
-   cd {{ cka_lab_scheduling_dir }}/02-affinities
-   NODE=$(kubectl get nodes -l '!node-role.kubernetes.io/control-plane' -o jsonpath='{.items[0].metadata.name}')
+#### Step 1: Label the Target Worker Node
 
-   kubectl label nodes "${NODE}" cka.zone=zone-a --overwrite
-   kubectl get nodes --show-labels | grep cka.zone
-   ```
+```bash
+cd {{ cka_lab_scheduling_dir }}/02-affinities
+NODE=$(kubectl get nodes -l '!node-role.kubernetes.io/control-plane' -o jsonpath='{.items[0].metadata.name}')
 
-1. **Step 2: Inspect and Deploy NodeAffinity Pod**:
+kubectl label nodes "${NODE}" cka.zone=zone-a --overwrite
+kubectl get nodes --show-labels | grep cka.zone
+```
 
-   Inspect `cka-lab-node-affinity-pod.yaml`:
+#### Step 2: Inspect and Deploy NodeAffinity Pod
 
-   ```yaml
-   spec:
-     affinity:
-       nodeAffinity:
-         requiredDuringSchedulingIgnoredDuringExecution:
-           nodeSelectorTerms:
-             - matchExpressions:
-                 - key: "cka.zone"
-                   operator: In
-                   values:
-                     - "zone-a"
-         preferredDuringSchedulingIgnoredDuringExecution:
-           - weight: 50
-             preference:
-               matchExpressions:
-                 - key: "disktype"
-                   operator: In
-                   values:
-                     - "nvme"
-   ```
+Inspect `cka-lab-node-affinity-pod.yaml`:
 
-   Deploy and verify node placement:
+```yaml
+spec:
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: "cka.zone"
+                operator: In
+                values:
+                  - "zone-a"
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 50
+          preference:
+            matchExpressions:
+              - key: "disktype"
+                operator: In
+                values:
+                  - "nvme"
+```
 
-   ```bash
-   kubectl apply -f cka-lab-node-affinity-pod.yaml
-   kubectl wait --for=condition=Ready pod/cka-lab-node-affinity-pod --timeout=30s
-   kubectl get pod cka-lab-node-affinity-pod -o wide
-   ```
+Deploy and verify node placement:
 
-   Confirm that the pod scheduled strictly onto `${NODE}` matching `cka.zone=zone-a`.
+```bash
+kubectl apply -f cka-lab-node-affinity-pod.yaml
+kubectl wait --for=condition=Ready pod/cka-lab-node-affinity-pod --timeout=30s
+kubectl get pod cka-lab-node-affinity-pod -o wide
+```
 
-1. **Step 3: Deploy PodAntiAffinity Multi-Replica Workload**:
+Confirm that the pod scheduled strictly onto `${NODE}` matching `cka.zone=zone-a`.
 
-   In `cka-lab-pod-anti-affinity-deploy.yaml`, a 2-replica Deployment specifies hard pod anti-affinity using `topologyKey: "kubernetes.io/hostname"`:
+#### Step 3: Deploy PodAntiAffinity Multi-Replica Workload
 
-   ```bash
-   kubectl apply -f cka-lab-pod-anti-affinity-deploy.yaml
-   kubectl rollout status deployment/cka-lab-anti-affinity-deploy --timeout=60s
-   kubectl get pods -l app=cka-lab-anti-affinity-app -o wide
-   ```
+In `cka-lab-pod-anti-affinity-deploy.yaml`, a 2-replica Deployment specifies hard pod anti-affinity using `topologyKey: "kubernetes.io/hostname"`:
 
-   Notice that the two replicas are scheduled onto distinct worker nodes. If you attempt to scale this deployment beyond the number of available nodes, additional replicas remain `Pending`.
+```bash
+kubectl apply -f cka-lab-pod-anti-affinity-deploy.yaml
+kubectl rollout status deployment/cka-lab-anti-affinity-deploy --timeout=60s
+kubectl get pods -l app=cka-lab-anti-affinity-app -o wide
+```
 
-1. **Step 4: Clean Up Workloads and Labels**:
+Notice that the two replicas are scheduled onto distinct worker nodes. If you attempt to scale this deployment beyond the number of available nodes, additional replicas remain `Pending`.
 
-   ```bash
-   kubectl delete pod cka-lab-node-affinity-pod --now
-   kubectl delete deployment cka-lab-anti-affinity-deploy --now
-   kubectl label nodes "${NODE}" cka.zone-
-   ```
+#### Step 4: Clean Up Workloads and Labels
 
-1. **Step 5: Run Automated Verification Script**:
+```bash
+kubectl delete pod cka-lab-node-affinity-pod --now
+kubectl delete deployment cka-lab-anti-affinity-deploy --now
+kubectl label nodes "${NODE}" cka.zone-
+```
 
-   ```bash
-   ./test-affinities.sh
-   ```
+#### Step 5: Run Automated Verification Script
+
+```bash
+./test-affinities.sh
+```
 
 ---
 
@@ -319,81 +322,82 @@ Control pod distribution based on node labels (node affinity) and co-located wor
 
 Scale pod replicas automatically in response to observed CPU utilization.
 
-1. **Core Requirements for HPA**:
-   - **Metrics Server**: HPA queries the Metrics API (`metrics.k8s.io`). Verify availability with `kubectl top nodes`.
-   - **Pod Resource Requests**: Target pods **must** declare `resources.requests.cpu`. HPA calculates target utilization as a percentage of the requested capacity. Without requests, HPA displays `<unknown>` and cannot make scaling decisions.
+#### Core Requirements for HPA
 
-1. **Step 1: Inspect Target Application**:
+- **Metrics Server**: HPA queries the Metrics API (`metrics.k8s.io`). If not yet installed, deploy it via `/home/vagrant/cka/helm/install-kube-metrics.sh`. Verify availability with `kubectl top nodes`.
+- **Pod Resource Requests**: Target pods **must** declare `resources.requests.cpu`. HPA calculates target utilization as a percentage of the requested capacity. Without requests, HPA displays `<unknown>` and cannot make scaling decisions.
 
-   ```bash
-   cd {{ cka_lab_scheduling_dir }}/03-hpa-autoscaling
-   cat cka-lab-autoscale-app.yaml
-   ```
+#### Step 1: Inspect Target Application
 
-   Notice the deployment specifies `requests: {cpu: 50m, memory: 64Mi}` and exposes a `ClusterIP` Service on port 80.
+```bash
+cd {{ cka_lab_scheduling_dir }}/03-hpa-autoscaling
+cat cka-lab-autoscale-app.yaml
+```
 
-1. **Step 2: Deploy Workload and Service**:
+Notice the deployment specifies `requests: {cpu: 50m, memory: 64Mi}` and exposes a `ClusterIP` Service on port 80.
 
-   ```bash
-   kubectl apply -f cka-lab-autoscale-app.yaml
-   kubectl rollout status deployment/cka-lab-autoscale-app --timeout=60s
-   ```
+#### Step 2: Deploy Workload and Service
 
-1. **Step 3: Create the HPA (Imperative vs Declarative)**:
+```bash
+kubectl apply -f cka-lab-autoscale-app.yaml
+kubectl rollout status deployment/cka-lab-autoscale-app --timeout=60s
+```
 
-   - **Imperative Creation (Exam Fast Path)**:
+#### Step 3: Create the HPA (Imperative vs Declarative)
 
-     Use `--cpu` with percentage syntax (e.g. `50%` for utilization) or resource quantity format (e.g. `500m` for milliCPU).
+##### Imperative Creation (Exam Fast Path)
 
-     > [!NOTE]
-     > In modern Kubernetes, the legacy `--cpu-percent` flag has been deprecated in favor of `--cpu` (which accepts percentage or milliCPU values) and `--memory` (e.g., `--memory=70%` or `--memory=200Mi`).
+Use `--cpu` with percentage syntax (e.g. `50%` for utilization) or resource quantity format (e.g. `500m` for milliCPU).
 
-     ```bash
-     kubectl autoscale deployment cka-lab-autoscale-app \
-       --cpu=50% \
-       --min=1 \
-       --max=4
-     ```
+> [!NOTE]
+> In modern Kubernetes, the legacy `--cpu-percent` flag has been deprecated in favor of `--cpu` (which accepts percentage or milliCPU values) and `--memory` (e.g., `--memory=70%` or `--memory=200Mi`).
 
-   - **Declarative Manifest (`cka-lab-hpa.yaml`)**:
+```bash
+kubectl autoscale deployment cka-lab-autoscale-app \
+  --cpu=50% \
+  --min=1 \
+  --max=4
+```
 
-     ```bash
-     kubectl apply -f cka-lab-hpa.yaml
-     ```
+##### Declarative Manifest (`cka-lab-hpa.yaml`)
 
-   Inspect the autoscaler status:
+```bash
+kubectl apply -f cka-lab-hpa.yaml
+```
 
-   ```bash
-   kubectl get hpa cka-lab-hpa
-   kubectl describe hpa cka-lab-hpa
-   ```
+Inspect the autoscaler status:
 
-1. **Step 4: Generate Synthetic Load**:
+```bash
+kubectl get hpa cka-lab-hpa
+kubectl describe hpa cka-lab-hpa
+```
 
-   Run a temporary busybox pod to issue high-frequency HTTP requests to the autoscale service:
+#### Step 4: Generate Synthetic Load
 
-   ```bash
-   kubectl run load-generator --rm -i --tty \
-     --image=busybox:1.36.1 \
-     --restart=Never \
-     -- /bin/sh -c "while true; do wget -q -O- http://cka-lab-autoscale-svc > /dev/null; done"
-   ```
+Run a temporary busybox pod to issue high-frequency HTTP requests to the autoscale service:
 
-   In another terminal, watch HPA scale up replicas from 1 towards 4:
+```bash
+kubectl run load-generator --rm -i --tty \
+  --image=busybox:1.36.1 \
+  --restart=Never \
+  -- /bin/sh -c "while true; do wget -q -O- http://cka-lab-autoscale-svc > /dev/null; done"
+```
 
-   ```bash
-   kubectl get hpa cka-lab-hpa -w
-   kubectl get deployment cka-lab-autoscale-app -w
-   ```
+In another terminal, watch HPA scale up replicas from 1 towards 4:
 
-1. **Step 5: Clean Up and Automated Validation**:
+```bash
+kubectl get hpa cka-lab-hpa -w
+kubectl get deployment cka-lab-autoscale-app -w
+```
 
-   ```bash
-   kubectl delete hpa cka-lab-hpa --now
-   kubectl delete deployment cka-lab-autoscale-app --now
-   kubectl delete service cka-lab-autoscale-svc --now
-   ./cka-lab-load-generator.sh
-   ```
+#### Step 5: Clean Up and Automated Validation
+
+```bash
+kubectl delete hpa cka-lab-hpa --now
+kubectl delete deployment cka-lab-autoscale-app --now
+kubectl delete service cka-lab-autoscale-svc --now
+./cka-lab-load-generator.sh
+```
 
 ---
 
@@ -401,79 +405,82 @@ Scale pod replicas automatically in response to observed CPU utilization.
 
 Govern resource allocations and prevent noisy neighbor exhaustion in multi-tenant namespaces.
 
-1. **Core Principles & Admission Interactions**:
-   - **`ResourceQuota`**: Enforces aggregate namespace limits on compute requests/limits (`requests.cpu`, `limits.memory`), storage, and object counts (`pods`, `services`).
-   - **`LimitRange`**: Sets per-container minimums, maximums, and default requests/limits automatically injected when pods omit them.
-   - **Critical Admission Rule**: If a namespace enforces a compute `ResourceQuota`, pods submitted without explicit resource specifications are **rejected by admission control** unless a `LimitRange` is defined to inject defaults.
+#### Core Principles & Admission Interactions
 
-1. **Step 1: Create Capacity Namespace and ResourceQuota**:
+- **`ResourceQuota`**: Enforces aggregate namespace limits on compute requests/limits (`requests.cpu`, `limits.memory`), storage, and object counts (`pods`, `services`).
+- **`LimitRange`**: Sets per-container minimums, maximums, and default requests/limits automatically injected when pods omit them.
+- **Critical Admission Rule**: If a namespace enforces a compute `ResourceQuota`, pods submitted without explicit resource specifications are **rejected by admission control** unless a `LimitRange` is defined to inject defaults.
 
-   ```bash
-   cd {{ cka_lab_scheduling_dir }}/04-quotas-limits
-   kubectl apply -f cka-lab-quota-ns.yaml
-   kubectl apply -f cka-lab-compute-quota.yaml
+#### Step 1: Create Capacity Namespace and ResourceQuota
 
-   kubectl describe resourcequota cka-lab-compute-quota -n {{ cka_lab_scheduling_capacity_namespace | default('cka-lab-capacity-ns') }}
-   ```
+```bash
+cd {{ cka_lab_scheduling_dir }}/04-quotas-limits
+kubectl apply -f cka-lab-quota-ns.yaml
+kubectl apply -f cka-lab-compute-quota.yaml
 
-   Observe the `Used` versus `Hard` columns (e.g. `requests.cpu: 0/500m`, `pods: 0/4`).
+kubectl describe resourcequota cka-lab-compute-quota -n {{ cka_lab_scheduling_capacity_namespace | default('cka-lab-capacity-ns') }}
+```
 
-1. **Step 2: Apply LimitRange and Inspect Defaults**:
+Observe the `Used` versus `Hard` columns (e.g. `requests.cpu: 0/500m`, `pods: 0/4`).
 
-   ```bash
-   kubectl apply -f cka-lab-limit-range.yaml
-   kubectl describe limitrange cka-lab-limit-range -n {{ cka_lab_scheduling_capacity_namespace | default('cka-lab-capacity-ns') }}
-   ```
+#### Step 2: Apply LimitRange and Inspect Defaults
 
-   Note the default injection rules:
-   - `defaultRequest`: CPU `50m`, Memory `64Mi`.
-   - `default` (limits): CPU `100m`, Memory `128Mi`.
-   - `max`: CPU `250m`, Memory `256Mi`.
-   - `min`: CPU `10m`, Memory `16Mi`.
+```bash
+kubectl apply -f cka-lab-limit-range.yaml
+kubectl describe limitrange cka-lab-limit-range -n {{ cka_lab_scheduling_capacity_namespace | default('cka-lab-capacity-ns') }}
+```
 
-1. **Step 3: Test Automatic Resource Injection**:
+Note the default injection rules:
 
-   Run a pod that specifies no resource requests or limits:
+- `defaultRequest`: CPU `50m`, Memory `64Mi`.
+- `default` (limits): CPU `100m`, Memory `128Mi`.
+- `max`: CPU `250m`, Memory `256Mi`.
+- `min`: CPU `10m`, Memory `16Mi`.
 
-   ```bash
-   kubectl run cka-lab-auto-limit-pod \
-     --image=busybox:1.36.1 \
-     --restart=Never \
-     -n {{ cka_lab_scheduling_capacity_namespace | default('cka-lab-capacity-ns') }} \
-     -- /bin/sh -c "sleep 3600"
+#### Step 3: Test Automatic Resource Injection
 
-   kubectl wait --for=condition=Ready pod/cka-lab-auto-limit-pod -n {{ cka_lab_scheduling_capacity_namespace | default('cka-lab-capacity-ns') }} --timeout=30s
-   kubectl get pod cka-lab-auto-limit-pod -n {{ cka_lab_scheduling_capacity_namespace | default('cka-lab-capacity-ns') }} -o yaml | grep -A 8 resources:
-   ```
+Run a pod that specifies no resource requests or limits:
 
-   Confirm that the `LimitRange` automatically injected `requests.cpu: 50m` and `limits.cpu: 100m`.
+```bash
+kubectl run cka-lab-auto-limit-pod \
+  --image=busybox:1.36.1 \
+  --restart=Never \
+  -n {{ cka_lab_scheduling_capacity_namespace | default('cka-lab-capacity-ns') }} \
+  -- /bin/sh -c "sleep 3600"
 
-1. **Step 4: Test Admission Boundary Enforcement**:
+kubectl wait --for=condition=Ready pod/cka-lab-auto-limit-pod -n {{ cka_lab_scheduling_capacity_namespace | default('cka-lab-capacity-ns') }} --timeout=30s
+kubectl get pod cka-lab-auto-limit-pod -n {{ cka_lab_scheduling_capacity_namespace | default('cka-lab-capacity-ns') }} -o yaml | grep -A 8 resources:
+```
 
-   Attempt to run a pod with a limit exceeding the `max` threshold of 250m CPU:
+Confirm that the `LimitRange` automatically injected `requests.cpu: 50m` and `limits.cpu: 100m`.
 
-   ```bash
-   kubectl run cka-lab-oversized-pod \
-     --image=busybox:1.36.1 \
-     --restart=Never \
-     --limits="cpu=500m" \
-     -n {{ cka_lab_scheduling_capacity_namespace | default('cka-lab-capacity-ns') }} \
-     -- /bin/sh -c "sleep 3600"
-   ```
+#### Step 4: Test Admission Boundary Enforcement
 
-   Observe immediate admission rejection:
+Inspect the pre-staged manifest specifying a container limit of 500m CPU (exceeding the `max: 250m` LimitRange threshold):
 
-   ```text
-   Error from server (Forbidden): pods "cka-lab-oversized-pod" is forbidden: maximum cpu usage per Container is 250m, but limit is 500m
-   ```
+```bash
+cat cka-lab-oversized-pod.yaml
+```
 
-1. **Step 5: Inspect Quota Consumption and Automated Validation**:
+Attempt to create the oversized pod:
 
-   ```bash
-   kubectl describe resourcequota cka-lab-compute-quota -n {{ cka_lab_scheduling_capacity_namespace | default('cka-lab-capacity-ns') }}
-   kubectl delete namespace {{ cka_lab_scheduling_capacity_namespace | default('cka-lab-capacity-ns') }}
-   ./test-quotas.sh
-   ```
+```bash
+kubectl apply -f cka-lab-oversized-pod.yaml
+```
+
+Observe immediate admission rejection by the `LimitRange` admission controller:
+
+```text
+Error from server (Forbidden): error when creating "cka-lab-oversized-pod.yaml": pods "cka-lab-oversized-pod" is forbidden: maximum cpu usage per Container is 250m, but limit is 500m
+```
+
+#### Step 5: Inspect Quota Consumption and Automated Validation
+
+```bash
+kubectl describe resourcequota cka-lab-compute-quota -n {{ cka_lab_scheduling_capacity_namespace | default('cka-lab-capacity-ns') }}
+kubectl delete namespace {{ cka_lab_scheduling_capacity_namespace | default('cka-lab-capacity-ns') }}
+./test-quotas.sh
+```
 
 ---
 
@@ -481,50 +488,52 @@ Govern resource allocations and prevent noisy neighbor exhaustion in multi-tenan
 
 Manage workload criticality and configure preemption policies when node compute is contended.
 
-1. **Core Concepts**:
-   - **`PriorityClass`**: A cluster-scoped object mapping a name to an integer priority (e.g. 1000000 vs 1000). Higher numbers indicate higher priority.
-   - **Preemption Flow**: When a high-priority pod cannot find a node with sufficient unallocated capacity, kube-scheduler identifies a node where evicting lower-priority pods frees enough resources, triggers graceful eviction, and schedules the high-priority pod.
-   - **`preemptionPolicy`**:
-     - `PreemptLowerPriority` (default): Preempts lower-priority pods when needed.
-     - `Never`: Non-preempting; queues ahead of lower-priority pods in the scheduling queue, but does not evict running workloads.
+#### Core Concepts
 
-1. **Step 1: Inspect and Apply PriorityClasses**:
+- **`PriorityClass`**: A cluster-scoped object mapping a name to an integer priority (e.g. 1000000 vs 1000). Higher numbers indicate higher priority.
+- **Preemption Flow**: When a high-priority pod cannot find a node with sufficient unallocated capacity, kube-scheduler identifies a node where evicting lower-priority pods frees enough resources, triggers graceful eviction, and schedules the high-priority pod.
+- **`preemptionPolicy`**:
+  - `PreemptLowerPriority` (default): Preempts lower-priority pods when needed.
+  - `Never`: Non-preempting; queues ahead of lower-priority pods in the scheduling queue, but does not evict running workloads.
 
-   ```bash
-   cd {{ cka_lab_scheduling_dir }}/05-priority-preemption
-   kubectl apply -f 01-priority-classes.yaml
+#### Step 1: Inspect and Apply PriorityClasses
 
-   kubectl get priorityclasses | grep -E "cka-high-priority|cka-low-priority"
-   ```
+```bash
+cd {{ cka_lab_scheduling_dir }}/05-priority-preemption
+kubectl apply -f 01-priority-classes.yaml
 
-   Notice `cka-high-priority` (value: 1000000) and `cka-low-priority` (value: 1000).
+kubectl get priorityclasses | grep -E "cka-high-priority|cka-low-priority"
+```
 
-1. **Step 2: Inspect Workload Manifests**:
+Notice `cka-high-priority` (value: 1000000) and `cka-low-priority` (value: 1000).
 
-   In `02-preemption-workloads.yaml`, workloads specify `spec.priorityClassName`:
-   - `cka-high-prio-pod`: `priorityClassName: cka-high-priority`
-   - `cka-low-prio-pod`: `priorityClassName: cka-low-priority`
+#### Step 2: Inspect Workload Manifests
 
-1. **Step 3: Deploy Workloads and Verify Assigned Priority**:
+In `02-preemption-workloads.yaml`, workloads specify `spec.priorityClassName`:
 
-   ```bash
-   kubectl apply -f 02-preemption-workloads.yaml
+- `cka-high-prio-pod`: `priorityClassName: cka-high-priority`
+- `cka-low-prio-pod`: `priorityClassName: cka-low-priority`
 
-   kubectl wait --for=condition=PodScheduled pod/cka-high-prio-pod -n default --timeout=60s
-   kubectl wait --for=condition=PodScheduled pod/cka-low-prio-pod -n default --timeout=60s
+#### Step 3: Deploy Workloads and Verify Assigned Priority
 
-   # Verify numeric priority resolution
-   kubectl get pod cka-high-prio-pod -n default -o jsonpath='{.spec.priority}{"\n"}'
-   kubectl get pod cka-low-prio-pod -n default -o jsonpath='{.spec.priority}{"\n"}'
-   ```
+```bash
+kubectl apply -f 02-preemption-workloads.yaml
 
-1. **Step 4: Clean Up and Automated Validation**:
+kubectl wait --for=condition=PodScheduled pod/cka-high-prio-pod -n default --timeout=60s
+kubectl wait --for=condition=PodScheduled pod/cka-low-prio-pod -n default --timeout=60s
 
-   ```bash
-   kubectl delete -f 02-preemption-workloads.yaml --now
-   kubectl delete -f 01-priority-classes.yaml
-   ./test-preemption.sh
-   ```
+# Verify numeric priority resolution
+kubectl get pod cka-high-prio-pod -n default -o jsonpath='{.spec.priority}{"\n"}'
+kubectl get pod cka-low-prio-pod -n default -o jsonpath='{.spec.priority}{"\n"}'
+```
+
+#### Step 4: Clean Up and Automated Validation
+
+```bash
+kubectl delete -f 02-preemption-workloads.yaml --now
+kubectl delete -f 01-priority-classes.yaml
+./test-preemption.sh
+```
 
 ---
 

@@ -42,21 +42,21 @@ kubectl auth can-i get pods --as=system:serviceaccount:default:deploy-bot
 
 ## Step-by-Step Procedure
 
-1. **Create ServiceAccount, Role, and RoleBinding**:
+### Step 1: Create ServiceAccount, Role, and RoleBinding
 
-   ```bash
-   kubectl apply -f sa-rbac-drill.yaml
-   ```
+```bash
+kubectl apply -f sa-rbac-drill.yaml
+```
 
-1. **Generate Bounded Token**:
+### Step 2: Generate Bounded Token
 
-   ```bash
-   TOKEN=$(kubectl create token deploy-bot --duration=1h)
-   echo "Generated Token: ${TOKEN:0:20}..."
-   ```
+```bash
+TOKEN=$(kubectl create token deploy-bot --duration=1h)
+echo "Generated Token: ${TOKEN:0:20}..."
+```
 
-1. **Verify API Permissions via Impersonation**:
+### Step 3: Verify API Permissions via Impersonation
 
-   ```bash
-   ./test-sa-rbac.sh
-   ```
+```bash
+./test-sa-rbac.sh
+```

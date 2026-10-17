@@ -43,6 +43,7 @@
     - {src: "scheduling_04_quota_ns.yaml.j2", dest: "04-quotas-limits/cka-lab-quota-ns.yaml"}
     - {src: "scheduling_04_compute_quota.yaml.j2", dest: "04-quotas-limits/cka-lab-compute-quota.yaml"}
     - {src: "scheduling_04_limit_range.yaml.j2", dest: "04-quotas-limits/cka-lab-limit-range.yaml"}
+    - {src: "scheduling_04_oversized_pod.yaml.j2", dest: "04-quotas-limits/cka-lab-oversized-pod.yaml"}
     - {src: "scheduling_04_test_quotas.sh.j2", dest: "04-quotas-limits/test-quotas.sh", mode: "0755"}
     - {src: "scheduling_05_guide.md.j2", dest: "05-priority-preemption/README.md", mode: "0644"}
     - {src: "scheduling_05_priority_classes.yaml.j2", dest: "05-priority-preemption/01-priority-classes.yaml"}

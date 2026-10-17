@@ -125,11 +125,70 @@
       - bash-completion
       - nfs-common
       - open-iscsi
+      - vim
     state: present
     update_cache: true
   tags:
     - common
     - packages
+
+- name: Ensure default editor is configured via system alternatives
+  community.general.alternatives:
+    name: editor
+    path: "{{ default_editor_path | default('/usr/bin/vim.basic') }}"
+  tags:
+    - common
+    - packages
+    - editor
+
+- name: Configure system-wide EDITOR and VISUAL environment profile
+  ansible.builtin.copy:
+    dest: /etc/profile.d/editor.sh
+    content: |
+      export EDITOR={{ default_editor | default('vim') }}
+      export VISUAL={{ default_editor | default('vim') }}
+    owner: root
+    group: root
+    mode: "0644"
+  tags:
+    - common
+    - editor
+
+- name: Ensure EDITOR is configured in /etc/environment
+  ansible.builtin.lineinfile:
+    path: /etc/environment
+    regexp: '^EDITOR='
+    line: 'EDITOR={{ default_editor | default("vim") }}'
+    state: present
+  tags:
+    - common
+    - editor
+
+- name: Ensure VISUAL is configured in /etc/environment
+  ansible.builtin.lineinfile:
+    path: /etc/environment
+    regexp: '^VISUAL='
+    line: 'VISUAL={{ default_editor | default("vim") }}'
+    state: present
+  tags:
+    - common
+    - editor
+
+- name: Configure global vimrc defaults for YAML indentation and line numbering
+  ansible.builtin.copy:
+    dest: /etc/vim/vimrc.local
+    content: |
+      set tabstop=2
+      set shiftwidth=2
+      set expandtab
+      set number
+      autocmd FileType yaml setlocal ts=2 sts=2 sw=2 expandtab
+    owner: root
+    group: root
+    mode: "0644"
+  tags:
+    - common
+    - editor
 
 - name: Ensure iscsid service is enabled and started
   ansible.builtin.systemd:

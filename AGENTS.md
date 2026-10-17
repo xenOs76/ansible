@@ -35,7 +35,7 @@ Multi-node Kubernetes 1.34+ cluster automated using `kubeadm`, `containerd`, and
 
 ### Roles Summary
 
-1. **`common`**: Pinned base packages (`socat`, `kubectl-netdrill`, `bash-completion`), sysctl network tuning, and kernel modules (`overlay`, `br_netfilter`, `rbd`).
+1. **`common`**: Pinned base packages (`socat`, `kubectl-netdrill`, `bash-completion`, `vim`), sysctl network tuning, default system editor configuration (`vim`), global YAML indentation defaults (`/etc/vim/vimrc.local`), and kernel modules (`overlay`, `br_netfilter`, `rbd`, `iscsi_tcp`).
 1. **`containerd`**: Container runtime installation, configuration (`SystemdCgroup = true`), and service health validation.
 1. **`kubernetes_packages`**: APT repository setup (`pkgs.k8s.io`), pinned binaries (`kubeadm`, `kubelet`, `kubectl`), and apt-mark hold.
 1. **`control_plane`**: `kubeadm init` automation, dynamic IP discovery for kube-apiserver TLS SANs, automated daily etcd backup with systemd timer (`etcd-backup.timer`), `~/.kube/config` distribution, user shell preferences (`alias k=kubectl`, `export koyaml="..."`, bash completion, and `~/.kube/kuberc`), and training MOTD cleanup.
