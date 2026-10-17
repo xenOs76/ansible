@@ -105,12 +105,23 @@ kubectl expose deployment <name> --port=80 --target-port=8080 --type=NodePort --
    {{ cka_lab_networking_dir }}/01-services/test-services.sh
    ```
 
-2. **Deploy Headless Service**:
+1. **Deploy Headless Service**:
 
    ```bash
    kubectl apply -f {{ cka_lab_networking_dir }}/01-services/cka-lab-headless-service.yaml
    {{ cka_lab_networking_dir }}/01-services/test-headless.sh
    ```
+
+1. **Modern Kubernetes (1.35+): Node-Local Routing (`PreferSameNode`)**:
+
+   In Kubernetes 1.35, the `spec.trafficDistribution` directive allows Service routing to favor endpoints located on the same node as the caller, eliminating unnecessary cross-node network transit and latency:
+
+   ```bash
+   kubectl apply -f {{ cka_lab_networking_dir }}/01-services/cka-lab-traffic-distribution-svc.yaml
+   kubectl describe service cka-lab-traffic-distribution-svc
+   ```
+
+   Inspect `Traffic Distribution` in the service details to confirm `PreferSameNode` routing policy.
 
 ### Drill 2: Ingress Path Routing (`02-ingresses/`)
 

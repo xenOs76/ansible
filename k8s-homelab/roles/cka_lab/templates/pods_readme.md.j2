@@ -230,6 +230,27 @@ kubectl explain pod.spec.containers.env
    kubectl get pod cka-lab-immutable-app
    ```
 
+1. **Modern Kubernetes (1.35+ GA): In-Place Pod Resource Resizing**:
+
+   Historically in Kubernetes, all container resource allocations were strictly immutable on running pods. Starting in **Kubernetes 1.35**, the `InPlacePodVerticalScaling` feature is Generally Available (GA), allowing CPU and memory requests/limits to be modified dynamically on live, running containers **without restarting or recreating the Pod**:
+
+   ```bash
+   # Dynamically resize running container CPU and Memory in-place
+   kubectl patch pod cka-lab-immutable-app --subresource=resize -p '{"spec":{"containers":[{"name":"web-app","resources":{"requests":{"cpu":"50m","memory":"64Mi"},"limits":{"cpu":"200m","memory":"128Mi"}}}]}}'
+
+   # Verify updated requests and limits
+   kubectl get pod cka-lab-immutable-app -o jsonpath='{.spec.containers[0].resources}'
+
+   # Confirm container did not restart (restartCount remains 0)
+   kubectl get pod cka-lab-immutable-app -o jsonpath='{.status.containerStatuses[0].restartCount}'
+   ```
+
+   Execute the standalone automated in-place resize drill:
+
+   ```bash
+   {{ cka_lab_pods_dir }}/05-spec-immutability/inplace-resize-drill.sh
+   ```
+
 ### Drill 6: Namespaces & Context Preferences (`06-namespaces-context/`)
 
 1. Create a dedicated practice namespace:

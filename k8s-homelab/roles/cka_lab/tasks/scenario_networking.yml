@@ -34,6 +34,7 @@
     - {src: "networking_01_backend_app.yaml.j2", dest: "01-services/cka-lab-backend-app.yaml"}
     - {src: "networking_01_clusterip_svc.yaml.j2", dest: "01-services/cka-lab-clusterip-service.yaml"}
     - {src: "networking_01_nodeport_svc.yaml.j2", dest: "01-services/cka-lab-nodeport-service.yaml"}
+    - {src: "networking_01_prefer_node_svc.yaml.j2", dest: "01-services/cka-lab-traffic-distribution-svc.yaml"}
     - {src: "networking_01_headless_service.yaml.j2", dest: "01-services/cka-lab-headless-service.yaml"}
     - {src: "networking_01_test_headless.sh.j2", dest: "01-services/test-headless.sh", mode: "0755"}
     - {src: "networking_01_test_services.sh.j2", dest: "01-services/test-services.sh", mode: "0755"}

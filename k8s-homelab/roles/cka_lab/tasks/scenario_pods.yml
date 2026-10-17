@@ -43,6 +43,7 @@
     - {src: "pods_05_immutable_v1.yaml.j2", dest: "05-spec-immutability/cka-lab-immutable-app-v1.yaml"}
     - {src: "pods_05_immutable_v2.yaml.j2", dest: "05-spec-immutability/cka-lab-immutable-app-v2.yaml"}
     - {src: "pods_05_replace_drill.sh.j2", dest: "05-spec-immutability/replace-drill.sh", mode: "0755"}
+    - {src: "pods_05_inplace_resize_drill.sh.j2", dest: "05-spec-immutability/inplace-resize-drill.sh", mode: "0755"}
     - {src: "pods_06_namespace.yaml.j2", dest: "06-namespaces-context/cka-lab-namespace.yaml"}
     - {src: "pods_06_namespace_context_drill.sh.j2", dest: "06-namespaces-context/namespace-context-drill.sh", mode: "0755"}
     - {src: "pods_07_guide.md.j2", dest: "07-quarantine-autopsy/README.md", mode: "0644"}
