@@ -28,6 +28,34 @@ Under official Linux Foundation / CNCF candidate policies, candidates may access
 4. **Homelab Auxiliary vs. Exam Primitives**:
    - The lab incorporates supplementary homelab tools (LitmusChaos, Caddy edge router, Ceph RBD, iSCSI). While valuable for practical learning, their documentation is **not** accessible during the actual exam. Scenarios note `[EXAM ALLOWED]` vs `[HOMELAB AUXILIARY]` so trainees cultivate exam-compliant reflexes.
 
+## CKA Lab Curriculum Architecture & Directory Hierarchy
+
+The hands-on training modules under `/home/vagrant/cka/` are organized into a 17-part linear sequence (`01-` to `17-`), ordered by strictly increasing architectural complexity and concept dependencies.
+
+All legacy unnumbered directory names are preserved as automatic symlinks at the root (`~/cka/`) for full backward compatibility with existing scripts and user habits.
+
+| Chapter | Directory | CKA Domain | Scope & Key Competencies |
+| :---: | :--- | :--- | :--- |
+| **01** | `01-jsonpath/` | CLI Speed | Fast JSONPath query extraction, custom-columns, and output formatting |
+| **02** | `02-helm/` | Packaging | Chart inspection, repo management, value overrides, and addon tools |
+| **03** | `03-rbac/` | Security (25%) | User certs, CSR approval, ServiceAccounts, Role, ClusterRole, and Bindings |
+| **04** | `04-pods/` | Workloads (15%) | Pod lifecycle, probes, init containers, spec immutability, and autopsy |
+| **05** | `05-configmaps/` | Workloads (15%) | Decoupled configuration, `valueFrom`, bulk `envFrom`, mounts, and `subPath` |
+| **06** | `06-secrets/` | Workloads (15%) | Opaque/TLS/registry secrets, base64 decoding, defaultMode 0400, and HTTPS |
+| **07** | `07-deployments/` | Workloads (15%) | ReplicaSets, rolling updates, rollbacks, zero-downtime bounds, pause/resume |
+| **08** | `08-workloads-advanced/` | Workloads (15%) | DaemonSets (node agents), batch Jobs (parallelism), and CronJobs |
+| **09** | `09-kustomize/` | Workloads (15%) | Declarative configuration management, base manifests, and env overlays |
+| **10** | `10-scheduling/` | Scheduling (15%) | Taints & tolerations, nodeAffinity, podAffinity, PriorityClasses, preemption |
+| **11** | `11-networking/` | Networking (20%) | Services (ClusterIP, NodePort), Ingress, Gateway API, and NetworkPolicies |
+| **12** | `12-volumes/` | Storage (10%) | `emptyDir`, `hostPath`, static PV/PVC lifecycle, and reclaim policy mutation |
+| **13** | `13-storage-classes/` | Storage (10%) | Dynamic CSI provisioners, `WaitForFirstConsumer`, and online PVC expansion |
+| **14** | `14-crds-operators/` | Architecture (25%) | CustomResourceDefinitions, OpenAPI schema validation, and operators |
+| **15** | `15-etcd/` | Architecture (25%) | Disaster recovery, `etcdctl` snapshots, and cluster state restoration |
+| **16** | `16-upgrade/` | Architecture (25%) | `kubeadm` control plane/worker upgrades, version skew, and node drain |
+| **17** | `17-cluster-troubleshooting/` | Troubleshooting (30%) | Control plane autopsy, static pod crash, dead kubelet, and CNI/DNS triage |
+
+A master navigation guide is generated at `/home/vagrant/cka/README.md` and styled for terminal viewing via `glow ~/cka/README.md`.
+
 ## Scenarios
 
 ### Scenario 0: Initial Steps Reminder MOTD (`motd`)

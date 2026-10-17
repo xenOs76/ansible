@@ -28,10 +28,12 @@
   loop:
     - {src: "deployments_readme.md.j2", dest: "README.md", mode: "0644"}
     - {src: "deployments_test_drills.sh.j2", dest: "test-deployments-drills.sh", mode: "0755"}
+    - {src: "deployments_01_run_imperative.sh.j2", dest: "01-basic-deployment/run-imperative.sh", mode: "0755"}
     - {src: "deployments_01_web_frontend.yaml.j2", dest: "01-basic-deployment/web-frontend-deployment.yaml"}
     - {src: "deployments_01_api_service.yaml.j2", dest: "01-basic-deployment/api-service-deployment.yaml"}
     - {src: "deployments_02_broken.yaml.j2", dest: "02-troubleshooting-labels/broken-deployment.yaml"}
     - {src: "deployments_02_fixed.yaml.j2", dest: "02-troubleshooting-labels/fixed-deployment.yaml"}
+    - {src: "deployments_02_quarantine_drill.sh.j2", dest: "02-troubleshooting-labels/quarantine-drill.sh", mode: "0755"}
     - {src: "deployments_02_readme.md.j2", dest: "02-troubleshooting-labels/README.md"}
     - {src: "deployments_03_deploy_v1.yaml.j2", dest: "03-rolling-updates-rollbacks/01-catalog-v1.yaml"}
     - {src: "deployments_03_update_v2.yaml.j2", dest: "03-rolling-updates-rollbacks/02-catalog-v2.yaml"}

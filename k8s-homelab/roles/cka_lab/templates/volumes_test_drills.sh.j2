@@ -1,0 +1,100 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# test-volumes-drills.sh: Automated Verification Suite for CKA Volumes
+# Managed by Ansible (roles/cka_lab)
+# ==============================================================================
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+NAMESPACE="default"
+
+cleanup() {
+  echo "==> Cleaning up test volume resources..."
+  kubectl delete pod emptydir-sidecar-pod emptydir-memory-pod hostpath-pod configmap-volume-pod secret-volume-pod local-storage-consumer \
+    -n "${NAMESPACE}" --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
+  kubectl delete pvc local-storage-pvc -n "${NAMESPACE}" --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
+  kubectl delete pv local-storage-pv --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
+  kubectl delete configmap app-runtime-config -n "${NAMESPACE}" --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
+  kubectl delete secret api-auth-credentials -n "${NAMESPACE}" --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
+}
+trap cleanup EXIT
+
+echo "===================================================================="
+echo "  [CKA LAB] Running End-to-End Volumes Verification Suite           "
+echo "===================================================================="
+
+# ------------------------------------------------------------------------------
+# Drill 1: Shared NFS Storage Verification
+# ------------------------------------------------------------------------------
+echo "--------------------------------------------------------------------"
+echo "  [1/5] Testing NFS Storage Mounts and Connectivity                 "
+echo "--------------------------------------------------------------------"
+if [[ -f "${SCRIPT_DIR}/test-nfs-mounts.sh" ]]; then
+  bash "${SCRIPT_DIR}/test-nfs-mounts.sh"
+else
+  echo "    WARN: test-nfs-mounts.sh not found, skipping."
+fi
+
+# ------------------------------------------------------------------------------
+# Drill 2: emptyDir Ephemeral and In-Memory Volumes
+# ------------------------------------------------------------------------------
+echo "--------------------------------------------------------------------"
+echo "  [2/5] Testing emptyDir (Scratch & Memory-backed) Volumes           "
+echo "--------------------------------------------------------------------"
+kubectl apply -f "${SCRIPT_DIR}/02-emptydir/01-emptydir-sidecar-pod.yaml" -n "${NAMESPACE}"
+kubectl wait --for=condition=Ready pod/emptydir-sidecar-pod -n "${NAMESPACE}" --timeout=60s
+
+kubectl apply -f "${SCRIPT_DIR}/02-emptydir/02-emptydir-memory-pod.yaml" -n "${NAMESPACE}"
+kubectl wait --for=condition=Ready pod/emptydir-memory-pod -n "${NAMESPACE}" --timeout=60s
+echo "    OK: emptyDir sidecar and memory pods running successfully."
+
+# ------------------------------------------------------------------------------
+# Drill 3: hostPath Node Filesystem Volume Mounts
+# ------------------------------------------------------------------------------
+echo "--------------------------------------------------------------------"
+echo "  [3/5] Testing hostPath Volume Mounts                              "
+echo "--------------------------------------------------------------------"
+kubectl apply -f "${SCRIPT_DIR}/03-hostpath/01-hostpath-pod.yaml" -n "${NAMESPACE}"
+kubectl wait --for=condition=Ready pod/hostpath-pod -n "${NAMESPACE}" --timeout=60s
+echo "    OK: hostPath pod running successfully."
+
+# ------------------------------------------------------------------------------
+# Drill 4: ConfigMap and Secret Volume Mounts
+# ------------------------------------------------------------------------------
+echo "--------------------------------------------------------------------"
+echo "  [4/5] Testing ConfigMap and Secret Projected Volume Mounts        "
+echo "--------------------------------------------------------------------"
+kubectl apply -f "${SCRIPT_DIR}/04-configmap-secret/01-configmap-volume-pod.yaml" -n "${NAMESPACE}"
+kubectl wait --for=condition=Ready pod/configmap-volume-pod -n "${NAMESPACE}" --timeout=60s
+
+kubectl apply -f "${SCRIPT_DIR}/04-configmap-secret/02-secret-volume-pod.yaml" -n "${NAMESPACE}"
+kubectl wait --for=condition=Ready pod/secret-volume-pod -n "${NAMESPACE}" --timeout=60s
+echo "    OK: ConfigMap and Secret volume pods running successfully."
+
+# ------------------------------------------------------------------------------
+# Drill 5: PV and PVC Lifecycle & Reclaim Policy Mutation
+# ------------------------------------------------------------------------------
+echo "--------------------------------------------------------------------"
+echo "  [5/5] Testing PV/PVC Binding Lifecycle and Reclaim Policy Mutation"
+echo "--------------------------------------------------------------------"
+if [[ -f "${SCRIPT_DIR}/05-pv-pvc-lifecycle/test-reclaim-mutation.sh" ]]; then
+  bash "${SCRIPT_DIR}/05-pv-pvc-lifecycle/test-reclaim-mutation.sh"
+else
+  echo "    WARN: 05-pv-pvc-lifecycle/test-reclaim-mutation.sh not found, skipping."
+fi
+
+kubectl apply -f "${SCRIPT_DIR}/05-pv-pvc-lifecycle/01-local-pv-pvc.yaml" -n "${NAMESPACE}"
+kubectl wait --for=condition=Ready pod/local-storage-consumer -n "${NAMESPACE}" --timeout=60s
+PV_STATUS=$(kubectl get pv local-storage-pv -o jsonpath='{.status.phase}')
+PVC_STATUS=$(kubectl get pvc local-storage-pvc -n "${NAMESPACE}" -o jsonpath='{.status.phase}')
+
+if [[ "${PV_STATUS}" == "Bound" && "${PVC_STATUS}" == "Bound" ]]; then
+  echo "    OK: Local PV and PVC successfully bound (PV=${PV_STATUS}, PVC=${PVC_STATUS})."
+else
+  echo "    FAIL: Expected Bound state, got PV=${PV_STATUS}, PVC=${PVC_STATUS}" >&2
+  exit 1
+fi
+
+echo "===================================================================="
+echo "  [SUCCESS] All CKA Volume drills verified successfully!            "
+echo "===================================================================="

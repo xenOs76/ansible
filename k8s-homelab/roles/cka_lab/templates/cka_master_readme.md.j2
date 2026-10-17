@@ -1,0 +1,69 @@
+# Certified Kubernetes Administrator (CKA): Master Lab Curriculum
+
+Welcome to the hands-on Certified Kubernetes Administrator (CKA) training environment.
+
+The training modules under `~/cka/` are structured into a 17-part linear progression, ordered by increasing architectural complexity and strict dependency prerequisites.
+
+---
+
+## Curriculum Navigation Matrix
+
+| Chapter | Module Directory | CKA Exam Domain | Competencies & Focus Area |
+| :---: | :--- | :--- | :--- |
+| **01** | [`01-jsonpath/`](01-jsonpath/README.md) | Exam Tooling & CLI Speed | Output formatting, custom-columns, range iteration, and speed extraction |
+| **02** | [`02-helm/`](02-helm/README.md) | Cluster Tooling & Packaging | Helm repository management, chart inspection, value overrides, and addon tools |
+| **03** | [`03-rbac/`](03-rbac/README.md) | Cluster Architecture (25%) | CSRs, User certificates, ServiceAccounts, Role, ClusterRole, and Bindings |
+| **04** | [`04-pods/`](04-pods/README.md) | Workloads & Scheduling (15%) | Pod lifecycle, probes (liveness, readiness, startup), init containers, and spec immutability |
+| **05** | [`05-configmaps/`](05-configmaps/README.md) | Workloads & Scheduling (15%) | Decoupled configuration, `valueFrom`, bulk `envFrom`, directory mounts, and `subPath` |
+| **06** | [`06-secrets/`](06-secrets/README.md) | Workloads & Scheduling (15%) | Opaque/TLS/registry secrets, base64 decoding, defaultMode permissions, and HTTPS web |
+| **07** | [`07-deployments/`](07-deployments/README.md) | Workloads & Scheduling (15%) | ReplicaSets, rolling updates, rollbacks, zero-downtime bounds, and pause/resume |
+| **08** | [`08-workloads-advanced/`](08-workloads-advanced/README.md) | Workloads & Scheduling (15%) | DaemonSets (node-level agents), batch Jobs (parallel tasks), and CronJobs |
+| **09** | [`09-kustomize/`](09-kustomize/README.md) | Workloads & Scheduling (15%) | Declarative configuration management, base manifests, and environment overlays |
+| **10** | [`10-scheduling/`](10-scheduling/README.md) | Workloads & Scheduling (15%) | Taints & tolerations, nodeAffinity, podAffinity/anti-affinity, PriorityClasses, and preemption |
+| **11** | [`11-networking/`](11-networking/README.md) | Services & Networking (20%) | ClusterIP, NodePort, Ingress controllers, Gateway API, CoreDNS, and NetworkPolicies |
+| **12** | [`12-volumes/`](12-volumes/README.md) | Storage (10%) | `emptyDir`, `hostPath`, static PV/PVC lifecycle, access modes, and reclaim policy mutation |
+| **13** | [`13-storage-classes/`](13-storage-classes/README.md) | Storage (10%) | Dynamic CSI provisioning, `WaitForFirstConsumer` delayed binding, and online PVC expansion |
+| **14** | [`14-crds-operators/`](14-crds-operators/README.md) | Cluster Architecture (25%) | CustomResourceDefinitions, OpenAPI v3 schema validation, and operator reconciliation |
+| **15** | [`15-etcd/`](15-etcd/README.md) | Cluster Architecture (25%) | Disaster recovery, `etcdctl` v3 snapshot saves, TLS static pod discovery, and restores |
+| **16** | [`16-upgrade/`](16-upgrade/README.md) | Cluster Architecture (25%) | `kubeadm` control plane/worker upgrades, version skew handling, and node cordon/drain |
+| **17** | [`17-cluster-troubleshooting/`](17-cluster-troubleshooting/README.md) | Troubleshooting (30%) | Control plane autopsy, static pod crash diagnosis, dead kubelet triage, and CNI/DNS recovery |
+
+---
+
+## Pedagogical Progression & Dependencies
+
+1. **Foundations (01–02)**: Establish CLI muscle memory and querying speed with `jsonpath`, and deploy cluster monitoring addons via `helm`.
+1. **Identity & Core Primitives (03–06)**: Secure cluster access with `rbac` before launching atomic `pods`, then decouple application state via `configmaps` and `secrets`.
+1. **Workload Management (07–09)**: Scale and roll out workloads via `deployments`, manage background tasks with `workloads-advanced`, and manage multi-environment overlays with `kustomize`.
+1. **Pod Placement & Routing (10–11)**: Constrain pod scheduling across cluster nodes via `scheduling`, and configure service discovery, ingress, and microsegmentation via `networking`.
+1. **Storage & State (12–13)**: Master static volume bindings and reclaim policies in `volumes`, then advance to dynamic CSI provisioners and delayed binding in `storage-classes`.
+1. **Cluster Administration & Capstone (14–17)**: Extend APIs with `crds-operators`, safeguard cluster state with `etcd`, perform maintenance with `upgrade`, and diagnose real-world multi-fault failures in `cluster-troubleshooting`.
+
+---
+
+## Backward-Compatible Navigation Shortcuts
+
+For convenience and muscle memory, all unnumbered legacy directory names are preserved as symlinks:
+
+```bash
+# Both of these commands navigate to the identical exercise:
+cd ~/cka/07-deployments
+cd ~/cka/deployments
+
+# Speed JSONPath:
+cd ~/cka/01-jsonpath
+cd ~/cka/jsonpath
+
+# User context creation helper:
+~/cka/create-user-context.sh
+```
+
+---
+
+## Terminal Rendering
+
+To view this guide with formatted styling in the terminal:
+
+```bash
+glow ~/cka/README.md
+```

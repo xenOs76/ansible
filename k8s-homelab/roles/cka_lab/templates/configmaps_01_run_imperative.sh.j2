@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# run-imperative.sh: Fast imperative creation drills for ConfigMaps and Secrets
+# ==============================================================================
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TARGET_NS="{{ cka_lab_configmaps_default_namespace | default('default') }}"
+
+echo "===================================================================="
+echo "  [CKA LAB] Drill 1: Rapid Imperative Creation (ConfigMaps & Secrets)"
+echo "===================================================================="
+echo "Target namespace: ${TARGET_NS}"
+
+# 1. Create from literal values
+echo "==> 1. Creating ConfigMap from literal values..."
+kubectl create configmap cka-cm-literals \
+  --from-literal=APP_ENV=production \
+  --from-literal=MAX_WORKERS=8 \
+  --from-literal=ENABLE_LOGGING=true \
+  -n "${TARGET_NS}" \
+  --dry-run=client -o yaml | kubectl apply -f -
+
+# 2. Create from individual files and custom key names
+echo "==> 2. Creating ConfigMap from files with custom key names..."
+kubectl create configmap cka-cm-files \
+  --from-file="${SCRIPT_DIR}/app.properties" \
+  --from-file=custom-ui.conf="${SCRIPT_DIR}/ui.conf" \
+  -n "${TARGET_NS}" \
+  --dry-run=client -o yaml | kubectl apply -f -
+
+# 3. Create from an environment file (--from-env-file)
+echo "==> 3. Creating ConfigMap from env file (unpacks each line as a distinct key)..."
+kubectl create configmap cka-cm-env-file \
+  --from-env-file="${SCRIPT_DIR}/game.env" \
+  -n "${TARGET_NS}" \
+  --dry-run=client -o yaml | kubectl apply -f -
+
+# 4. Create Secret from literal values
+echo "==> 4. Creating Secret from literal values..."
+kubectl create secret generic cka-sec-literals \
+  --from-literal=username=appuser \
+  --from-literal=password='SuperSecretToken123!' \
+  -n "${TARGET_NS}" \
+  --dry-run=client -o yaml | kubectl apply -f -
+
+echo "==> Verification:"
+echo "--- cka-cm-literals keys ---"
+kubectl get configmap cka-cm-literals -n "${TARGET_NS}" -o jsonpath='{.data}'
+echo ""
+echo "--- cka-cm-files keys ---"
+kubectl get configmap cka-cm-files -n "${TARGET_NS}" -o jsonpath='{keys .data}'
+echo ""
+echo "--- cka-cm-env-file keys ---"
+kubectl get configmap cka-cm-env-file -n "${TARGET_NS}" -o jsonpath='{keys .data}'
+echo ""
+echo "--- cka-sec-literals keys ---"
+kubectl get secret cka-sec-literals -n "${TARGET_NS}" -o jsonpath='{keys .data}'
+echo ""
+
+echo "==> Imperative creation drills completed successfully."

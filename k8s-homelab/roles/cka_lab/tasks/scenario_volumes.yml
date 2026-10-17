@@ -85,6 +85,7 @@
     mode: "{{ item.mode | default('0644') }}"
   loop:
     - {src: "volumes_readme.md.j2", dest: "README.md", mode: "0644"}
+    - {src: "volumes_test_drills.sh.j2", dest: "test-volumes-drills.sh", mode: "0755"}
     - {src: "volumes_test_nfs_mounts.sh.j2", dest: "test-nfs-mounts.sh", mode: "0755"}
     - {src: "volumes_01_nfs_direct_pod.yaml.j2", dest: "01-nfs/01-nfs-direct-pod.yaml"}
     - {src: "volumes_01_nfs_deployment_shared.yaml.j2", dest: "01-nfs/02-nfs-deployment-shared.yaml"}

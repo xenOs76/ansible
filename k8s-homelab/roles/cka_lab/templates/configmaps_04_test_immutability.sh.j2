@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# test-immutability.sh: Verify that the API server rejects mutation of immutable CM
+# ==============================================================================
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TARGET_NS="{{ cka_lab_configmaps_default_namespace | default('default') }}"
+
+echo "===================================================================="
+echo "  [CKA LAB] Drill 4: Spec Immutability & Live Update Semantics       "
+echo "===================================================================="
+echo "Target namespace: ${TARGET_NS}"
+
+echo "==> 1. Applying immutable ConfigMap..."
+kubectl apply -f "${SCRIPT_DIR}/immutable-configmap.yaml" -n "${TARGET_NS}"
+
+echo "==> 2. Verifying immutable flag is set to true..."
+IS_IMMUTABLE=$(kubectl get configmap cka-immutable-config -n "${TARGET_NS}" -o jsonpath='{.immutable}')
+if [ "${IS_IMMUTABLE}" != "true" ]; then
+  echo "ERROR: ConfigMap is not marked immutable!" >&2
+  exit 1
+fi
+echo "ConfigMap cka-immutable-config has immutable: ${IS_IMMUTABLE}"
+
+echo "==> 3. Attempting to mutate data on immutable ConfigMap (expecting rejection)..."
+SET_ERROR=0
+UPDATE_OUTPUT=$(kubectl patch configmap cka-immutable-config -n "${TARGET_NS}" \
+  --type=merge -p '{"data":{"max_connections":"500"}}' 2>&1) || SET_ERROR=1
+
+if [ "${SET_ERROR}" -eq 1 ]; then
+  echo "Expected failure occurred when attempting to patch immutable ConfigMap:"
+  echo "${UPDATE_OUTPUT}"
+  if echo "${UPDATE_OUTPUT}" | grep -q -i "immutable"; then
+    echo "==> SUCCESS: API server strictly rejected modification due to field immutability."
+  else
+    echo "WARNING: Patch failed but error message did not contain 'immutable': ${UPDATE_OUTPUT}"
+  fi
+else
+  echo "ERROR: Patch succeeded unexpectedly on immutable ConfigMap!" >&2
+  exit 1
+fi

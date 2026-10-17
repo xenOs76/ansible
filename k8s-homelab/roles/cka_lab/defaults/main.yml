@@ -45,7 +45,7 @@ cka_lab_user_rbac_context_name: "{{ cka_lab_user_rbac_name }}@kubernetes"
 
 # Vagrant user context creation script settings
 # Reference: https://github.com/bmuschko/cka-crash-course/blob/master/exercises/04-rbac/create-user-context.sh
-cka_lab_rbac_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/rbac"
+cka_lab_rbac_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/03-rbac"
 cka_lab_rbac_user: "{{ ansible_user | default('vagrant') }}"
 cka_lab_rbac_csr_expiration_seconds: 86400
 cka_lab_rbac_manual_dir: "{{ cka_lab_rbac_dir }}/manual-user"
@@ -56,7 +56,7 @@ cka_lab_rbac_manual_group: "developers"
 # Reference: https://kubernetes.io/docs/concepts/configuration/secret/
 cka_lab_secrets_default_namespace: "default"
 cka_lab_secrets_dev_namespace: "development"
-cka_lab_secrets_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/secrets"
+cka_lab_secrets_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/06-secrets"
 
 # Default namespace secret parameters
 cka_lab_secret_opaque_username: "appadmin"
@@ -79,8 +79,8 @@ cka_lab_dev_secret_basic_password: "DevAuthPass#456"
 # Reference: https://kubernetes.io/docs/concepts/configuration/configmap/
 cka_lab_configmaps_default_namespace: "default"
 cka_lab_configmaps_dev_namespace: "development"
-cka_lab_configmaps_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/configmaps"
-cka_lab_kustomize_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/kustomize"
+cka_lab_configmaps_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/05-configmaps"
+cka_lab_kustomize_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/09-kustomize"
 
 cka_lab_configmaps_definitions:
   - namespace: "{{ cka_lab_configmaps_default_namespace }}"
@@ -171,7 +171,7 @@ cka_lab_configmaps_definitions:
 
 # Scenario: helm (Helm Monitoring & Addon Drill)
 # Reference: https://helm.sh/docs/ and https://github.com/prometheus-operator/kube-prometheus
-cka_lab_helm_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/helm"
+cka_lab_helm_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/02-helm"
 cka_lab_helm_monitoring_namespace: "monitoring"
 cka_lab_helm_metrics_server_chart_version: ""
 cka_lab_helm_kube_prometheus_chart_version: ""
@@ -203,7 +203,7 @@ cka_lab_helm_nfs_csi_chart_version: "v4.9.0"
 
 # Scenario: volumes (NFS Server & CKA Volume Drills)
 # Reference: https://kubernetes.io/docs/concepts/storage/
-cka_lab_volumes_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/volumes"
+cka_lab_volumes_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/12-volumes"
 cka_lab_nfs_server_hostname: "nfs-server.local"
 cka_lab_nfs_server_ip: >-
   {{
@@ -223,18 +223,18 @@ cka_lab_iscsi_fs_lun: 1
 cka_lab_iscsi_block_lun: 2
 
 # Scenario: deployments (Deployments, ReplicaSets, Rollouts, and Strategy Drills)
-cka_lab_deployments_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/deployments"
+cka_lab_deployments_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/07-deployments"
 cka_lab_deployments_namespace: "default"
 
 # Scenario: pods (Pods, Namespaces, Lifecycle, and Immutability Drills)
 # Reference: Kubernetes Pods and Namespaces CKA curriculum
-cka_lab_pods_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/pods"
+cka_lab_pods_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/04-pods"
 cka_lab_pods_namespace: "default"
 cka_lab_pods_staging_namespace: "cka-lab-staging"
 
 # Scenario: networking (Services, Ingress, Gateway API, and Network Policies)
 # Reference: Kubernetes Services & Networking CKA curriculum
-cka_lab_networking_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/networking"
+cka_lab_networking_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/11-networking"
 cka_lab_networking_namespace: "default"
 cka_lab_networking_gateway_namespace: "nginx-gateway"
 cka_lab_networking_client_namespace: "cka-lab-net-client"
@@ -244,42 +244,42 @@ cka_lab_networking_gateway_domain: "httpbin.example.local"
 cka_lab_networking_gateway_unmatched_domain: "unmatched.example.local"
 
 # Scenario: scheduling (Taints, Tolerations, Affinities, HPA, and Resource Quotas)
-cka_lab_scheduling_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/scheduling"
+cka_lab_scheduling_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/10-scheduling"
 cka_lab_scheduling_namespace: "default"
 cka_lab_scheduling_capacity_namespace: "cka-lab-capacity-ns"
 
 # Scenario: workloads_advanced (DaemonSets, Batch Jobs, CronJobs, and Sidecars)
-cka_lab_workloads_advanced_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/workloads-advanced"
+cka_lab_workloads_advanced_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/08-workloads-advanced"
 cka_lab_workloads_advanced_namespace: "default"
 
 # Scenario: storage_classes (Dynamic StorageClasses, Binding Modes, and PVC Expansion)
-cka_lab_storage_classes_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/storage-classes"
+cka_lab_storage_classes_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/13-storage-classes"
 cka_lab_storage_classes_namespace: "default"
 cka_lab_nfs_csi_storage_class: "nfs-csi"
 cka_lab_ceph_nfs_storage_class: "ceph-nfs-csi"
 cka_lab_cephfs_storage_class: "{{ rook_ceph_fs_storage_class_name | default('rook-cephfs') }}"
 
 # Scenario: cluster_troubleshooting (Cordon/Drain, Static Pod Recovery, Kubelet Diagnostics)
-cka_lab_cluster_troubleshooting_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/cluster-troubleshooting"
+cka_lab_cluster_troubleshooting_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/17-cluster-troubleshooting"
 
 # Scenario: crds (CustomResourceDefinitions and OpenAPI Schema Validation)
-cka_lab_crds_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/crds-operators"
+cka_lab_crds_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/14-crds-operators"
 cka_lab_crds_namespace: "default"
 
 # Scenario: chaos_troubleshooting (LitmusChaos Dynamic Resilience & Runtime Diagnostics)
-cka_lab_chaos_troubleshooting_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/chaos-troubleshooting"
+cka_lab_chaos_troubleshooting_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/18-chaos-troubleshooting"
 cka_lab_chaos_namespace: "cka-troubleshooting"
 cka_lab_litmus_operator_version: "v3.0.0"
 
 # Scenario: etcd (etcd Snapshot Backup & Restore)
-cka_lab_etcd_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/etcd"
+cka_lab_etcd_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/15-etcd"
 cka_lab_etcd_backup_dir: "/var/lib/etcd-backup"
 cka_lab_etcd_backup_prefix: "etcd-snapshot-"
 cka_lab_etcd_backup_retention_days: 7
 cka_lab_etcd_backup_calendar: "daily"
 
 # Scenario: upgrade_drill (Manual Kubeadm Node & Cluster Upgrade)
-cka_lab_upgrade_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/upgrade"
+cka_lab_upgrade_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/16-upgrade"
 
 # Scenario: jsonpath (Speed JSONPath & Output Formatting)
-cka_lab_jsonpath_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/jsonpath"
+cka_lab_jsonpath_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/01-jsonpath"

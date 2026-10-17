@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **ConfigMaps, Secrets & Pod Consumption Practice Module (`roles/cka_lab`, `~/cka/configmaps/`)**: Expanded CKA exam training lab with a comprehensive practice module synthesizing ConfigMap and Secret generation, granular environment variable binding (`valueFrom`), bulk environment variable binding with prefixes (`envFrom`), full directory volume mounts, single-file projections using `subPath`, specification immutability (`immutable: true`) with API server rejection tests, and an automated end-to-end verification test suite aligned with official Kubernetes documentation and CNCF curriculum competencies.
+- **Kubernetes Secrets & Workload Consumption Practice Module (`roles/cka_lab`, `~/cka/secrets/`)**: Expanded CKA exam training lab with an end-to-end Secrets module covering imperative creation across generic, TLS, and docker-registry types, fast Base64 JSONPath and Go-template decoding, granular environment variable binding (`valueFrom.secretKeyRef`), bulk injection (`envFrom.secretRef` with prefixes), restrictive volume file permissions (`defaultMode: 0400`), NGINX HTTPS web termination, specification immutability enforcement, and an automated verification test suite.
+- **Deployments & Workload Rollout Practice Module (`roles/cka_lab`, `~/cka/deployments/`)**: Expanded CKA exam training lab with an end-to-end Deployments module covering rapid imperative generation (`kubectl create deployment`, `kubectl set image`, `kubectl scale`), selector immutability diagnosis and pod quarantine autopsy debugging, zero-downtime rolling update strategy tuning (`maxSurge`, `maxUnavailable`) vs singleton `Recreate`, rollout revision history inspection with undo rollbacks, batch configuration changes via pause and resume, and an automated verification test suite.
+- **Storage, Volumes & Lifecycle Practice Module (`roles/cka_lab`, `~/cka/volumes/`)**: Expanded CKA exam training lab with a comprehensive Storage module covering static PersistentVolume and PersistentVolumeClaim binding phases, live reclaim policy mutation (`Retain` vs `Delete`) with manual recovery, ephemeral and in-memory scratch storage (`emptyDir`), host filesystem mounts (`hostPath`), ConfigMap and Secret projected volume consumption, online volume expansion, and an end-to-end automated verification test suite.
+- **Curriculum Architecture & Sequential Directory Numbering (`roles/cka_lab`, `~/cka/`)**: Restructured all 17 hands-on exam practice modules into a 2-digit zero-padded linear hierarchy (`01-jsonpath` through `17-cluster-troubleshooting`), ordered strictly by increasing architectural complexity and dependency prerequisites, accompanied by an interactive master index (`~/cka/README.md`) and automatic backward-compatibility symlinks for all legacy unnumbered paths.
+
 ## [1.4.3] - 2026-10-14
 
 ### Added

@@ -5,13 +5,40 @@
 # ==============================================================================
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NAMESPACE="{{ cka_lab_deployments_namespace | default('default') }}"
 TEST_DEPLOY="cka-lab-test-rollout"
 
-echo "==> [1/5] Testing basic Deployment creation and replica scaling..."
-if kubectl get deployment "${TEST_DEPLOY}" -n "${NAMESPACE}" >/dev/null 2>&1; then
-  kubectl delete deployment "${TEST_DEPLOY}" -n "${NAMESPACE}" --interactive=false --wait=true >/dev/null 2>&1 || true
+cleanup() {
+  echo "==> Cleaning up test deployments..."
+  kubectl delete deployment "${TEST_DEPLOY}" -n "${NAMESPACE}" --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
+  kubectl delete deployment cka-imperative-web -n "${NAMESPACE}" --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
+  kubectl delete deployment cka-lab-web-frontend -n "${NAMESPACE}" --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
+}
+trap cleanup EXIT
+
+echo "===================================================================="
+echo "  [CKA LAB] Running End-to-End Deployments Verification Suite       "
+echo "===================================================================="
+
+echo "==> [1/5] Testing imperative Deployment creation and scaling workflow..."
+if [[ -f "${SCRIPT_DIR}/01-basic-deployment/run-imperative.sh" ]]; then
+  bash "${SCRIPT_DIR}/01-basic-deployment/run-imperative.sh"
+  echo "    OK: Imperative deployment drill completed successfully."
+else
+  echo "    WARN: 01-basic-deployment/run-imperative.sh not found, skipping."
 fi
+
+echo "==> [2/5] Testing pod isolation and autopsy drill..."
+if [[ -f "${SCRIPT_DIR}/02-troubleshooting-labels/quarantine-drill.sh" ]]; then
+  bash "${SCRIPT_DIR}/02-troubleshooting-labels/quarantine-drill.sh"
+  echo "    OK: Quarantine and autopsy drill completed successfully."
+else
+  echo "    WARN: 02-troubleshooting-labels/quarantine-drill.sh not found, skipping."
+fi
+
+echo "==> [3/5] Testing rolling update and change-cause annotation..."
+kubectl delete deployment "${TEST_DEPLOY}" -n "${NAMESPACE}" --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
 
 kubectl create deployment "${TEST_DEPLOY}" \
   --image=nginx:1.23.0 \
@@ -27,7 +54,6 @@ else
   exit 1
 fi
 
-echo "==> [2/5] Testing rolling update and change-cause annotation..."
 kubectl annotate deployment "${TEST_DEPLOY}" -n "${NAMESPACE}" kubernetes.io/change-cause="Initial release 1.23.0"
 
 kubectl set image "deployment/${TEST_DEPLOY}" "nginx=nginx:1.23.4" -n "${NAMESPACE}"
@@ -42,7 +68,7 @@ else
   exit 1
 fi
 
-echo "==> [3/5] Testing rollback to revision 1..."
+echo "==> [4/5] Testing rollback to revision 1..."
 kubectl rollout undo "deployment/${TEST_DEPLOY}" -n "${NAMESPACE}" --to-revision=1
 kubectl rollout status "deployment/${TEST_DEPLOY}" -n "${NAMESPACE}" --timeout=60s
 
@@ -54,7 +80,7 @@ else
   exit 1
 fi
 
-echo "==> [4/5] Testing rollout pause and resume for batch updates..."
+echo "==> [5/5] Testing rollout pause and resume for batch updates..."
 kubectl rollout pause "deployment/${TEST_DEPLOY}" -n "${NAMESPACE}"
 kubectl set image "deployment/${TEST_DEPLOY}" "nginx=nginx:1.24.0" -n "${NAMESPACE}"
 kubectl set env "deployment/${TEST_DEPLOY}" "APP_ENV=production" -n "${NAMESPACE}"
@@ -71,8 +97,5 @@ kubectl rollout resume "deployment/${TEST_DEPLOY}" -n "${NAMESPACE}"
 kubectl rollout status "deployment/${TEST_DEPLOY}" -n "${NAMESPACE}" --timeout=60s
 RESUMED_IMAGE="$(kubectl get deployment "${TEST_DEPLOY}" -n "${NAMESPACE}" -o jsonpath='{.spec.template.spec.containers[0].image}')"
 echo "    OK: Rollout resumed and updated to ${RESUMED_IMAGE}."
-
-echo "==> [5/5] Cleaning up test deployment..."
-kubectl delete deployment "${TEST_DEPLOY}" -n "${NAMESPACE}" --interactive=false --wait=true >/dev/null 2>&1 || true
 
 echo "==> All CKA Deployments and ReplicaSets drill tests PASSED successfully!"

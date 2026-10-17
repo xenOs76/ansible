@@ -1,0 +1,96 @@
+---
+- name: Ensure root CKA directory exists
+  ansible.builtin.file:
+    path: "/home/{{ ansible_user | default('vagrant') }}/cka"
+    state: directory
+    owner: "{{ ansible_user | default('vagrant') }}"
+    group: "{{ ansible_user | default('vagrant') }}"
+    mode: "0755"
+  tags:
+    - cka_lab
+    - directories
+
+- name: Define CKA lab numbered directory definitions and compatibility symlinks
+  ansible.builtin.set_fact:
+    cka_lab_directory_symlinks:
+      - {src: "{{ cka_lab_jsonpath_dir }}", dest: "/home/{{ ansible_user | default('vagrant') }}/cka/jsonpath"}
+      - {src: "{{ cka_lab_helm_dir }}", dest: "/home/{{ ansible_user | default('vagrant') }}/cka/helm"}
+      - {src: "{{ cka_lab_rbac_dir }}", dest: "/home/{{ ansible_user | default('vagrant') }}/cka/rbac"}
+      - {src: "{{ cka_lab_pods_dir }}", dest: "/home/{{ ansible_user | default('vagrant') }}/cka/pods"}
+      - {src: "{{ cka_lab_configmaps_dir }}", dest: "/home/{{ ansible_user | default('vagrant') }}/cka/configmaps"}
+      - {src: "{{ cka_lab_secrets_dir }}", dest: "/home/{{ ansible_user | default('vagrant') }}/cka/secrets"}
+      - {src: "{{ cka_lab_deployments_dir }}", dest: "/home/{{ ansible_user | default('vagrant') }}/cka/deployments"}
+      - {src: "{{ cka_lab_workloads_advanced_dir }}", dest: "/home/{{ ansible_user | default('vagrant') }}/cka/workloads-advanced"}
+      - {src: "{{ cka_lab_kustomize_dir }}", dest: "/home/{{ ansible_user | default('vagrant') }}/cka/kustomize"}
+      - {src: "{{ cka_lab_scheduling_dir }}", dest: "/home/{{ ansible_user | default('vagrant') }}/cka/scheduling"}
+      - {src: "{{ cka_lab_networking_dir }}", dest: "/home/{{ ansible_user | default('vagrant') }}/cka/networking"}
+      - {src: "{{ cka_lab_volumes_dir }}", dest: "/home/{{ ansible_user | default('vagrant') }}/cka/volumes"}
+      - {src: "{{ cka_lab_storage_classes_dir }}", dest: "/home/{{ ansible_user | default('vagrant') }}/cka/storage-classes"}
+      - {src: "{{ cka_lab_crds_dir }}", dest: "/home/{{ ansible_user | default('vagrant') }}/cka/crds-operators"}
+      - {src: "{{ cka_lab_etcd_dir }}", dest: "/home/{{ ansible_user | default('vagrant') }}/cka/etcd"}
+      - {src: "{{ cka_lab_upgrade_dir }}", dest: "/home/{{ ansible_user | default('vagrant') }}/cka/upgrade"}
+      - {src: "{{ cka_lab_cluster_troubleshooting_dir }}", dest: "/home/{{ ansible_user | default('vagrant') }}/cka/cluster-troubleshooting"}
+  tags:
+    - cka_lab
+    - directories
+
+- name: Ensure all numbered CKA scenario directories exist
+  ansible.builtin.file:
+    path: "{{ item.src }}"
+    state: directory
+    owner: "{{ ansible_user | default('vagrant') }}"
+    group: "{{ ansible_user | default('vagrant') }}"
+    mode: "0755"
+  loop: "{{ cka_lab_directory_symlinks }}"
+  loop_control:
+    label: "{{ item.src | basename }}"
+  tags:
+    - cka_lab
+    - directories
+
+- name: Inspect legacy unnumbered CKA directories for migration
+  ansible.builtin.stat:
+    path: "{{ item.dest }}"
+  loop: "{{ cka_lab_directory_symlinks }}"
+  register: cka_lab_legacy_stat
+  tags:
+    - cka_lab
+    - directories
+
+- name: Remove legacy non-symlink directories to allow clean symlink creation
+  ansible.builtin.file:
+    path: "{{ item.item.dest }}"
+    state: absent
+  loop: "{{ cka_lab_legacy_stat.results }}"
+  when: item.stat.exists and not item.stat.islnk
+  loop_control:
+    label: "{{ item.item.dest | basename }}"
+  tags:
+    - cka_lab
+    - directories
+
+- name: Create backward-compatibility symlinks for legacy directory names
+  ansible.builtin.file:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    state: link
+    force: true
+    owner: "{{ ansible_user | default('vagrant') }}"
+    group: "{{ ansible_user | default('vagrant') }}"
+  loop: "{{ cka_lab_directory_symlinks }}"
+  loop_control:
+    label: "{{ item.dest | basename }} -> {{ item.src | basename }}"
+  tags:
+    - cka_lab
+    - directories
+
+- name: Render master CKA curriculum navigation guide into root directory
+  ansible.builtin.template:
+    src: cka_master_readme.md.j2
+    dest: "/home/{{ ansible_user | default('vagrant') }}/cka/README.md"
+    owner: "{{ ansible_user | default('vagrant') }}"
+    group: "{{ ansible_user | default('vagrant') }}"
+    mode: "0644"
+  tags:
+    - cka_lab
+    - directories

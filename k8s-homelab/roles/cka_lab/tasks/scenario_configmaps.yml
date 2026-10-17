@@ -10,6 +10,10 @@
     - "{{ cka_lab_configmaps_dir }}"
     - "{{ cka_lab_configmaps_dir }}/{{ cka_lab_configmaps_default_namespace }}"
     - "{{ cka_lab_configmaps_dir }}/{{ cka_lab_configmaps_dev_namespace }}"
+    - "{{ cka_lab_configmaps_dir }}/01-imperative-creation"
+    - "{{ cka_lab_configmaps_dir }}/02-env-var-injection"
+    - "{{ cka_lab_configmaps_dir }}/03-volume-mounts-subpath"
+    - "{{ cka_lab_configmaps_dir }}/04-immutability-drill"
     - "{{ cka_lab_kustomize_dir }}/base"
     - "{{ cka_lab_kustomize_dir }}/overlays/development"
     - "{{ cka_lab_kustomize_dir }}/overlays/production"
@@ -49,6 +53,32 @@
     owner: "{{ ansible_user | default('vagrant') }}"
     group: "{{ ansible_user | default('vagrant') }}"
     mode: "0644"
+  tags:
+    - cka_lab
+    - configmaps
+
+- name: Render CKA configmaps and secrets drill manifests and guides
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "{{ cka_lab_configmaps_dir }}/{{ item.dest }}"
+    owner: "{{ ansible_user | default('vagrant') }}"
+    group: "{{ ansible_user | default('vagrant') }}"
+    mode: "{{ item.mode | default('0644') }}"
+  loop:
+    - {src: "configmaps_readme.md.j2", dest: "README.md", mode: "0644"}
+    - {src: "configmaps_test_drills.sh.j2", dest: "test-configmaps-drills.sh", mode: "0755"}
+    - {src: "configmaps_01_run_imperative.sh.j2", dest: "01-imperative-creation/run-imperative.sh", mode: "0755"}
+    - {src: "configmaps_01_app.properties.j2", dest: "01-imperative-creation/app.properties", mode: "0644"}
+    - {src: "configmaps_01_ui.conf.j2", dest: "01-imperative-creation/ui.conf", mode: "0644"}
+    - {src: "configmaps_01_game.env.j2", dest: "01-imperative-creation/game.env", mode: "0644"}
+    - {src: "configmaps_02_single_env_pod.yaml.j2", dest: "02-env-var-injection/01-single-env-pod.yaml", mode: "0644"}
+    - {src: "configmaps_02_bulk_envfrom_pod.yaml.j2", dest: "02-env-var-injection/02-bulk-envfrom-pod.yaml", mode: "0644"}
+    - {src: "configmaps_03_volume_dir_pod.yaml.j2", dest: "03-volume-mounts-subpath/01-volume-directory-pod.yaml", mode: "0644"}
+    - {src: "configmaps_03_subpath_pod.yaml.j2", dest: "03-volume-mounts-subpath/02-subpath-single-file-pod.yaml", mode: "0644"}
+    - {src: "configmaps_04_immutable_cm.yaml.j2", dest: "04-immutability-drill/immutable-configmap.yaml", mode: "0644"}
+    - {src: "configmaps_04_test_immutability.sh.j2", dest: "04-immutability-drill/test-immutability.sh", mode: "0755"}
+  loop_control:
+    label: "configmaps/{{ item.dest }}"
   tags:
     - cka_lab
     - configmaps

@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# run-imperative.sh: Rapid imperative creation, scaling, and update drills
+# ==============================================================================
+set -euo pipefail
+
+TARGET_NS="{{ cka_lab_deployments_namespace | default('default') }}"
+DEPLOY_NAME="cka-imperative-web"
+
+echo "===================================================================="
+echo "  [CKA LAB] Drill 1: Rapid Imperative Deployment Lifecycle          "
+echo "===================================================================="
+echo "Target namespace: ${TARGET_NS}"
+
+# 1. Rapid imperative creation with dry-run YAML generation
+echo "==> 1. Creating multi-replica Deployment imperatively..."
+kubectl create deployment "${DEPLOY_NAME}" \
+  --image=nginx:1.24-alpine \
+  --replicas=3 \
+  --port=80 \
+  -n "${TARGET_NS}" \
+  --dry-run=client -o yaml | kubectl apply -f -
+
+echo "Waiting for ${DEPLOY_NAME} rollout to finish..."
+kubectl rollout status "deployment/${DEPLOY_NAME}" -n "${TARGET_NS}" --timeout=60s
+
+# 2. Imperative scaling
+echo "==> 2. Scaling deployment from 3 to 5 replicas..."
+kubectl scale "deployment/${DEPLOY_NAME}" --replicas=5 -n "${TARGET_NS}"
+kubectl rollout status "deployment/${DEPLOY_NAME}" -n "${TARGET_NS}" --timeout=60s
+
+REPLICAS=$(kubectl get deployment "${DEPLOY_NAME}" -n "${TARGET_NS}" -o jsonpath='{.status.readyReplicas}')
+echo "Active ready replicas: ${REPLICAS}"
+
+# 3. Imperative image update with change-cause annotation
+echo "==> 3. Performing in-place rolling update to nginx:1.25-alpine..."
+kubectl set image "deployment/${DEPLOY_NAME}" nginx=nginx:1.25-alpine -n "${TARGET_NS}"
+kubectl annotate "deployment/${DEPLOY_NAME}" kubernetes.io/change-cause="Upgrade image to 1.25-alpine" -n "${TARGET_NS}" --overwrite
+
+echo "Waiting for updated rollout to finish..."
+kubectl rollout status "deployment/${DEPLOY_NAME}" -n "${TARGET_NS}" --timeout=60s
+
+# 4. Rollout history inspection
+echo "==> 4. Inspecting rollout history and revision causes:"
+kubectl rollout history "deployment/${DEPLOY_NAME}" -n "${TARGET_NS}"
+
+NEW_IMAGE=$(kubectl get deployment "${DEPLOY_NAME}" -n "${TARGET_NS}" -o jsonpath='{.spec.template.spec.containers[0].image}')
+echo "Current container image: ${NEW_IMAGE}"
+
+echo "==> Imperative deployment drill completed successfully."

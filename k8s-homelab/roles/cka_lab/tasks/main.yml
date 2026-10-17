@@ -6,6 +6,11 @@
     - cka_lab
     - motd
 
+- name: Execute CKA Lab Scenario - Directory Structure & Compatibility Links (directories)
+  ansible.builtin.include_tasks: scenario_directories.yml
+  tags:
+    - cka_lab
+    - directories
 
 - name: Execute CKA Lab Scenario - User Authentication & RBAC (user_rbac)
   ansible.builtin.include_tasks: scenario_user_rbac.yml

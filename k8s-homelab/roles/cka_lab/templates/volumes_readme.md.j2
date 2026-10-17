@@ -15,7 +15,8 @@ All NFS examples connect to the control plane NFS export at:
 ```text
 {{ cka_lab_volumes_dir }}/
 ├── README.md                         # This practice guide
-├── test-nfs-mounts.sh                # Automated validation script
+├── test-volumes-drills.sh            # End-to-end automated validation suite
+├── test-nfs-mounts.sh                # Automated NFS validation script
 ├── 01-nfs/
 │   ├── 01-nfs-direct-pod.yaml        # Inline NFS volume mount (direct without PV/PVC)
 │   ├── 02-nfs-deployment-shared.yaml # Deployment with ReadWriteMany shared volume
@@ -34,7 +35,9 @@ All NFS examples connect to the control plane NFS export at:
 ├── 05-pv-pvc-lifecycle/
 │   ├── 01-local-pv-pvc.yaml          # Local PV with storageClassName: manual & Retain policy
 │   ├── 02-pvc-expansion.yaml         # StorageClass & PVC demonstrating volume expansion
-│   └── 03-reclaim-policy-drill.md    # Reclaim policy lifecycle drill (Retain vs Delete)
+│   ├── 03-reclaim-policy-drill.md    # Reclaim policy lifecycle drill (Retain vs Delete)
+│   ├── reclaim-mutation-drill.sh     # Interactive PV reclaim policy mutation script
+│   └── test-reclaim-mutation.sh      # Automated test for reclaim policy mutation
 ├── 06-rbd/
 │   ├── README.md                     # Dedicated Ceph RBD drills guide
 │   ├── test-rbd-volumes.sh           # Automated Ceph RBD test script
@@ -144,15 +147,30 @@ kubectl apply -f 02-emptydir/01-emptydir-sidecar-pod.yaml
 kubectl logs emptydir-sidecar-pod -c reader-sidecar
 ```
 
-### Drill 5: Automated Verification
+### Drill 5: PersistentVolume Reclaim Policy Mutation & Manual Recovery
 
-Run the test script to automatically validate all NFS mounts, DNS resolution, and read/write operations:
+Practice dynamically altering a PersistentVolume's reclaim policy from `Delete` to `Retain`, simulating PVC deletion, preserving underlying data, and manually clearing `claimRef` to release the volume:
+
+```bash
+cd 05-pv-pvc-lifecycle
+./reclaim-mutation-drill.sh
+```
+
+### Drill 6: Automated Verification
+
+Run the end-to-end test suite to automatically validate all standard CKA volume types (NFS, emptyDir, hostPath, ConfigMap/Secret projected volumes, and PV/PVC lifecycle):
+
+```bash
+./test-volumes-drills.sh
+```
+
+Or test NFS host resolution, RPC port connectivity, and inline pod mount independently:
 
 ```bash
 ./test-nfs-mounts.sh
 ```
 
-### Drill 6: Ceph RBD Volume Operations & Modes
+### Drill 7: Ceph RBD Volume Operations & Modes
 
 Practice dynamic filesystem mounting, raw block device consumption (`volumeMode: Block`), and online PVC expansion:
 
@@ -171,7 +189,7 @@ kubectl exec rbd-raw-block-consumer-pod -- test -b /dev/rbdblock && echo "Block 
 06-rbd/test-rbd-volumes.sh
 ```
 
-### Drill 7: iSCSI Volume Operations & Raw Block Devices
+### Drill 8: iSCSI Volume Operations & Raw Block Devices
 
 Practice direct in-tree Pod volume mounting, static PersistentVolume binding, raw block mode, and multi-node fencing over iSCSI:
 
@@ -195,7 +213,7 @@ kubectl exec iscsi-raw-block-consumer-pod -- ls -l /dev/iscsiblock
 07-iscsi/test-iscsi-volumes.sh
 ```
 
-### Drill 8: Dynamic NFS CSI Driver & ReadWriteMany StorageClasses
+### Drill 9: Dynamic NFS CSI Driver & ReadWriteMany StorageClasses
 
 For automated, dynamic PersistentVolume provisioning over NFS (without manually pre-creating static PVs):
 

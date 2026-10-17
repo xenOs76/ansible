@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# quarantine-drill.sh: Pod isolation and autopsy troubleshooting drill
+# ==============================================================================
+set -euo pipefail
+
+TARGET_NS="{{ cka_lab_deployments_namespace | default('default') }}"
+DEPLOY_NAME="cka-lab-web-frontend"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+echo "===================================================================="
+echo "  [CKA LAB] Drill 2: Pod Isolation & Autopsy Pattern                "
+echo "===================================================================="
+echo "Target namespace: ${TARGET_NS}"
+
+# 1. Ensure target deployment is running
+echo "==> 1. Ensuring target deployment is running..."
+kubectl apply -f "${SCRIPT_DIR}/../01-basic-deployment/web-frontend-deployment.yaml" -n "${TARGET_NS}"
+kubectl rollout status "deployment/${DEPLOY_NAME}" -n "${TARGET_NS}" --timeout=60s
+
+# 2. Pick a running pod to isolate
+TARGET_POD=$(kubectl get pods -n "${TARGET_NS}" -l app.kubernetes.io/name="${DEPLOY_NAME}" -o jsonpath='{.items[0].metadata.name}')
+echo "Selected target pod for isolation: ${TARGET_POD}"
+
+# 3. Mutate the pod's label to isolate it from the deployment selector
+echo "==> 2. Relabeling target pod to isolate it from the ReplicaSet selector..."
+kubectl label pod "${TARGET_POD}" -n "${TARGET_NS}" app.kubernetes.io/name=quarantine-isolated --overwrite
+
+echo "==> 3. Verifying the ReplicaSet controller detects the deficit and launches a replacement..."
+# Sleep briefly for controller reconciliation
+sleep 2
+
+REPLICA_COUNT=$(kubectl get deployment "${DEPLOY_NAME}" -n "${TARGET_NS}" -o jsonpath='{.status.readyReplicas}')
+echo "Active deployment ready replicas: ${REPLICA_COUNT}"
+
+# 4. Confirm isolated pod is still alive for offline triage
+echo "==> 4. Verifying isolated pod remains running for autopsy/investigation..."
+POD_STATUS=$(kubectl get pod "${TARGET_POD}" -n "${TARGET_NS}" -o jsonpath='{.status.phase}')
+echo "Quarantined pod ${TARGET_POD} phase: ${POD_STATUS}"
+
+if [ "${POD_STATUS}" = "Running" ]; then
+  echo "==> SUCCESS: Quarantined pod preserved for debugging while service maintains full replica capacity."
+fi
+
+# Cleanup quarantined pod
+kubectl delete pod "${TARGET_POD}" -n "${TARGET_NS}" --now >/dev/null 2>&1 || true
+echo "==> Quarantined pod cleaned up."

@@ -54,7 +54,7 @@ Multi-node Kubernetes 1.34+ cluster automated using `kubeadm`, `containerd`, and
 
 ## 3. CKA Lab Practice Environment (`cka_lab`)
 
-Dedicated CKA certification scenarios provisioned on `kube-control-plane`:
+Dedicated CKA certification scenarios provisioned on `kube-control-plane` under `/home/vagrant/cka/`, organized into 17 sequentially numbered chapters (`01-jsonpath` through `17-cluster-troubleshooting`) ordered by increasing architectural complexity and concept dependencies. Legacy unnumbered paths are preserved via root symlinks for full backward compatibility:
 
 - **User Authentication (`user_rbac`)**:
   - Trainee user `anna`: Dedicated Linux user with CSR-approved certificate (`/CN=anna/O=developers`) and isolated `~/.kube/config`.
