@@ -141,11 +141,39 @@ kubectl delete namespace monitoring
 
 ### Script 3: Install NGINX Gateway Fabric
 
-Run the installer:
+Run the automated installer:
 
 ```bash
 cd /home/vagrant/cka/helm
 ./install-nginx-gateway-fabric.sh
+```
+
+#### Manual / Exam Installation Commands
+
+```bash
+# 1. Clean up any remaining NGINX CRDs
+kubectl delete crd $(kubectl get crds | grep nginx | awk '{ print $1 }')
+
+# 2. Install standard Gateway API CRDs
+kubectl kustomize "https://github.com/nginx/nginx-gateway-fabric/config/crd/gateway-api/standard?ref=v2.8.0" | kubectl apply -f -
+
+# 3. Apply NGINX Gateway Fabric CRDs with forced conflicts
+kubectl apply --server-side --force-conflicts -f https://raw.githubusercontent.com/nginx/nginx-gateway-fabric/v2.8.0/deploy/crds.yaml
+
+# 4. Install Helm chart with --skip-crds and homelab NodePorts
+helm upgrade --install ngf oci://ghcr.io/nginx/charts/nginx-gateway-fabric \
+  --namespace nginx-gateway \
+  --create-namespace \
+  --skip-crds \
+  --set nginx.service.type=NodePort \
+  --set "nginx.service.nodePorts[0].port=30080" \
+  --set "nginx.service.nodePorts[0].listenerPort=80" \
+  --set "nginx.service.nodePorts[1].port=30443" \
+  --set "nginx.service.nodePorts[1].listenerPort=443" \
+  --set "nginx.container.hostPorts[0].port=30080" \
+  --set "nginx.container.hostPorts[0].containerPort=80" \
+  --set "nginx.container.hostPorts[1].port=30443" \
+  --set "nginx.container.hostPorts[1].containerPort=443"
 ```
 
 #### Verification

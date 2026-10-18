@@ -13,12 +13,7 @@ HTTP_PORT="{{ cka_lab_helm_ngf_http_port | default(30080) }}"
 echo "==> [Gateway API Drill] Verifying Gateway API prerequisites..."
 if ! kubectl get crd gateways.gateway.networking.k8s.io >/dev/null 2>&1; then
   echo "Installing Gateway API standard CRDs..."
-  kubectl kustomize "https://github.com/nginx/nginx-gateway-fabric/config/crd/gateway-api/standard?ref={{ cka_lab_helm_ngf_crd_version | default('v1.6.1') }}" | kubectl apply -f -
-fi
-
-if ! kubectl get crd nginxgateways.gateway.nginx.org >/dev/null 2>&1; then
-  echo "Installing NGINX Gateway Fabric CRDs..."
-  kubectl apply --server-side -f "https://raw.githubusercontent.com/nginx/nginx-gateway-fabric/{{ cka_lab_helm_ngf_crd_version | default('v1.6.1') }}/deploy/crds.yaml"
+  kubectl kustomize "https://github.com/nginx/nginx-gateway-fabric/config/crd/gateway-api/standard?ref={{ cka_lab_helm_ngf_crd_version | default('v2.8.0') }}" | kubectl apply -f -
 fi
 
 if ! kubectl get gatewayclass nginx >/dev/null 2>&1; then

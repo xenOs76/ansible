@@ -31,6 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **NGINX Gateway Fabric Server-Side Apply CRD Conflict (`roles/cka_lab`)**: Resolved Helm SSA manager conflicts (`conflicts with "kubectl"`) during `install-nginx-gateway-fabric.sh` by removing redundant out-of-band `kubectl apply --server-side` pre-installation, pinning chart and CRD versions to `2.8.0`/`v2.8.0`, and auto-reconciling any stale `kubectl`-managed `gateway.nginx.org` CRDs so Helm's bundled chart CRDs install cleanly.
 - **CKA Lab Scheduling Quotas & Admission Drill (`roles/cka_lab`, `~/cka/10-scheduling/04-quotas-limits/`)**: Fixed invalid `kubectl run --limits` syntax in the capacity governance tutorial guide by introducing a dedicated manifest (`cka-lab-oversized-pod.yaml`) and documenting inline heredoc and `--overrides` methods, eliminating CLI flag parse failures and aligning with Kubernetes admission control semantics.
 
 ## [1.4.3] - 2026-10-14

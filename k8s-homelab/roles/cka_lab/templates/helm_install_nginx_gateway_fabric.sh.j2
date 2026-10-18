@@ -75,7 +75,18 @@ if [ -n "${CHART_VERSION}" ]; then
 fi
 
 # ------------------------------------------------------------------------------
-# 1. Install Gateway API Standard CRDs (if not already installed)
+# 1. Clean Up Any Remaining NGINX CRDs
+# ------------------------------------------------------------------------------
+echo "Checking and cleaning up any remaining NGINX CRDs..."
+EXISTING_NGINX_CRDS=$(kubectl get crds 2>/dev/null | grep nginx | awk '{ print $1 }' || true)
+if [ -n "${EXISTING_NGINX_CRDS}" ]; then
+  echo "Removing existing NGINX CRDs to ensure a clean state..."
+  # shellcheck disable=SC2086
+  kubectl delete crd ${EXISTING_NGINX_CRDS} --ignore-not-found=true
+fi
+
+# ------------------------------------------------------------------------------
+# 2. Install Gateway API Standard CRDs (if not already installed)
 # ------------------------------------------------------------------------------
 echo "Checking Kubernetes Gateway API CRD availability..."
 if ! kubectl get crd gatewayclasses.gateway.networking.k8s.io >/dev/null 2>&1; then
@@ -87,24 +98,20 @@ else
 fi
 
 # ------------------------------------------------------------------------------
-# 2. Install NGINX Gateway Fabric CRDs (if not already installed)
+# 3. Install NGINX Gateway Fabric CRDs via Server-Side Apply with Force Conflicts
 # ------------------------------------------------------------------------------
-echo "Checking NGINX Gateway Fabric CRD availability..."
-if ! kubectl get crd nginxgateways.gateway.nginx.org >/dev/null 2>&1; then
-  echo "Installing NGINX Gateway Fabric CRDs from upstream repository (ref=${CRD_VERSION})..."
-  kubectl apply --server-side -f "https://raw.githubusercontent.com/nginx/nginx-gateway-fabric/${CRD_VERSION}/deploy/crds.yaml"
-  echo "NGINX Gateway Fabric CRDs installed successfully."
-else
-  echo "NGINX Gateway Fabric CRDs already present in cluster."
-fi
+echo "Installing NGINX Gateway Fabric CRDs from upstream repository (ref=${CRD_VERSION})..."
+kubectl apply --server-side --force-conflicts -f "https://raw.githubusercontent.com/nginx/nginx-gateway-fabric/${CRD_VERSION}/deploy/crds.yaml"
+echo "NGINX Gateway Fabric CRDs installed successfully."
 
 # ------------------------------------------------------------------------------
-# 3. Deploy or Upgrade NGINX Gateway Fabric Chart
+# 4. Deploy or Upgrade NGINX Gateway Fabric Chart with --skip-crds
 # ------------------------------------------------------------------------------
 echo "Installing/upgrading NGINX Gateway Fabric release '${RELEASE_NAME}' in namespace '${TARGET_NAMESPACE}'..."
 helm upgrade --install "${RELEASE_NAME}" oci://ghcr.io/nginx/charts/nginx-gateway-fabric \
   --namespace "${TARGET_NAMESPACE}" \
   --create-namespace \
+  --skip-crds \
   --set nginx.service.type="${SERVICE_TYPE}" \
   --set "nginx.service.nodePorts[0].port=${HTTP_PORT}" \
   --set "nginx.service.nodePorts[0].listenerPort=80" \

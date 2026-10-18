@@ -177,8 +177,8 @@ cka_lab_helm_metrics_server_chart_version: ""
 cka_lab_helm_kube_prometheus_chart_version: ""
 cka_lab_helm_ngf_release_name: "ngf"
 cka_lab_helm_ngf_namespace: "nginx-gateway"
-cka_lab_helm_ngf_chart_version: ""
-cka_lab_helm_ngf_crd_version: "v1.6.1"
+cka_lab_helm_ngf_chart_version: "2.8.0"
+cka_lab_helm_ngf_crd_version: "v2.8.0"
 cka_lab_helm_ngf_service_type: "NodePort"
 cka_lab_helm_ngf_http_port: 30080
 cka_lab_helm_ngf_https_port: 30443

@@ -308,20 +308,54 @@ The Kubernetes Gateway API provides an expressive, role-oriented routing archite
 
 #### Prerequisite: Deploy NGINX Gateway Fabric & httpbin-go
 
-The Gateway API requires a Gateway Controller implementation (such as NGINX Gateway Fabric) and test target backends:
+The Gateway API requires a Gateway Controller implementation (such as NGINX Gateway Fabric) and test target backends.
+
+Run the automated helper script:
 
 ```bash
 cd /home/vagrant/cka/helm
 
-# 1. Deploy NGINX Gateway Fabric (installs Gateway API CRDs & controller)
+# 1. Deploy NGINX Gateway Fabric (handles CRD cleanup, forced SSA apply & chart install)
 ./install-nginx-gateway-fabric.sh
 
 # 2. Deploy lightweight httpbin-go backend (serves /httpbin and /get routes)
 ./install-httpbin-go.sh
 ```
 
+##### Manual / CKA Exam Step-by-Step Equivalent
+
+To perform the exact installation sequence manually:
+
+```bash
+# 1. Clean up any remaining or conflicting NGINX CRDs
+kubectl delete crd $(kubectl get crds | grep nginx | awk '{ print $1 }')
+
+# 2. Install standard Gateway API CRDs (GatewayClass, Gateway, HTTPRoute)
+kubectl kustomize "https://github.com/nginx/nginx-gateway-fabric/config/crd/gateway-api/standard?ref=v2.8.0" | kubectl apply -f -
+
+# 3. Apply NGINX Gateway Fabric CRDs with forced conflicts to establish clean ownership
+kubectl apply --server-side --force-conflicts -f https://raw.githubusercontent.com/nginx/nginx-gateway-fabric/v2.8.0/deploy/crds.yaml
+
+# 4. Install NGINX Gateway Fabric via Helm with --skip-crds and homelab NodePort bindings
+helm upgrade --install ngf oci://ghcr.io/nginx/charts/nginx-gateway-fabric \
+  --namespace nginx-gateway \
+  --create-namespace \
+  --skip-crds \
+  --set nginx.service.type=NodePort \
+  --set "nginx.service.nodePorts[0].port=30080" \
+  --set "nginx.service.nodePorts[0].listenerPort=80" \
+  --set "nginx.service.nodePorts[1].port=30443" \
+  --set "nginx.service.nodePorts[1].listenerPort=443" \
+  --set "nginx.container.hostPorts[0].port=30080" \
+  --set "nginx.container.hostPorts[0].containerPort=80" \
+  --set "nginx.container.hostPorts[1].port=30443" \
+  --set "nginx.container.hostPorts[1].containerPort=443"
+```
+
 > [!WARNING]
-> **NodePort Collision Notice**: NGINX Gateway Fabric binds host/NodePort `30080` (HTTP) and `30443` (HTTPS). If Ingress-NGINX was previously deployed for Drill 2, uninstall it first (`helm uninstall ingress-nginx -n ingress-nginx`) before starting NGINX Gateway Fabric.
+> **NodePort Collision Notice**:
+>
+> - NGINX Gateway Fabric binds host/NodePort `30080` (HTTP) and `30443` (HTTPS). If Ingress-NGINX was previously deployed for Drill 2, uninstall it first (`helm uninstall ingress-nginx -n ingress-nginx`) before starting NGINX Gateway Fabric.
 
 #### Step 1: Deploy and Inspect the Gateway Resource
 
