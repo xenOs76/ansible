@@ -1,0 +1,14 @@
+[Unit]
+Description=Fibre Channel SAN Emulator Loop Backstore Service
+Documentation=file:///home/vagrant/cka/12-volumes/08-fc/README.md
+After=local-fs.target systemd-udevd.service
+Wants=systemd-udevd.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/fc-san-ctl attach-all
+ExecStop=/usr/local/bin/fc-san-ctl detach-all
+
+[Install]
+WantedBy=multi-user.target

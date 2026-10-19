@@ -1,0 +1,137 @@
+---
+- name: Install HAProxy, Keepalived, HATop, and curl packages
+  ansible.builtin.apt:
+    name:
+      - haproxy
+      - keepalived
+      - hatop
+      - curl
+    state: present
+    update_cache: true
+
+  tags:
+    - ha_control_plane
+    - haproxy
+    - keepalived
+    - hatop
+
+- name: Enable non-local IP binding via sysctl
+  ansible.posix.sysctl:
+    name: net.ipv4.ip_nonlocal_bind
+    value: "1"
+    sysctl_set: true
+    state: present
+    reload: true
+  tags:
+    - ha_control_plane
+    - sysctl
+
+- name: Discover network interface for HA control plane VIP
+  ansible.builtin.command:
+    cmd: "ip -4 -o addr show to {{ node_ip | default(ansible_host) }}"
+  register: ha_control_plane_discovered_ip
+  changed_when: false
+  tags:
+    - ha_control_plane
+    - keepalived
+
+- name: Set HA control plane interface fact
+  ansible.builtin.set_fact:
+    ha_control_plane_interface: "{{ ha_control_plane_discovered_ip.stdout.split()[1] }}"
+  when: ha_control_plane_discovered_ip.stdout | default('') | length > 0
+  tags:
+    - ha_control_plane
+    - keepalived
+
+- name: Deploy HAProxy configuration
+  ansible.builtin.template:
+    src: haproxy.cfg.j2
+    dest: /etc/haproxy/haproxy.cfg
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart haproxy
+  tags:
+    - ha_control_plane
+    - haproxy
+
+- name: Validate HAProxy configuration syntax
+  ansible.builtin.command:
+    cmd: haproxy -c -f /etc/haproxy/haproxy.cfg
+  changed_when: false
+  tags:
+    - ha_control_plane
+    - haproxy
+
+- name: Ensure HAProxy service is restarted and enabled
+  ansible.builtin.systemd:
+    name: haproxy
+    enabled: true
+    state: restarted
+  tags:
+    - ha_control_plane
+    - haproxy
+
+- name: Wait for HAProxy to listen on control plane port
+  ansible.builtin.wait_for:
+    port: "{{ ha_control_plane_port }}"
+    host: "127.0.0.1"
+    timeout: 15
+  tags:
+    - ha_control_plane
+    - haproxy
+
+- name: Wait for HAProxy to listen on Prometheus metrics port
+  ansible.builtin.wait_for:
+    port: "{{ ha_control_plane_metrics_port }}"
+    host: "127.0.0.1"
+    timeout: 15
+  when: ha_control_plane_metrics_enabled | default(true) | bool
+  tags:
+    - ha_control_plane
+    - haproxy
+    - metrics
+
+- name: Configure system-wide hatop alias
+
+  ansible.builtin.copy:
+    dest: /etc/profile.d/hatop.sh
+    content: |
+      alias hatop="sudo hatop -s /run/haproxy/admin.sock"
+    owner: root
+    group: root
+    mode: "0644"
+  tags:
+    - ha_control_plane
+    - haproxy
+    - hatop
+    - tools
+
+- name: Deploy Keepalived configuration
+  ansible.builtin.template:
+    src: keepalived.conf.j2
+    dest: /etc/keepalived/keepalived.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart keepalived
+  tags:
+    - ha_control_plane
+    - keepalived
+
+- name: Validate Keepalived configuration syntax
+  ansible.builtin.command:
+    cmd: keepalived --config-test -f /etc/keepalived/keepalived.conf
+  changed_when: false
+  tags:
+    - ha_control_plane
+    - keepalived
+
+- name: Ensure Keepalived service is enabled and started
+  ansible.builtin.systemd:
+    name: keepalived
+    enabled: true
+    state: started
+  tags:
+    - ha_control_plane
+    - keepalived

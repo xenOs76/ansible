@@ -2,9 +2,18 @@
 # Playbook suite version
 playbook_version: "1.4.3"
 
-# Kubernetes versions and repositories
-k8s_version: "1.34.1-1.1"
-k8s_version_major_minor: "v1.34"
+# Kubernetes versions and repositories (Base: v1.36, Target Upgrade: v1.37)
+k8s_version: "1.36.0-1.1"
+k8s_version_major_minor: "v1.36"
+k8s_upgrade_target_version: "1.37.0-1.1"
+k8s_upgrade_target_version_major_minor: "v1.37"
+
+# High-Availability Control Plane endpoint settings
+ha_control_plane_enabled: false
+ha_control_plane_vip: "192.168.56.9"
+ha_control_plane_port: 8443
+ha_control_plane_metrics_port: 8405
+
 
 # Cluster networking
 pod_network_cidr: "10.1.0.0/16"
@@ -144,9 +153,10 @@ rook_ceph_toolbox_enabled: true
 # NFS shared storage server configuration
 nfs_server_enabled: true
 nfs_server_hostname: "nfs-server.local"
-nfs_export_dir: "/exports"
+nfs_export_dir: "/srv/nfsroot"
+nfs_legacy_export_symlink: "/exports"
 nfs_export_subnet: "{{ '192.168.56.0/24' if ('preprod' in groups) else (pod_network_cidr | default('10.0.0.0/8')) }}"
-nfs_export_options: "rw,sync,no_subtree_check,no_root_squash,insecure"
+nfs_export_options: "rw,sync,no_subtree_check,no_root_squash,insecure,fsid=0"
 
 # NFS CSI Driver Helm & in-cluster dynamic storage provisioning
 nfs_csi_enabled: false
@@ -156,5 +166,26 @@ nfs_csi_namespace: "kube-system"
 nfs_csi_storage_class_name: "nfs-csi"
 nfs_csi_storage_class_default: false
 nfs_csi_server: "{{ nfs_server_hostname | default('nfs-server.local') }}"
-nfs_csi_share: "{{ nfs_export_dir | default('/exports') }}"
+nfs_csi_share: "{{ nfs_export_dir | default('/srv/nfsroot') }}"
 nfs_csi_reclaim_policy: "Delete"
+
+# Fibre Channel (FC) SAN storage emulation configuration
+fc_san_enabled: false
+fc_san_storage_dir: "/srv/fc"
+fc_san_target_wwnn: "20000025b5000001"
+fc_san_target_wwns:
+  - "5001438024266301" # Fabric A primary target WWPN
+  - "5001438024266302" # Fabric B secondary target WWPN (multipath)
+fc_san_luns:
+  - id: 0
+    name: "lun0.img"
+    size: "512M"
+    description: "Filesystem LUN (ext4) for Pod volume mounts"
+  - id: 1
+    name: "lun1.img"
+    size: "512M"
+    description: "Raw block LUN for Block volumeMode drills"
+  - id: 2
+    name: "lun2.img"
+    size: "1024M"
+    description: "Dynamic expansion and reclaim disaster recovery LUN"

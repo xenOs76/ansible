@@ -1,0 +1,107 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# CKA Volumes Practice Lab - Unified Ceph Cloud-Native Storage Test Suite
+# Tests: Ceph RBD (Block), Native CephFS (Shared), Ceph NFS (NFS-Ganesha)
+# Managed by Ansible (roles/cka_lab)
+# ==============================================================================
+set -euo pipefail
+
+NAMESPACE="{{ cka_lab_storage_classes_namespace | default('default') }}"
+RBD_STORAGE_CLASS="{{ cka_lab_rbd_storage_class | default('rook-ceph-block') }}"
+CEPHFS_STORAGE_CLASS="{{ cka_lab_cephfs_storage_class | default('rook-cephfs') }}"
+CEPH_NFS_STORAGE_CLASS="{{ cka_lab_ceph_nfs_storage_class | default('ceph-nfs-csi') }}"
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Detect KUBECONFIG if not set
+if [ -z "${KUBECONFIG:-}" ] && [ -f /etc/kubernetes/admin.conf ] && [ ! -f "${HOME}/.kube/config" ]; then
+  export KUBECONFIG=/etc/kubernetes/admin.conf
+fi
+
+# Pre-flight check for on-demand Ceph availability
+if ! kubectl get storageclass "${RBD_STORAGE_CLASS}" >/dev/null 2>&1 && ! kubectl get cephcluster rook-ceph -n rook-ceph >/dev/null 2>&1; then
+  echo "==> [AUX] Ceph cloud-native storage is not currently active on this cluster."
+  echo "    Ceph is an on-demand auxiliary layer. To deploy and activate it, run:"
+  echo "      make preprod-ceph"
+  exit 0
+fi
+
+cleanup() {
+  echo "==> Cleaning up Ceph test resources..."
+  kubectl delete pod rbd-fs-consumer-pod rbd-raw-block-consumer-pod -n "${NAMESPACE}" --ignore-not-found=true --timeout=60s >/dev/null 2>&1 || true
+  kubectl delete deployment cephfs-shared-app ceph-nfs-shared-app -n "${NAMESPACE}" --ignore-not-found=true --timeout=60s >/dev/null 2>&1 || true
+  kubectl delete pvc rbd-claim-fs rbd-claim-raw-block cephfs-dynamic-claim ceph-nfs-dynamic-claim -n "${NAMESPACE}" --ignore-not-found=true --timeout=60s >/dev/null 2>&1 || true
+  kubectl delete storageclass "${CEPHFS_STORAGE_CLASS}" "${CEPH_NFS_STORAGE_CLASS}" --ignore-not-found=true >/dev/null 2>&1 || true
+}
+trap cleanup EXIT
+
+echo "===================================================================="
+echo "  CKA Lab: Unified Ceph Cloud-Native Storage Verification Suite     "
+echo "===================================================================="
+
+# ------------------------------------------------------------------------------
+# 1. Ceph RBD: Dynamic Filesystem Mount & Online Expansion
+# ------------------------------------------------------------------------------
+echo "==> [1/3] Testing Ceph RBD Dynamic Block Storage..."
+if kubectl get storageclass "${RBD_STORAGE_CLASS}" >/dev/null 2>&1; then
+  echo "    Applying dynamic RBD filesystem volume..."
+  kubectl apply -f "${SCRIPT_DIR}/01-rbd-dynamic-filesystem.yaml" -n "${NAMESPACE}"
+  kubectl wait --for=condition=Ready pod/rbd-fs-consumer-pod -n "${NAMESPACE}" --timeout=180s
+
+  FS_CONTENT="$(kubectl exec rbd-fs-consumer-pod -n "${NAMESPACE}" -- cat /mnt/storage/data.txt)"
+  if echo "${FS_CONTENT}" | grep -q "Ceph RBD filesystem mounted"; then
+    echo "    OK: Ceph RBD filesystem write verified."
+  else
+    echo "    FAIL: Unexpected content from /mnt/storage/data.txt" >&2
+    exit 1
+  fi
+
+  echo "    Applying dynamic RBD raw block device (volumeMode: Block)..."
+  kubectl apply -f "${SCRIPT_DIR}/02-rbd-raw-block.yaml" -n "${NAMESPACE}"
+  kubectl wait --for=condition=Ready pod/rbd-raw-block-consumer-pod -n "${NAMESPACE}" --timeout=180s
+
+  BLOCK_DEV="$(kubectl exec rbd-raw-block-consumer-pod -n "${NAMESPACE}" -- ls -l /dev/rbdblock)"
+  if echo "${BLOCK_DEV}" | grep -q "rbdblock"; then
+    echo "    OK: Ceph RBD raw block device mapped successfully (${BLOCK_DEV})."
+  else
+    echo "    FAIL: Raw block device /dev/rbdblock not found in container" >&2
+    exit 1
+  fi
+
+  echo "    Testing online PVC expansion from 1Gi to 2Gi..."
+  kubectl patch pvc rbd-claim-fs -n "${NAMESPACE}" -p '{"spec":{"resources":{"requests":{"storage":"2Gi"}}}}'
+  EXPANDED_REQ=$(kubectl get pvc rbd-claim-fs -n "${NAMESPACE}" -o jsonpath='{.spec.resources.requests.storage}')
+  echo "    OK: Ceph RBD PVC expansion requested capacity: ${EXPANDED_REQ}."
+else
+  echo "    SKIP: StorageClass '${RBD_STORAGE_CLASS}' not present."
+fi
+
+# ------------------------------------------------------------------------------
+# 2. Native CephFS: Dynamic ReadWriteMany Shared Filesystem
+# ------------------------------------------------------------------------------
+echo "==> [2/3] Testing Native CephFS Dynamic Shared Storage..."
+if kubectl get cephfilesystem cephfs -n rook-ceph >/dev/null 2>&1; then
+  kubectl apply -f "${SCRIPT_DIR}/05-cephfs-sc.yaml"
+  kubectl apply -f "${SCRIPT_DIR}/06-cephfs-dynamic-pvc.yaml" -n "${NAMESPACE}"
+  kubectl apply -f "${SCRIPT_DIR}/07-cephfs-shared-deployment.yaml" -n "${NAMESPACE}"
+  kubectl rollout status deployment/cephfs-shared-app -n "${NAMESPACE}" --timeout=180s
+  echo "    OK: Native CephFS deployment running across cluster nodes."
+else
+  echo "    SKIP: CephFileSystem 'cephfs' not active in rook-ceph namespace."
+fi
+
+# ------------------------------------------------------------------------------
+# 3. Ceph NFS: NFS-Ganesha Export via NFS CSI Driver
+# ------------------------------------------------------------------------------
+echo "==> [3/3] Testing Ceph NFS (NFS-Ganesha via NFS CSI)..."
+if kubectl get csidriver nfs.csi.k8s.io >/dev/null 2>&1 && kubectl get cephnfs -n rook-ceph >/dev/null 2>&1; then
+  kubectl apply -f "${SCRIPT_DIR}/08-ceph-nfs-sc.yaml"
+  kubectl apply -f "${SCRIPT_DIR}/09-ceph-nfs-dynamic-pvc.yaml" -n "${NAMESPACE}"
+  kubectl apply -f "${SCRIPT_DIR}/10-ceph-nfs-shared-deployment.yaml" -n "${NAMESPACE}"
+  kubectl rollout status deployment/ceph-nfs-shared-app -n "${NAMESPACE}" --timeout=180s
+  echo "    OK: Ceph NFS shared deployment running successfully."
+else
+  echo "    NOTICE: Ceph NFS requires NFS CSI driver and CephNFS daemon."
+fi
+
+echo "==> Unified Ceph storage verification completed successfully."

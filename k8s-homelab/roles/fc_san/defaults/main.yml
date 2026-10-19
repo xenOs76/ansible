@@ -1,0 +1,43 @@
+---
+# ==============================================================================
+# Role Defaults: Fibre Channel (FC) SAN Storage Emulator
+# ==============================================================================
+
+# Toggle role execution
+fc_san_enabled: true
+
+# Base directory for sparse file-backed SAN LUNs
+fc_san_storage_dir: "/srv/fc"
+
+# Target World Wide Node Name (WWNN, 16 hex chars)
+fc_san_target_wwnn: "20000025b5000001"
+
+# Target World Wide Port Names (WWPNs) for dual-fabric redundancy & multipath
+fc_san_target_wwns:
+  - "5001438024266301" # Fabric A primary target WWPN
+  - "5001438024266302" # Fabric B secondary target WWPN (multipath)
+
+# Synthetic PCI slot identifier for emulated HBA by-path device strings
+fc_san_pci_slot_a: "0000:00:03.0"
+fc_san_pci_slot_b: "0000:00:04.0"
+
+# SAN LUN definitions
+fc_san_luns:
+  - id: 0
+    name: "lun0.img"
+    size: "512M"
+    loop_minor: 10
+    description: "Filesystem LUN (ext4) for Pod volume mounts"
+  - id: 1
+    name: "lun1.img"
+    size: "512M"
+    loop_minor: 11
+    description: "Raw block LUN for Block volumeMode drills"
+  - id: 2
+    name: "lun2.img"
+    size: "1024M"
+    loop_minor: 12
+    description: "Dynamic expansion and reclaim disaster recovery LUN"
+
+# Base loop device minor number offset
+fc_san_loop_base: 10

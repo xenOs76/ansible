@@ -5,6 +5,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CP_SCRIPT="${SCRIPT_DIR}/01-control-plane/mock-control-plane-upgrade.sh"
 WORKER_SCRIPT="${SCRIPT_DIR}/02-worker-node/mock-worker-upgrade.sh"
+SECONDARY_CP_SCRIPT="${SCRIPT_DIR}/03-secondary-control-plane/mock-secondary-cp-upgrade.sh"
 
 echo "=========================================================="
 echo " Running Automated Validation: CKA Kubeadm Upgrade Drills"
@@ -41,6 +42,9 @@ run_test "Control plane mock script execution" "bash ${CP_SCRIPT}"
 
 # 6. Run worker node mock upgrade script
 run_test "Worker mock script execution" "bash ${WORKER_SCRIPT}"
+
+# 7. Run secondary control plane mock upgrade script
+run_test "Secondary control plane mock script execution" "bash ${SECONDARY_CP_SCRIPT}"
 
 echo "=========================================================="
 if [[ ${FAILED} -eq 0 ]]; then

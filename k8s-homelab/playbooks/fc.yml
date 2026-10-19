@@ -1,0 +1,10 @@
+---
+- name: Deploy Fibre Channel (FC) SAN storage emulator on cluster nodes
+  hosts: all
+  become: true
+  roles:
+    - role: fc_san
+  tags:
+    - fc
+    - fc_san
+    - storage

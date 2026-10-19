@@ -6,3 +6,4 @@ admin.conf
 kubeconfig.*
 kubeadm-init.out
 .ansible/
+.topology

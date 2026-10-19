@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: nfs-storage-pv
+  labels:
+    type: nfs
+spec:
+  capacity:
+    storage: 1Gi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: nfs-manual
+  nfs:
+    server: {{ cka_lab_nfs_server_hostname }}
+    path: {{ cka_lab_nfs_export_dir }}

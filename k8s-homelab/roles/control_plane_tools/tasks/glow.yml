@@ -8,10 +8,21 @@
     - tools
     - glow
 
+- name: Check if glow CLI is already installed
+  ansible.builtin.command: glow --version
+  register: control_plane_tools_glow_check
+  failed_when: false
+  changed_when: false
+  tags:
+    - bootstrap
+    - tools
+    - glow
+
 - name: Install glow from official release .deb package
   ansible.builtin.apt:
     deb: "https://github.com/charmbracelet/glow/releases/download/v{{ control_plane_tools_glow_version }}/{{ control_plane_tools_glow_deb_pkg }}"
     state: present
+  when: control_plane_tools_glow_check.rc != 0
   tags:
     - bootstrap
     - tools

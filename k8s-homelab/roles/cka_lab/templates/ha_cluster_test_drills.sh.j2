@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# test-ha-drills.sh: Automated Validation for Scenario 19 (High Availability Control Plane)
+# ==============================================================================
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DRILL1="${SCRIPT_DIR}/01-verify-vip.sh"
+DRILL2="${SCRIPT_DIR}/02-etcd-quorum.sh"
+DRILL3="${SCRIPT_DIR}/03-simulate-failover.sh"
+DRILL4="${SCRIPT_DIR}/04-ha-upgrade-sequence.sh"
+
+echo "=========================================================="
+echo " Running Automated Validation: CKA High Availability Drills"
+echo "=========================================================="
+
+FAILED=0
+
+run_test() {
+    local name="$1"
+    local cmd="$2"
+    echo -n "Test: ${name} ... "
+    if eval "${cmd}" >/dev/null 2>&1; then
+        echo "PASS"
+    else
+        echo "FAIL"
+        FAILED=$(( FAILED + 1 ))
+    fi
+}
+
+# 1. HAProxy binary available
+run_test "HAProxy installed" "command -v haproxy"
+
+# 2. Keepalived binary available
+run_test "Keepalived installed" "command -v keepalived"
+
+# 3. Virtual IP drill script exists and is executable
+run_test "Drill 1 script executable" "test -x ${DRILL1}"
+
+# 4. etcd quorum drill script exists and is executable
+run_test "Drill 2 script executable" "test -x ${DRILL2}"
+
+# 5. Failover drill script exists and is executable
+run_test "Drill 3 script executable" "test -x ${DRILL3}"
+
+# 6. HA upgrade sequence script exists and is executable
+run_test "Drill 4 script executable" "test -x ${DRILL4}"
+
+# 7. Execute Drill 1
+run_test "Execute Drill 1 (VIP verification)" "bash ${DRILL1}"
+
+# 8. Execute Drill 3
+run_test "Execute Drill 3 (Failover & events check)" "bash ${DRILL3}"
+
+# 9. Execute Drill 4
+run_test "Execute Drill 4 (HA upgrade sequence)" "bash ${DRILL4}"
+
+echo "=========================================================="
+if [[ ${FAILED} -eq 0 ]]; then
+    echo " All High Availability drill tests PASSED!"
+    exit 0
+else
+    echo " ${FAILED} test(s) FAILED in HA drill."
+    exit 1
+fi

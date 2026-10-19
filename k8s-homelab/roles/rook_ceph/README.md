@@ -1,19 +1,30 @@
 # Rook-Ceph Cloud-Native Storage Role (`rook_ceph`)
 
-Ansible role for automating Rook-Ceph cloud-native storage orchestration on the `k8s-homelab` cluster, providing both **RBD block storage** and **CephFS / CephNFS shared filesystem storage** as a seamless alternative to `nfs-server`.
+Ansible role for automating Rook-Ceph cloud-native storage orchestration on the `k8s-homelab` cluster, providing both
+**RBD block storage** and **CephFS / CephNFS shared filesystem storage** as a seamless alternative to `nfs-server`.
 
 ---
 
 ## 1. Architecture Overview
 
-This role deploys the official Rook-Ceph operator and provisions a Ceph cluster where storage is provided from a dedicated block device attached to the Kubernetes control plane node (`kube-control-plane`):
+This role deploys the official Rook-Ceph operator and provisions a Ceph cluster where storage is provided from a
+dedicated block device attached to the Kubernetes control plane node (`kube-control-plane`):
 
-- **Control Plane Node**: Hosts Ceph MON, MGR, OSD, MDS, and NFS-Ganesha daemons, backed by a dedicated unformatted block device (`/dev/vdb` in preprod). Explicit tolerations are configured to schedule Ceph control and storage pods on the control plane despite the `node-role.kubernetes.io/control-plane:NoSchedule` taint.
-- **Worker Nodes**: Run Ceph CSI node plugins (`rook-ceph-csi-rbd-node` and `rook-ceph-csi-cephfs-node`) DaemonSets and standard kernel NFS client (`nfs-common`). Worker nodes do not host OSD storage; instead, pods on worker nodes consume dynamically provisioned Ceph block volumes (RBD), CephFS shared volumes, or mount Ceph NFS shares over the cluster network.
+- **Control Plane Node**: Hosts Ceph MON, MGR, OSD, MDS, and NFS-Ganesha daemons, backed by a dedicated unformatted
+  block device (`/dev/vdb` in preprod). Explicit tolerations are configured to schedule Ceph control and storage pods on
+  the control plane despite the `node-role.kubernetes.io/control-plane:NoSchedule` taint.
+- **Worker Nodes**: Run Ceph CSI node plugins (`rook-ceph-csi-rbd-node` and `rook-ceph-csi-cephfs-node`) DaemonSets and
+  standard kernel NFS client (`nfs-common`). Worker nodes do not host OSD storage; instead, pods on worker nodes consume
+  dynamically provisioned Ceph block volumes (RBD), CephFS shared volumes, or mount Ceph NFS shares over the cluster
+  network.
 - **Dual Protocol Serving**:
-  - **RBD (Block)**: A Kubernetes `StorageClass` (`rook-ceph-block`) registered with provisioner `rook-ceph.rbd.csi.ceph.com` backed by a replicated `CephBlockPool`.
-  - **CephFS (Distributed Filesystem)**: A `CephFilesystem` resource (`cephfs`) backed by an active MDS daemon, exposed via dynamic `StorageClass` (`rook-cephfs`) with provisioner `rook-ceph.cephfs.csi.ceph.com` (RWX).
-  - **CephNFS (Shared NFSv4 Server)**: An in-cluster NFS-Ganesha server managed by `CephNFS` bound to `hostNetwork: true` on `kube-control-plane` port 2049, exporting `/exports` with `no_root_squash`. This acts as a 100% drop-in alternative to `nfs-kernel-server` using the same `nfs-server.local:/exports` endpoint.
+  - **RBD (Block)**: A Kubernetes `StorageClass` (`rook-ceph-block`) registered with provisioner
+    `rook-ceph.rbd.csi.ceph.com` backed by a replicated `CephBlockPool`.
+  - **CephFS (Distributed Filesystem)**: A `CephFilesystem` resource (`cephfs`) backed by an active MDS daemon, exposed
+    via dynamic `StorageClass` (`rook-cephfs`) with provisioner `rook-ceph.cephfs.csi.ceph.com` (RWX).
+  - **CephNFS (Shared NFSv4 Server)**: An in-cluster NFS-Ganesha server managed by `CephNFS` bound to `hostNetwork:
+    true` on `kube-control-plane` port 2049, exporting `/exports` with `no_root_squash`. This acts as a 100% drop-in
+    alternative to `nfs-kernel-server` using the same `nfs-server.local:/exports` endpoint.
 
 ---
 
@@ -53,7 +64,8 @@ This role deploys the official Rook-Ceph operator and provisions a Ceph cluster 
   - `rook_ceph_devices: [{name: "vdb"}]`
 - **Production (`group_vars/prod.yml`)**:
   - `rook_ceph_storage_node`: Target control or storage host.
-  - `rook_ceph_devices`: List of raw block devices (e.g. `nvme0n1` or `sdb`). If empty, the operator is installed but cluster creation is deferred until disks are configured.
+  - `rook_ceph_devices`: List of raw block devices (e.g. `nvme0n1` or `sdb`). If empty, the operator is installed but
+    cluster creation is deferred until disks are configured.
 
 ---
 

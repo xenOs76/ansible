@@ -1,0 +1,215 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# Fibre Channel SAN Control & Management Utility (fc-san-ctl)
+# Managed by Ansible (roles/fc_san)
+# ==============================================================================
+set -euo pipefail
+
+STORAGE_DIR="{{ fc_san_storage_dir }}"
+WWNN="{{ fc_san_target_wwnn }}"
+WWPN_A="{{ fc_san_target_wwns[0] }}"
+WWPN_B="{{ fc_san_target_wwns[1] | default('') }}"
+PCI_SLOT_A="{{ fc_san_pci_slot_a }}"
+PCI_SLOT_B="{{ fc_san_pci_slot_b }}"
+
+usage() {
+  cat <<'EOF'
+Usage: fc-san-ctl <command> [arguments]
+
+Commands:
+  status                Show SAN array target status, WWPNs, and attached LUNs
+  list-luns             List all configured LUNs, sizes, and device paths
+  attach-all            Attach backing files to loop devices and register FC paths
+  detach-all            Detach all SAN loop devices
+  grow-lun <id> <size>  Resize backing LUN image (e.g. grow-lun 0 1024M)
+  rescan                Rescan FC bus and refresh kernel block device sizes
+  help                  Show this usage help message
+EOF
+}
+
+cmd_status() {
+  echo "=== Fibre Channel SAN Emulation Status ==="
+  echo "Target Storage Directory : ${STORAGE_DIR}"
+  echo "Target WWNN              : ${WWNN}"
+  echo "Target WWPN (Fabric A)   : ${WWPN_A}"
+  if [ -n "${WWPN_B}" ]; then
+    echo "Target WWPN (Fabric B)   : ${WWPN_B} (Multipath Secondary)"
+  fi
+  echo ""
+  echo "--- Active LUN Attachments ---"
+  cmd_list_luns
+}
+
+cmd_list_luns() {
+  printf "%-6s %-10s %-12s %-20s %s\n" "LUN_ID" "SIZE" "LOOP_DEV" "BACKING_FILE" "BY-PATH_DEVICE"
+  printf "%-6s %-10s %-12s %-20s %s\n" "------" "----" "--------" "------------" "--------------"
+
+{% for lun in fc_san_luns %}
+  {
+    LUN_ID="{{ lun.id }}"
+    IMG_NAME="{{ lun.name }}"
+    LOOP_DEV="/dev/loop{{ lun.loop_minor }}"
+    IMG_PATH="${STORAGE_DIR}/${IMG_NAME}"
+    BY_PATH_A="/dev/disk/by-path/pci-${PCI_SLOT_A}-fc-0x${WWPN_A}-lun-${LUN_ID}"
+
+    ACTUAL_SIZE="N/A"
+    if [ -f "${IMG_PATH}" ]; then
+      BYTES="$(stat -c %s "${IMG_PATH}" 2>/dev/null || echo 0)"
+      ACTUAL_SIZE="$(awk -v b="${BYTES}" 'BEGIN {printf "%.0fM", b/1048576}')"
+    fi
+
+    printf "%-6s %-10s %-12s %-20s %s\n" \
+      "${LUN_ID}" \
+      "${ACTUAL_SIZE}" \
+      "${LOOP_DEV}" \
+      "${IMG_NAME}" \
+      "${BY_PATH_A}"
+  }
+{% endfor %}
+}
+
+cmd_attach_all() {
+  mkdir -p "${STORAGE_DIR}"
+  mkdir -p /dev/disk/by-path
+  mkdir -p /dev/disk/by-id
+
+{% for lun in fc_san_luns %}
+  {
+    LUN_ID="{{ lun.id }}"
+    IMG_NAME="{{ lun.name }}"
+    DEFAULT_SIZE="{{ lun.size }}"
+    LOOP_DEV="/dev/loop{{ lun.loop_minor }}"
+    IMG_PATH="${STORAGE_DIR}/${IMG_NAME}"
+
+    if [ ! -f "${IMG_PATH}" ]; then
+      echo "==> Initializing sparse backing image for LUN ${LUN_ID} (${DEFAULT_SIZE})..."
+      truncate -s "${DEFAULT_SIZE}" "${IMG_PATH}"
+    fi
+
+    # Ensure loop control device exists
+    if [ ! -b "${LOOP_DEV}" ]; then
+      mknod -m 0660 "${LOOP_DEV}" b 7 {{ lun.loop_minor }} || true
+    fi
+
+    # Attach to loop device if not already bound
+    CURRENT_BACKING="$(losetup -O BACK-FILE -n "${LOOP_DEV}" 2>/dev/null || true)"
+    if [ "${CURRENT_BACKING}" != "${IMG_PATH}" ]; then
+      echo "==> Binding ${LOOP_DEV} to ${IMG_PATH}..."
+      losetup -d "${LOOP_DEV}" 2>/dev/null || true
+      losetup "${LOOP_DEV}" "${IMG_PATH}"
+    fi
+
+    # Create canonical Kubernetes in-tree FC by-path symlinks (Fabric A)
+    BY_PATH_A="/dev/disk/by-path/pci-${PCI_SLOT_A}-fc-0x${WWPN_A}-lun-${LUN_ID}"
+    ln -sfn "${LOOP_DEV}" "${BY_PATH_A}"
+
+    # Create Fabric B multipath symlink if configured
+    if [ -n "${WWPN_B}" ]; then
+      BY_PATH_B="/dev/disk/by-path/pci-${PCI_SLOT_B}-fc-0x${WWPN_B}-lun-${LUN_ID}"
+      ln -sfn "${LOOP_DEV}" "${BY_PATH_B}"
+    fi
+
+    # Create WWID symlink
+    WWID_HEX="$(printf "%s%016d" "${WWPN_A}" "${LUN_ID}")"
+    ln -sfn "${LOOP_DEV}" "/dev/disk/by-id/wwn-0x${WWID_HEX}"
+  }
+{% endfor %}
+
+  echo "==> All Fibre Channel SAN LUNs attached and verified."
+}
+
+cmd_detach_all() {
+  echo "==> Detaching Fibre Channel SAN LUN loop devices..."
+{% for lun in fc_san_luns %}
+  {
+    LUN_ID="{{ lun.id }}"
+    LOOP_DEV="/dev/loop{{ lun.loop_minor }}"
+    rm -f "/dev/disk/by-path/pci-${PCI_SLOT_A}-fc-0x${WWPN_A}-lun-${LUN_ID}" || true
+    if [ -n "${WWPN_B}" ]; then
+      rm -f "/dev/disk/by-path/pci-${PCI_SLOT_B}-fc-0x${WWPN_B}-lun-${LUN_ID}" || true
+    fi
+    WWID_HEX="$(printf "%s%016d" "${WWPN_A}" "${LUN_ID}")"
+    rm -f "/dev/disk/by-id/wwn-0x${WWID_HEX}" || true
+    losetup -d "${LOOP_DEV}" 2>/dev/null || true
+  }
+{% endfor %}
+  echo "==> Done."
+}
+
+cmd_grow_lun() {
+  if [ $# -lt 2 ]; then
+    echo "Error: grow-lun requires <lun_id> and <new_size>" >&2
+    echo "Example: fc-san-ctl grow-lun 0 1024M" >&2
+    exit 1
+  fi
+  TARGET_LUN="$1"
+  NEW_SIZE="$2"
+
+  case "${TARGET_LUN}" in
+{% for lun in fc_san_luns %}
+    {{ lun.id }})
+      IMG_PATH="${STORAGE_DIR}/{{ lun.name }}"
+      LOOP_DEV="/dev/loop{{ lun.loop_minor }}"
+      ;;
+{% endfor %}
+    *)
+      echo "Error: Unknown LUN ID '${TARGET_LUN}'." >&2
+      exit 1
+      ;;
+  esac
+
+  if [ ! -f "${IMG_PATH}" ]; then
+    echo "Error: Backing image ${IMG_PATH} not found. Run 'fc-san-ctl attach-all' first." >&2
+    exit 1
+  fi
+
+  echo "==> Growing backing image ${IMG_PATH} to ${NEW_SIZE}..."
+  truncate -s "${NEW_SIZE}" "${IMG_PATH}"
+
+  echo "==> Informing kernel of loop device capacity update (${LOOP_DEV})..."
+  losetup -c "${LOOP_DEV}" 2>/dev/null || true
+  blockdev --rereadpt "${LOOP_DEV}" 2>/dev/null || true
+
+  echo "==> LUN ${TARGET_LUN} resized successfully."
+  du -h "${IMG_PATH}"
+  blockdev --getsize64 "${LOOP_DEV}" | awk '{printf "Block device size: %d bytes (%.2f MiB)\n", $1, $1/1048576}'
+}
+
+cmd_rescan() {
+  echo "==> Triggering Fibre Channel SAN bus rescan..."
+  cmd_attach_all
+  udevadm trigger --subsystem-match=block --action=change || true
+  echo "==> Rescan complete."
+}
+
+COMMAND="${1:-status}"
+shift || true
+
+case "${COMMAND}" in
+  status)
+    cmd_status
+    ;;
+  list-luns)
+    cmd_list_luns
+    ;;
+  attach-all)
+    cmd_attach_all
+    ;;
+  detach-all)
+    cmd_detach_all
+    ;;
+  grow-lun)
+    cmd_grow_lun "$@"
+    ;;
+  rescan)
+    cmd_rescan
+    ;;
+  help|--help|-h)
+    usage
+    ;;
+  *)
+    echo "Error: Unknown command '${COMMAND}'." >&2
+    usage
+    exit 1
+    ;;
+esac

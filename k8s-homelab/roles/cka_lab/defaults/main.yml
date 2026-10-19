@@ -1,5 +1,6 @@
 ---
 # Scenario toggles (organized by CKA exam domain)
+cka_lab_scenario_cluster_installation_enabled: true
 cka_lab_scenario_motd_enabled: true
 cka_lab_scenario_user_rbac_enabled: true
 cka_lab_scenario_secrets_enabled: true
@@ -18,6 +19,7 @@ cka_lab_scenario_chaos_troubleshooting_enabled: false
 cka_lab_scenario_etcd_enabled: true
 cka_lab_scenario_upgrade_drill_enabled: true
 cka_lab_scenario_jsonpath_enabled: true
+cka_lab_scenario_ha_cluster_enabled: true
 
 # Scenario: motd (CKA Initial Steps Reminder Announcement)
 cka_lab_motd_user: "{{ ansible_user | default('vagrant') }}"
@@ -211,9 +213,10 @@ cka_lab_nfs_server_ip: >-
     | default(hostvars[groups['control_plane'][0]]['ansible_host']
     | default('192.168.56.10'))
   }}
-cka_lab_nfs_export_dir: "{{ nfs_export_dir | default('/exports') }}"
+cka_lab_nfs_export_dir: "{{ nfs_export_dir | default('/srv/nfsroot') }}"
+cka_lab_nfs_legacy_export_dir: "{{ nfs_legacy_export_symlink | default('/exports') }}"
 cka_lab_nfs_export_subnet: "{{ '192.168.56.0/24' if ('preprod' in groups) else '10.0.0.0/8' }}"
-cka_lab_nfs_export_options: "rw,sync,no_subtree_check,no_root_squash,insecure"
+cka_lab_nfs_export_options: "rw,sync,no_subtree_check,no_root_squash,insecure,fsid=0"
 cka_lab_rbd_storage_class: "{{ rook_ceph_storage_class_name | default('rook-ceph-block') }}"
 cka_lab_rbd_namespace: "{{ rook_ceph_namespace | default('rook-ceph') }}"
 cka_lab_rbd_pool_name: "{{ rook_ceph_pool_name | default('replicapool') }}"
@@ -221,6 +224,12 @@ cka_lab_iscsi_portal: "{{ cka_lab_nfs_server_ip }}:3260"
 cka_lab_iscsi_iqn: "iqn.2026-10.xyz.os76:storage.target01"
 cka_lab_iscsi_fs_lun: 1
 cka_lab_iscsi_block_lun: 2
+cka_lab_fc_storage_dir: "{{ fc_san_storage_dir | default('/srv/fc') }}"
+cka_lab_fc_target_wwns: "{{ fc_san_target_wwns | default(['5001438024266301', '5001438024266302']) }}"
+cka_lab_fc_fs_lun: 0
+cka_lab_fc_block_lun: 1
+cka_lab_fc_expansion_lun: 2
+cka_lab_fc_storage_class: "fc-manual"
 
 # Scenario: deployments (Deployments, ReplicaSets, Rollouts, and Strategy Drills)
 cka_lab_deployments_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/07-deployments"
@@ -283,3 +292,14 @@ cka_lab_upgrade_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/16-upgra
 
 # Scenario: jsonpath (Speed JSONPath & Output Formatting)
 cka_lab_jsonpath_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/01-jsonpath"
+
+# Scenario: ha_cluster (High-Availability Control Plane Drills)
+cka_lab_ha_cluster_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/19-ha-cluster"
+cka_lab_ha_cluster_vip: "{{ ha_control_plane_vip | default('192.168.56.9') }}"
+cka_lab_ha_cluster_port: "{{ ha_control_plane_port | default(8443) }}"
+
+# Scenario: cluster_installation (Cluster Installation & Kubeadm Bootstrapping)
+cka_lab_cluster_installation_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/00-cluster-installation"
+cka_lab_cluster_install_pod_cidr: "{{ pod_network_cidr | default('10.1.0.0/16') }}"
+cka_lab_cluster_install_service_cidr: "{{ service_cidr | default('10.96.0.0/12') }}"
+cka_lab_cluster_install_apiserver_ip: "{{ apiserver_advertise_address | default(node_ip) | default('192.168.56.10') }}"

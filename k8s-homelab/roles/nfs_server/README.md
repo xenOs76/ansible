@@ -1,6 +1,7 @@
 # NFS Storage Server Role (`nfs_server`)
 
-Ansible role for deploying and managing the Linux kernel NFS storage server (`nfs-kernel-server`) on the Kubernetes control plane node, exporting `/exports` to cluster worker nodes across preproduction and production environments.
+Ansible role for deploying and managing the Linux kernel NFS storage server (`nfs-kernel-server`) on the Kubernetes
+control plane node, exporting `/exports` to cluster worker nodes across preproduction and production environments.
 
 ---
 

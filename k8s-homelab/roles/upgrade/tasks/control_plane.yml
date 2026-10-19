@@ -1,4 +1,23 @@
 ---
+- name: Update Kubernetes apt repository key for target minor release
+  ansible.builtin.get_url:
+    url: "https://pkgs.k8s.io/core:/stable:/{{ upgrade_target_k8s_version_major_minor }}/deb/Release.key"
+    dest: /etc/apt/keyrings/kubernetes-apt-keyring.asc
+    mode: "0644"
+  tags:
+    - upgrade
+    - upgrade_control_plane
+
+- name: Update Kubernetes apt repository source to target minor version
+  ansible.builtin.apt_repository:
+    repo: "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.asc] https://pkgs.k8s.io/core:/stable:/{{ upgrade_target_k8s_version_major_minor }}/deb/ /"
+    state: present
+    filename: kubernetes
+    update_cache: true
+  tags:
+    - upgrade
+    - upgrade_control_plane
+
 - name: Unhold kubeadm package on control plane
   ansible.builtin.dpkg_selections:
     name: kubeadm
@@ -24,19 +43,29 @@
     - upgrade
     - upgrade_control_plane
 
-- name: Check kubeadm upgrade plan
+- name: Check kubeadm upgrade plan on primary control plane
   ansible.builtin.command: kubeadm upgrade plan
   register: upgrade_kubeadm_plan_out
   changed_when: false
+  when: inventory_hostname == groups['control_plane'][0]
   tags:
     - upgrade
     - upgrade_control_plane
 
-- name: Apply kubeadm upgrade on control plane
+- name: Apply kubeadm upgrade on primary control plane
   ansible.builtin.command: >-
     kubeadm upgrade apply -y "v{{ upgrade_target_k8s_version.split('-')[0] }}"
   register: upgrade_kubeadm_upgrade_out
   changed_when: true
+  when: inventory_hostname == groups['control_plane'][0]
+  tags:
+    - upgrade
+    - upgrade_control_plane
+
+- name: Upgrade secondary control plane node via kubeadm upgrade node
+  ansible.builtin.command: kubeadm upgrade node
+  changed_when: true
+  when: inventory_hostname != groups['control_plane'][0]
   tags:
     - upgrade
     - upgrade_control_plane

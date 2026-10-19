@@ -77,6 +77,11 @@ ansible-lint -c "${BASE_DIR}/.ansible-lint" playbooks/ roles/
 echo "✔ ansible-lint checks passed."
 
 echo ""
+echo "=== 5. Markdown & README Paragraph Line Length (120 chars) ==="
+python3 "${ROOT_DIR}/scripts/check-readme-line-length.py" --all
+echo "✔ README line length checks passed."
+
+echo ""
 echo "========================================="
 echo "🎉 All Ansible code quality checks passed!"
 echo "========================================="

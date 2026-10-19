@@ -1,0 +1,40 @@
+---
+# Preprod HA specific configuration (Vagrant multi-master cluster)
+environment_name: "preprod-ha"
+ha_control_plane_enabled: true
+ha_control_plane_vip: "192.168.56.9"
+ha_control_plane_port: 8443
+ha_control_plane_metrics_port: 8405
+
+
+# Context and cluster naming for preprod-ha
+cluster_name: "k8s-homelab-preprod-ha"
+k8s_context_name: "k8s-homelab-preprod-ha"
+k8s_user_name: "k8s-homelab-preprod-ha-admin"
+
+# Rook Ceph preprod-ha storage node and device configuration
+rook_ceph_storage_node: "kube-cp-1"
+rook_ceph_devices:
+  - name: "vdb"
+
+# CKA lab scenarios enabled for High Availability preprod environment
+cka_lab_scenario_motd_enabled: false
+cka_lab_scenario_user_rbac_enabled: false
+cka_lab_scenario_secrets_enabled: true
+cka_lab_scenario_configmaps_enabled: true
+cka_lab_scenario_helm_enabled: false
+cka_lab_scenario_volumes_enabled: false
+cka_lab_scenario_deployments_enabled: true
+cka_lab_scenario_pods_enabled: true
+cka_lab_scenario_networking_enabled: false
+cka_lab_scenario_scheduling_enabled: false
+cka_lab_scenario_workloads_advanced_enabled: false
+cka_lab_scenario_storage_classes_enabled: false
+cka_lab_scenario_cluster_troubleshooting_enabled: false
+cka_lab_scenario_crds_enabled: false
+cka_lab_scenario_chaos_troubleshooting_enabled: false
+cka_lab_scenario_etcd_enabled: false
+cka_lab_scenario_upgrade_drill_enabled: true
+cka_lab_scenario_jsonpath_enabled: false
+cka_lab_scenario_cluster_installation_enabled: true
+cka_lab_scenario_ha_cluster_enabled: true

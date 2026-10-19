@@ -1,0 +1,13 @@
+# ==============================================================================
+# Udev Rules: Fibre Channel (FC) SAN Emulation Device Mappings
+# Managed by Ansible (roles/fc_san)
+# ==============================================================================
+
+{% for lun in fc_san_luns %}
+# LUN {{ lun.id }}: {{ lun.description }}
+KERNEL=="loop{{ lun.loop_minor }}", SUBSYSTEM=="block", SYMLINK+="disk/by-path/pci-{{ fc_san_pci_slot_a }}-fc-0x{{ fc_san_target_wwns[0] }}-lun-{{ lun.id }}"
+{% if fc_san_target_wwns | length > 1 %}
+KERNEL=="loop{{ lun.loop_minor }}", SUBSYSTEM=="block", SYMLINK+="disk/by-path/pci-{{ fc_san_pci_slot_b }}-fc-0x{{ fc_san_target_wwns[1] }}-lun-{{ lun.id }}"
+{% endif %}
+KERNEL=="loop{{ lun.loop_minor }}", SUBSYSTEM=="block", SYMLINK+="disk/by-id/wwn-0x{{ fc_san_target_wwns[0] }}{{ '%016d' | format(lun.id) }}"
+{% endfor %}

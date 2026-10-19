@@ -1,4 +1,4 @@
-.PHONY: all lint syntax inventory deps check-deps preprod-up preprod-destroy preprod-recreate preprod-status preprod-provision preprod-sync-kubeconfig prod-sync-kubeconfig preprod-deploy preprod-caddy preprod-cni preprod-ceph prod-ceph preprod-ceph-status preprod-iscsi preprod-nfs prod-nfs preprod-nfs-csi prod-nfs-csi preprod-upgrade preprod-reset preprod-cka-lab preprod-cks-lab help
+.PHONY: all lint syntax inventory deps check-deps preprod-up preprod-destroy preprod-recreate preprod-status preprod-provision preprod-sync-kubeconfig prod-sync-kubeconfig preprod-deploy preprod-caddy preprod-cni preprod-ceph prod-ceph preprod-ceph-status preprod-iscsi preprod-fc preprod-fc-status preprod-nfs prod-nfs preprod-ha-nfs preprod-nfs-csi prod-nfs-csi preprod-upgrade preprod-reset preprod-cka preprod-cka-lab preprod-cks-lab preprod-ha-up preprod-ha-destroy preprod-ha-recreate preprod-ha-deploy preprod-ha-sync-kubeconfig preprod-ha-cka preprod-ha-cka-lab preprod-switch-ha preprod-switch-standard help
 
 all: help
 
@@ -24,8 +24,11 @@ help:
 	@echo "make prod-ceph         - Deploy/configure Rook-Ceph block storage on prod"
 	@echo "make preprod-ceph-status - Inspect Rook-Ceph operator, cluster, and Ceph status"
 	@echo "make preprod-iscsi     - Deploy/configure standalone iSCSI storage target on preprod"
+	@echo "make preprod-fc        - Deploy/configure Fibre Channel SAN storage emulator on preprod"
+	@echo "make preprod-fc-status - Inspect Fibre Channel SAN status, WWPNs, and LUN mappings"
 	@echo "make preprod-nfs       - Deploy/configure NFS storage server on preprod"
 	@echo "make prod-nfs          - Deploy/configure NFS storage server on prod"
+	@echo "make preprod-ha-nfs    - Deploy/configure NFS storage server on preprod HA"
 	@echo "make preprod-nfs-csi   - Deploy/configure NFS CSI dynamic storage driver on preprod"
 	@echo "make prod-nfs-csi      - Deploy/configure NFS CSI dynamic storage driver on prod"
 	@echo "make preprod-upgrade   - Run rolling upgrade on preprod"
@@ -33,6 +36,13 @@ help:
 	@echo "make preprod-cka-lab   - Deploy CKA training lab scenarios on preprod"
 	@echo "make preprod-cka-chaos - Deploy CKA lab including Litmus dynamic chaos drills"
 	@echo "make preprod-cks-lab   - Deploy CKS training lab scenarios on preprod"
+	@echo "make preprod-ha-up     - Boot up Vagrant libvirt preprod HA VMs (3 CPs + 1 Worker)"
+	@echo "make preprod-ha-deploy - Run full Ansible playbook deployment on HA preprod"
+	@echo "make preprod-ha-destroy - Destroy Vagrant libvirt preprod HA VMs"
+	@echo "make preprod-ha-sync-kubeconfig - Sync HA preprod credentials (VIP: 192.168.56.9:8443)"
+	@echo "make preprod-ha-cka-lab - Deploy CKA lab scenarios on HA preprod (alias: preprod-ha-cka)"
+	@echo "make preprod-switch-ha - Switch active topology to HA profile cleanly"
+	@echo "make preprod-switch-standard - Switch active topology to Standard profile cleanly"
 
 deps:
 	ansible-galaxy collection install -r requirements.yml
@@ -58,6 +68,7 @@ inventory:
 	ansible-inventory -i inventory/preprod/hosts.ini --graph
 
 preprod-up:
+	@echo "standard" > .topology
 	./scripts/shell.sh --run "vagrant up"
 	./scripts/run-playbook.sh -e preprod -p nfs.yml
 	@./scripts/sync-kubeconfig.sh --best-effort || true
@@ -65,7 +76,7 @@ preprod-up:
 preprod-destroy:
 	./scripts/shell.sh --run "vagrant destroy -f"
 	@virsh -c qemu:///system vol-delete --pool default k8s-homelab_kube-control-plane-vdb.qcow2 2>/dev/null || true
-	@rm -f admin.conf kubeconfig.preprod
+	@rm -f admin.conf kubeconfig.preprod .topology
 
 preprod-status:
 	./scripts/shell.sh --run "vagrant status"
@@ -102,11 +113,21 @@ preprod-ceph-status:
 preprod-iscsi:
 	./scripts/run-playbook.sh -e preprod -p iscsi.yml
 
+preprod-fc:
+	./scripts/run-playbook.sh -e preprod -p fc.yml
+
+preprod-fc-status:
+	@echo "Checking Fibre Channel SAN status on preprod nodes..."
+	./scripts/run-playbook.sh -e preprod -p fc.yml
+
 preprod-nfs:
 	./scripts/run-playbook.sh -e preprod -p nfs.yml
 
 prod-nfs:
 	./scripts/run-playbook.sh -e prod -p nfs.yml
+
+preprod-ha-nfs:
+	./scripts/run-playbook.sh -e preprod-ha -p nfs.yml
 
 preprod-nfs-csi:
 	./scripts/run-playbook.sh -e preprod -p nfs_csi.yml
@@ -120,6 +141,7 @@ preprod-upgrade:
 preprod-reset:
 	./scripts/run-playbook.sh -e preprod -p reset.yml
 
+preprod-cka: preprod-cka-lab
 preprod-cka-lab:
 	./scripts/run-playbook.sh -e preprod -p cka_lab.yml
 
@@ -128,3 +150,30 @@ preprod-cka-chaos:
 
 preprod-cks-lab:
 	./scripts/run-playbook.sh -e preprod -p cks_lab.yml
+
+preprod-ha-up:
+	@echo "ha" > .topology
+	TOPOLOGY=ha ./scripts/shell.sh --run "vagrant up"
+	./scripts/run-playbook.sh -e preprod-ha -p ha_control_plane.yml
+	@./scripts/sync-kubeconfig.sh -e preprod-ha --best-effort || true
+
+preprod-ha-destroy:
+	TOPOLOGY=ha ./scripts/shell.sh --run "vagrant destroy -f"
+	@virsh -c qemu:///system vol-delete --pool default k8s-homelab_kube-cp-1-vdb.qcow2 2>/dev/null || true
+	@rm -f admin.conf kubeconfig.preprod-ha .topology
+
+preprod-ha-recreate: preprod-ha-destroy preprod-ha-up
+
+preprod-ha-deploy:
+	./scripts/run-playbook.sh -e preprod-ha -p site.yml
+
+preprod-ha-sync-kubeconfig:
+	@./scripts/sync-kubeconfig.sh -e preprod-ha
+
+preprod-ha-cka: preprod-ha-cka-lab
+preprod-ha-cka-lab:
+	./scripts/run-playbook.sh -e preprod-ha -p cka_lab.yml
+
+preprod-switch-ha: preprod-destroy preprod-ha-up
+
+preprod-switch-standard: preprod-ha-destroy preprod-up

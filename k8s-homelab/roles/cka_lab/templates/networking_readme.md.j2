@@ -1,18 +1,26 @@
 # CKA Lab Exercise: Kubernetes Networking (Services, Ingress, Gateway API & Network Policies)
 
-Hands-on training scenario for the Certified Kubernetes Administrator (CKA) certification, covering Services, Headless services, Ingress controllers, the Gateway API (with NGINX Gateway Fabric & Caddy reverse proxy), and multi-namespace Network Policies.
+Hands-on training scenario for the Certified Kubernetes Administrator (CKA) certification, covering Services, Headless
+services, Ingress controllers, the Gateway API (with NGINX Gateway Fabric & Caddy reverse proxy), and multi-namespace
+Network Policies.
 
 ---
 
 ## 1. Overview & Curriculum Objectives
 
-Networking constitutes a major domain (20%) of the CKA exam curriculum. This lab brings together the core networking primitives and modern architectural patterns:
+Networking constitutes a major domain (20%) of the CKA exam curriculum. This lab brings together the core networking
+primitives and modern architectural patterns:
 
-- **Module 1 (Services & CoreDNS)**: Stable ClusterIP networking, Headless Services (`clusterIP: None`), DNS resolution (`<service>.<namespace>.svc.cluster.local`), multi-port NodePort services, and EndpointSlice mapping.
-- **Module 2 (Ingresses)**: L7 HTTP/HTTPS traffic routing via standard Ingress resources, host-based routing, and path-prefix matching.
-- **Module 3 (Gateway API)**: Role-oriented routing using standard Gateway API CRDs (`GatewayClass`, `Gateway`, `HTTPRoute`), NGINX Gateway Fabric, and Caddy TLS edge forwarding.
-- **Module 4 (Network Policies)**: Microsegmentation, default-deny ingress/egress, pod label selectors, DNS port 53 allow rules, and verification via `httpbin-go`.
-- **Module 5 (Advanced Network Policies)**: Complex cross-namespace microsegmentation combining `namespaceSelector` and `podSelector`, with strict port-level egress filtering.
+- **Module 1 (Services & CoreDNS)**: Stable ClusterIP networking, Headless Services (`clusterIP: None`), DNS resolution
+  (`<service>.<namespace>.svc.cluster.local`), multi-port NodePort services, and EndpointSlice mapping.
+- **Module 2 (Ingresses)**: L7 HTTP/HTTPS traffic routing via standard Ingress resources, host-based routing, and
+  path-prefix matching.
+- **Module 3 (Gateway API)**: Role-oriented routing using standard Gateway API CRDs (`GatewayClass`, `Gateway`,
+  `HTTPRoute`), NGINX Gateway Fabric, and Caddy TLS edge forwarding.
+- **Module 4 (Network Policies)**: Microsegmentation, default-deny ingress/egress, pod label selectors, DNS port 53
+  allow rules, and verification via `httpbin-go`.
+- **Module 5 (Advanced Network Policies)**: Complex cross-namespace microsegmentation combining `namespaceSelector` and
+  `podSelector`, with strict port-level egress filtering.
 
 ### Scenario Directory Structure
 
@@ -88,7 +96,8 @@ kubectl expose deployment <name> --port=80 --target-port=8080 --type=NodePort --
 
 ### Exam Context & Permissibility Notes
 
-- Caddy acts as a homelab edge reverse proxy `[HOMELAB AUXILIARY]`. In the CKA exam, network ingress tasks focus directly on Ingress (`networking.k8s.io/v1`) or Gateway API CRDs (`gateway.networking.k8s.io/v1`).
+- Caddy acts as a homelab edge reverse proxy `[HOMELAB AUXILIARY]`. In the CKA exam, network ingress tasks focus
+  directly on Ingress (`networking.k8s.io/v1`) or Gateway API CRDs (`gateway.networking.k8s.io/v1`).
 
 ---
 
@@ -96,7 +105,9 @@ kubectl expose deployment <name> --port=80 --target-port=8080 --type=NodePort --
 
 ### Drill 1: Services & CoreDNS Discovery (`01-services/`)
 
-A Kubernetes Service provides a stable network abstraction (virtual ClusterIP and DNS name) fronting dynamic, ephemeral pods. In this drill, master manual imperative creation, multi-port definitions, EndpointSlice tracking, and Headless services.
+A Kubernetes Service provides a stable network abstraction (virtual ClusterIP and DNS name) fronting dynamic, ephemeral
+pods. In this drill, master manual imperative creation, multi-port definitions, EndpointSlice tracking, and Headless
+services.
 
 #### Step 1: Deploy Backend Workload
 
@@ -113,7 +124,8 @@ The backend pods expose two container ports: port `80` (`http-web`) and port `80
 
 #### Step 2: Create a ClusterIP Service (Imperative vs Declarative)
 
-During the CKA exam, use `kubectl expose` to generate Service manifests in seconds rather than handwriting YAML boilerplate from scratch:
+During the CKA exam, use `kubectl expose` to generate Service manifests in seconds rather than handwriting YAML
+boilerplate from scratch:
 
 ```bash
 # Imperative dry-run generation
@@ -125,7 +137,8 @@ kubectl expose deployment cka-lab-backend-app \
 ```
 
 > [!IMPORTANT]
-> If a Service exposes multiple ports, Kubernetes **requires** each port entry to have a unique `name` attribute (e.g., `http-web` and `http-metrics`).
+> If a Service exposes multiple ports, Kubernetes **requires** each port entry to have a unique `name` attribute (e.g.,
+> `http-web` and `http-metrics`).
 
 Apply the multi-port Service manifest:
 
@@ -164,7 +177,8 @@ kubectl run cka-lab-http-probe \
 
 #### Step 4: Expose Service Externally via NodePort
 
-A `NodePort` service allocates a static port from the cluster range (default `30000-32767`) on **every node**. Incoming traffic to `<NodeIP>:<NodePort>` is proxied directly to matching pods:
+A `NodePort` service allocates a static port from the cluster range (default `30000-32767`) on **every node**. Incoming
+traffic to `<NodeIP>:<NodePort>` is proxied directly to matching pods:
 
 ```bash
 # Imperative dry-run creation
@@ -193,7 +207,8 @@ curl -s "http://${NODE_IP}:31080" | grep -i "nginx"
 
 #### Step 5: Headless Service (`clusterIP: None`) for Direct Pod Addressing
 
-When `spec.clusterIP: None` is configured, Kubernetes skips allocating a virtual ClusterIP. Instead, CoreDNS returns direct `A` records for each matching Pod IP:
+When `spec.clusterIP: None` is configured, Kubernetes skips allocating a virtual ClusterIP. Instead, CoreDNS returns
+direct `A` records for each matching Pod IP:
 
 ```bash
 cat cka-lab-headless-service.yaml
@@ -215,7 +230,8 @@ kubectl run test-pod-dns --rm -i --restart=Never --image=busybox:1.36 -- \
 
 #### Step 6: Node-Local Routing (`PreferSameNode` - Kubernetes 1.35+)
 
-In Kubernetes 1.35, the `spec.trafficDistribution` field allows Services to favor routing to endpoints residing on the same node as the client pod, eliminating unnecessary cross-node latency:
+In Kubernetes 1.35, the `spec.trafficDistribution` field allows Services to favor routing to endpoints residing on the
+same node as the client pod, eliminating unnecessary cross-node latency:
 
 ```bash
 cat cka-lab-traffic-distribution-svc.yaml
@@ -234,11 +250,13 @@ kubectl describe service cka-lab-traffic-distribution-svc -n {{ cka_lab_networki
 
 ### Drill 2: Ingress Path Routing (`02-ingresses/`)
 
-An `Ingress` operates at Layer 7 (HTTP/HTTPS) to route traffic to cluster services based on hostname headers and request URI paths.
+An `Ingress` operates at Layer 7 (HTTP/HTTPS) to route traffic to cluster services based on hostname headers and request
+URI paths.
 
 #### Prerequisite: Deploy Ingress-NGINX Controller
 
-Standard `Ingress` resources require an active Ingress controller. Deploy the community Ingress-NGINX controller (v4.15.1) via Helm:
+Standard `Ingress` resources require an active Ingress controller. Deploy the community Ingress-NGINX controller
+(v4.15.1) via Helm:
 
 ```bash
 cd /home/vagrant/cka/helm
@@ -247,7 +265,9 @@ cd /home/vagrant/cka/helm
 ```
 
 > [!WARNING]
-> **NodePort Collision Notice**: Ingress-NGINX binds host/NodePort `30080` (HTTP) and `30443` (HTTPS). If NGINX Gateway Fabric is currently installed, uninstall it first (`helm uninstall ngf -n nginx-gateway`) to avoid port binding conflicts.
+> **NodePort Collision Notice**: Ingress-NGINX binds host/NodePort `30080` (HTTP) and `30443` (HTTPS). If NGINX Gateway
+> Fabric is currently installed, uninstall it first (`helm uninstall ngf -n nginx-gateway`) to avoid port binding
+> conflicts.
 
 #### Step 1: Deploy Ingress Backend Services
 
@@ -304,7 +324,8 @@ curl -i -H "Host: {{ cka_lab_networking_domain | default('cka-lab.example.local'
 
 ### Drill 3: Gateway API & Modern Routing (`03-gateway-api/`)
 
-The Kubernetes Gateway API provides an expressive, role-oriented routing architecture separating infrastructure declaration (`Gateway`) from application routing (`HTTPRoute`).
+The Kubernetes Gateway API provides an expressive, role-oriented routing architecture separating infrastructure
+declaration (`Gateway`) from application routing (`HTTPRoute`).
 
 #### Prerequisite: Deploy NGINX Gateway Fabric & httpbin-go
 
@@ -355,7 +376,9 @@ helm upgrade --install ngf oci://ghcr.io/nginx/charts/nginx-gateway-fabric \
 > [!WARNING]
 > **NodePort Collision Notice**:
 >
-> - NGINX Gateway Fabric binds host/NodePort `30080` (HTTP) and `30443` (HTTPS). If Ingress-NGINX was previously deployed for Drill 2, uninstall it first (`helm uninstall ingress-nginx -n ingress-nginx`) before starting NGINX Gateway Fabric.
+> - NGINX Gateway Fabric binds host/NodePort `30080` (HTTP) and `30443` (HTTPS). If Ingress-NGINX was previously
+> deployed for Drill 2, uninstall it first (`helm uninstall ingress-nginx -n ingress-nginx`) before starting NGINX
+> Gateway Fabric.
 
 #### Step 1: Deploy and Inspect the Gateway Resource
 
@@ -400,12 +423,14 @@ curl -s -H "Host: {{ cka_lab_networking_gateway_domain | default('httpbin.exampl
 ### Drill 4: Network Policies with httpbin-go (`04-network-policies/`)
 
 > [!NOTE]
-> **No Extra Helm Installation Required**: NetworkPolicies are enforced natively by Cilium CNI (already active in the cluster). Workload pods (`cka-lab-target-backend` and clients) are created directly by the manifests in this drill.
+> **No Extra Helm Installation Required**: NetworkPolicies are enforced natively by Cilium CNI (already active in the
+> cluster). Workload pods (`cka-lab-target-backend` and clients) are created directly by the manifests in this drill.
 
 NetworkPolicies enforce pod-to-pod microsegmentation. Understand the core rules:
 
 1. **Non-Isolated by Default**: If no policy selects a pod, it accepts traffic from all sources.
-2. **Isolation on Selection**: As soon as `spec.podSelector` matches a pod, that pod drops all unwhitelisted traffic for the declared `policyTypes` (`Ingress` / `Egress`).
+2. **Isolation on Selection**: As soon as `spec.podSelector` matches a pod, that pod drops all unwhitelisted traffic for
+   the declared `policyTypes` (`Ingress` / `Egress`).
 3. **Whitelist Model**: NetworkPolicies only grant access; they cannot explicitly deny.
 
 #### Step 1: Provision Namespaces and Workloads
@@ -439,7 +464,8 @@ cat cka-lab-default-deny-ingress.yaml
 kubectl apply -f cka-lab-default-deny-ingress.yaml
 ```
 
-The empty `podSelector: {}` isolates **all pods** in namespace `{{ cka_lab_networking_backend_namespace | default('cka-lab-net-backend') }}`. Verify that connections now time out:
+The empty `podSelector: {}` isolates **all pods** in namespace `{{ cka_lab_networking_backend_namespace |
+default('cka-lab-net-backend') }}`. Verify that connections now time out:
 
 ```bash
 kubectl exec -n {{ cka_lab_networking_client_namespace | default('cka-lab-net-client') }} cka-lab-client-authorized -- wget -qO- -T 2 "${BACKEND_URL}" || echo "Connection dropped by default-deny!"
@@ -469,7 +495,8 @@ Placing `namespaceSelector` and `podSelector` together in the **same list item**
 
 #### Step 5: Whitelist CoreDNS Egress (Avoid CKA Exam Trap)
 
-When restricting egress traffic, you **must** allow traffic to CoreDNS (UDP/TCP port 53), otherwise all DNS lookups will fail:
+When restricting egress traffic, you **must** allow traffic to CoreDNS (UDP/TCP port 53), otherwise all DNS lookups will
+fail:
 
 ```bash
 cat cka-lab-egress-dns-policy.yaml
@@ -496,7 +523,8 @@ kubectl exec -n {{ cka_lab_networking_client_namespace | default('cka-lab-net-cl
 
 ### Drill 5: Advanced Cross-Namespace Microsegmentation (`05-advanced-network-policies/`)
 
-Master complex pod-to-pod microsegmentation combining `namespaceSelector`, `podSelector`, and strict port-level filters (e.g. PostgreSQL `TCP 5432`).
+Master complex pod-to-pod microsegmentation combining `namespaceSelector`, `podSelector`, and strict port-level filters
+(e.g. PostgreSQL `TCP 5432`).
 
 #### Step 1: Provision Namespaces and Tiered Workloads
 
@@ -524,7 +552,8 @@ kubectl describe networkpolicy cross-namespace-db-allow -n cka-secure-db
 Key architectural concepts:
 
 - **Isolated Target**: Pods with `role: db` in `cka-secure-db`.
-- **Allowed Source**: Namespace `cka-portal` (`kubernetes.io/metadata.name: cka-portal`) **AND** pod label `tier: frontend`.
+- **Allowed Source**: Namespace `cka-portal` (`kubernetes.io/metadata.name: cka-portal`) **AND** pod label `tier:
+  frontend`.
 - **Port Filter**: Only `TCP 5432` is permitted.
 
 #### Step 3: Run Automated Matrix Testing for Module 5

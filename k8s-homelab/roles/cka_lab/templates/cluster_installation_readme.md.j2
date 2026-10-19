@@ -1,0 +1,203 @@
+# Certified Kubernetes Administrator (CKA): Cluster Installation & Bootstrapping
+
+Welcome to Chapter 00 of the CKA training curriculum. This module focuses on the **Cluster Architecture,
+Installation & Configuration** domain (25% of the CKA exam scoring criteria).
+
+This drill teaches hands-on initialization of Kubernetes using `kubeadm` across two distinct operational tracks:
+1. **Track A (Standard)**: Single control plane bootstrap with CNI plugins and worker node joins.
+2. **Track B (High Availability)**: Multi-master control plane bootstrap with Keepalived VRRP virtual IP,
+   HAProxy load balancing, stacked etcd quorum, and secondary control plane joins.
+
+---
+
+## Prerequisites Verification
+
+Before executing `kubeadm init`, verify baseline host and container runtime readiness:
+
+```bash
+# 1. Verify container runtime (containerd) is active and running:
+sudo systemctl status containerd --no-pager
+
+# 2. Verify swap is completely disabled (required by kubelet):
+sudo swapoff -a && free -m
+
+# 3. Verify kubelet service is enabled:
+sudo systemctl is-enabled kubelet
+
+# 4. Check available kubeadm images:
+sudo kubeadm config images list
+```
+
+---
+
+## Track A: Standard Cluster Bootstrapping (Single Control Plane)
+
+Execute these steps on `kube-control-plane` (or `kube-cp-1` in standard mode):
+
+### 1. Initialize Control Plane
+
+Execute the pre-configured initialization helper script:
+
+```bash
+cd ~/cka/00-cluster-installation
+sudo ./01-kubeadm-init.sh
+```
+
+Or execute `kubeadm init` manually with explicit network CIDRs:
+
+```bash
+sudo kubeadm init \
+  --pod-network-cidr="{{ cka_lab_cluster_install_pod_cidr }}" \
+  --service-cidr="{{ cka_lab_cluster_install_service_cidr }}" \
+  --apiserver-advertise-address="{{ cka_lab_cluster_install_apiserver_ip }}" \
+  --apiserver-cert-extra-sans="{{ cka_lab_cluster_install_apiserver_ip }},127.0.0.1,localhost"
+```
+
+### 2. Configure Client Kubeconfig Credentials
+
+Configure client credentials for your regular user:
+
+```bash
+mkdir -p "$HOME/.kube"
+sudo cp -i /etc/kubernetes/admin.conf "$HOME/.kube/config"
+sudo chown "$(id -u):$(id -g)" "$HOME/.kube/config"
+chmod 0600 "$HOME/.kube/config"
+```
+
+Verify API server reachability:
+
+```bash
+kubectl get nodes
+kubectl get pods -n kube-system
+```
+
+*(Note: Nodes remain in `NotReady` state and CoreDNS pods remain `Pending` until a CNI network plugin is installed).*
+
+### 3. Deploy Pod Network Add-on (CNI)
+
+Install either Cilium (eBPF) or Calico (standard CKA reference):
+
+```bash
+# Option 1: Install Cilium CNI (homelab default):
+./02-install-cni-cilium.sh
+
+# Option 2: Install Calico CNI:
+./02-install-cni-calico.sh
+```
+
+Wait for CoreDNS pods to transition to `Running` and control plane node to report `Ready`:
+
+```bash
+kubectl get nodes -w
+```
+
+### 4. Join Worker Nodes
+
+Print the worker join token and command:
+
+```bash
+./03-generate-join-command.sh
+```
+
+On each worker node (`kube-worker-1`, `kube-worker-2`), execute the printed join command with `sudo`:
+
+```bash
+sudo kubeadm join {{ cka_lab_cluster_install_apiserver_ip }}:6443 \
+  --token <token> \
+  --discovery-token-ca-cert-hash sha256:<hash>
+```
+
+---
+
+## Track B: High-Availability Multi-Master Bootstrapping
+
+For HA environments (`preprod-ha`), execute these steps across control planes:
+
+### 1. High Availability Architecture
+
+The HA topology distributes apiserver requests across 3 control planes through a shared virtual IP:
+- **Floating VIP**: `{{ cka_lab_ha_cluster_vip }}:{{ cka_lab_ha_cluster_port }}` managed by Keepalived VRRP.
+- **Load Balancer**: Co-located HAProxy listening on `:{{ cka_lab_ha_cluster_port }}` forwarding to local `:6443`.
+
+Verify VIP reachability before starting:
+
+```bash
+nc -zvw3 {{ cka_lab_ha_cluster_vip }} {{ cka_lab_ha_cluster_port }} || true
+```
+
+### 2. Initialize Primary Control Plane (`kube-cp-1`)
+
+On `kube-cp-1`, initialize the cluster specifying `--control-plane-endpoint` and `--upload-certs`:
+
+```bash
+cd ~/cka/00-cluster-installation
+sudo ./01-ha-kubeadm-init.sh
+```
+
+Or execute manually:
+
+```bash
+sudo kubeadm init \
+  --control-plane-endpoint="{{ cka_lab_ha_cluster_vip }}:{{ cka_lab_ha_cluster_port }}" \
+  --upload-certs \
+  --pod-network-cidr="{{ cka_lab_cluster_install_pod_cidr }}" \
+  --service-cidr="{{ cka_lab_cluster_install_service_cidr }}"
+```
+
+### 3. Join Secondary Control Planes (`kube-cp-2`, `kube-cp-3`)
+
+Retrieve the control plane join command generated during `kubeadm init` (contains `--control-plane --certificate-key`).
+
+> [!IMPORTANT]
+> You **must** supply `--apiserver-advertise-address <joining_node_ip>` matching each node's cluster interface
+> (`192.168.56.11` on `kube-cp-2` and `192.168.56.12` on `kube-cp-3`). Omitting this flag causes `kubeadm` to bind
+> to the default NAT interface, stalling the join on etcd cluster health.
+
+Execute on **`kube-cp-2`** (`192.168.56.11`):
+
+```bash
+sudo kubeadm join {{ cka_lab_ha_cluster_vip }}:{{ cka_lab_ha_cluster_port }} \
+  --token <token> \
+  --discovery-token-ca-cert-hash sha256:<hash> \
+  --control-plane \
+  --certificate-key <key> \
+  --apiserver-advertise-address 192.168.56.11
+```
+
+Execute on **`kube-cp-3`** (`192.168.56.12`):
+
+```bash
+sudo kubeadm join {{ cka_lab_ha_cluster_vip }}:{{ cka_lab_ha_cluster_port }} \
+  --token <token> \
+  --discovery-token-ca-cert-hash sha256:<hash> \
+  --control-plane \
+  --certificate-key <key> \
+  --apiserver-advertise-address 192.168.56.12
+```
+
+### 4. Verify Stacked etcd Quorum
+
+Verify that all 3 control plane members participate in the etcd quorum:
+
+```bash
+sudo ETCDCTL_API=3 etcdctl \
+  --cacert=/etc/kubernetes/pki/etcd/ca.crt \
+  --cert=/etc/kubernetes/pki/etcd/server.crt \
+  --key=/etc/kubernetes/pki/etcd/server.key \
+  --endpoints=https://127.0.0.1:2379 \
+  endpoint health
+```
+
+---
+
+## Automated Validation Test Suite
+
+Run the end-to-end verification script to confirm cluster readiness:
+
+```bash
+cd ~/cka/00-cluster-installation
+./test-cluster-install.sh
+```
+
+Once the cluster is initialized, re-run `make preprod-cka-lab` or `make preprod-ha-cka-lab` from the host
+machine to apply live in-cluster exercises (e.g. testing secrets, namespaces, and workloads).

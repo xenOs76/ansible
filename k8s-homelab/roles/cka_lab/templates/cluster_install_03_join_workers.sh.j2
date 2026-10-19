@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# Script: 03-join-workers.sh
+# Purpose: Generate and display fresh worker join commands for the cluster.
+# ==============================================================================
+set -euo pipefail
+
+if [[ ! -f /etc/kubernetes/admin.conf ]]; then
+  echo "Error: Control plane is not initialized (/etc/kubernetes/admin.conf is missing)." >&2
+  echo "       Please run ./01-kubeadm-init.sh (or ./01-ha-kubeadm-init.sh) first." >&2
+  exit 1
+fi
+
+echo "==> Generating fresh worker join command..."
+JOIN_CMD=$(sudo kubeadm token create --print-join-command)
+
+echo "--------------------------------------------------------------------------------"
+echo "Execute the following command on each worker node (with sudo):"
+echo ""
+echo "  sudo ${JOIN_CMD}"
+echo ""
+echo "--------------------------------------------------------------------------------"
+
+{% if ha_control_plane_enabled | default(false) | bool %}
+echo "==> For High-Availability Secondary Control Plane nodes:"
+echo "    Re-upload certificates to get a fresh certificate key:"
+echo "      sudo kubeadm init phase upload-certs --upload-certs"
+echo "    Then join secondary control plane with:"
+echo "      sudo \${JOIN_CMD} --control-plane --certificate-key <certificate-key> --apiserver-advertise-address <node_ip>"
+echo "    (e.g., 192.168.56.11 on kube-cp-2, 192.168.56.12 on kube-cp-3)"
+echo "--------------------------------------------------------------------------------"
+{% endif %}

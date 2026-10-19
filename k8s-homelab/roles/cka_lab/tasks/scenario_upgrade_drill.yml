@@ -10,6 +10,7 @@
     - "{{ cka_lab_upgrade_dir }}"
     - "{{ cka_lab_upgrade_dir }}/01-control-plane"
     - "{{ cka_lab_upgrade_dir }}/02-worker-node"
+    - "{{ cka_lab_upgrade_dir }}/03-secondary-control-plane"
   tags:
     - cka_lab
     - upgrade_drill
@@ -26,6 +27,7 @@
     - {src: "upgrade_test_drills.sh.j2", dest: "test-upgrade-drills.sh", mode: "0755"}
     - {src: "upgrade_01_mock_cp_upgrade.sh.j2", dest: "01-control-plane/mock-control-plane-upgrade.sh", mode: "0755"}
     - {src: "upgrade_02_mock_worker_upgrade.sh.j2", dest: "02-worker-node/mock-worker-upgrade.sh", mode: "0755"}
+    - {src: "upgrade_03_mock_secondary_cp_upgrade.sh.j2", dest: "03-secondary-control-plane/mock-secondary-cp-upgrade.sh", mode: "0755"}
   loop_control:
     label: "upgrade/{{ item.dest }}"
   tags:

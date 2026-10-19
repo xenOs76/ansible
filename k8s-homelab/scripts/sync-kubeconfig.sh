@@ -56,11 +56,14 @@ fi
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "${TMP_DIR}"' EXIT
 
-# Determine cluster names and defaults based on environment
 if [[ "${ENV}" == "preprod" ]]; then
   DEFAULT_CTX="k8s-homelab-preprod"
   DEFAULT_CLUSTER="k8s-homelab-preprod"
   DEFAULT_USER="k8s-homelab-preprod-admin"
+elif [[ "${ENV}" == "preprod-ha" ]]; then
+  DEFAULT_CTX="k8s-homelab-preprod-ha"
+  DEFAULT_CLUSTER="k8s-homelab-preprod-ha"
+  DEFAULT_USER="k8s-homelab-preprod-ha-admin"
 else
   DEFAULT_CTX="k8s-homelab"
   DEFAULT_CLUSTER="k8s-homelab"
@@ -129,25 +132,30 @@ echo "${BOLD}${CYAN}[sync-kubeconfig]${RESET} Synchronizing '${ENV}' Kubernetes 
 
 # 1. Locate or fetch admin.conf
 SRC_CONF="${TMP_DIR}/source-admin.conf"
-if [[ "${ENV}" == "preprod" ]]; then
+if [[ "${ENV}" == "preprod" || "${ENV}" == "preprod-ha" ]]; then
+  PRIMARY_CP="kube-control-plane"
+  if [[ "${ENV}" == "preprod-ha" ]] || [[ -f "${BASE_DIR}/.topology" && "$(<"${BASE_DIR}/.topology")" == "ha" ]]; then
+    PRIMARY_CP="kube-cp-1"
+  fi
+
   # For preprod, ensure apiserver certificate includes all VM network interface IPs
   if [[ -f "${BASE_DIR}/scripts/update-apiserver-sans.sh" ]]; then
     UPDATE_CMD="if [ -x /vagrant/scripts/update-apiserver-sans.sh ]; then sudo /vagrant/scripts/update-apiserver-sans.sh; else sudo bash -s; fi"
     if command -v vagrant >/dev/null 2>&1; then
-      vagrant ssh kube-control-plane -c "${UPDATE_CMD}" < "${BASE_DIR}/scripts/update-apiserver-sans.sh" 2>/dev/null || true
+      vagrant ssh "${PRIMARY_CP}" -c "${UPDATE_CMD}" < "${BASE_DIR}/scripts/update-apiserver-sans.sh" 2>/dev/null || true
     elif [[ -x "${BASE_DIR}/scripts/shell.sh" ]]; then
-      "${BASE_DIR}/scripts/shell.sh" --run "vagrant ssh kube-control-plane -c '${UPDATE_CMD}'" < "${BASE_DIR}/scripts/update-apiserver-sans.sh" 2>/dev/null || true
+      "${BASE_DIR}/scripts/shell.sh" --run "vagrant ssh ${PRIMARY_CP} -c '${UPDATE_CMD}'" < "${BASE_DIR}/scripts/update-apiserver-sans.sh" 2>/dev/null || true
     fi
   fi
 
   # Refresh credentials from the VM rather than accepting a possibly stale staged file
   FETCH_SUCCESS=false
   if command -v vagrant >/dev/null 2>&1; then
-    if vagrant ssh kube-control-plane -c "sudo cat /etc/kubernetes/admin.conf" > "${SRC_CONF}" 2>/dev/null; then
+    if vagrant ssh "${PRIMARY_CP}" -c "sudo cat /etc/kubernetes/admin.conf" > "${SRC_CONF}" 2>/dev/null; then
       FETCH_SUCCESS=true
     fi
   elif [[ -x "${BASE_DIR}/scripts/shell.sh" ]]; then
-    if "${BASE_DIR}/scripts/shell.sh" --run "vagrant ssh kube-control-plane -c 'sudo cat /etc/kubernetes/admin.conf'" > "${SRC_CONF}" 2>/dev/null; then
+    if "${BASE_DIR}/scripts/shell.sh" --run "vagrant ssh ${PRIMARY_CP} -c 'sudo cat /etc/kubernetes/admin.conf'" > "${SRC_CONF}" 2>/dev/null; then
       FETCH_SUCCESS=true
     fi
   fi
@@ -203,6 +211,8 @@ API_PORT="$(echo "${DETECTED_SERVER}" | grep -oE '[0-9]+$' || echo "6443")"
 
 if [[ -n "${API_SERVER:-}" ]]; then
   EFFECTIVE_SERVER="${API_SERVER}"
+elif [[ -n "${DETECTED_SERVER}" && "${DETECTED_SERVER}" != *"127.0.0.1"* && "${DETECTED_SERVER}" != *"localhost"* ]]; then
+  EFFECTIVE_SERVER="${DETECTED_SERVER}"
 elif [[ -n "${INV_HOST}" ]]; then
   EFFECTIVE_SERVER="https://${INV_HOST}:${API_PORT}"
 elif [[ -n "${DETECTED_SERVER}" ]]; then

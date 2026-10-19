@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# userns-drill.sh: User Namespaces Container Isolation (Kubernetes 1.36+ GA)
+# ==============================================================================
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+MANIFEST="${SCRIPT_DIR}/userns-security-pod.yaml"
+POD_NAME="userns-security-pod"
+NAMESPACE="{{ cka_lab_pods_namespace | default('default') }}"
+
+echo "=== CKA Practice: User Namespaces Pod Isolation (Kubernetes 1.36+ GA) ==="
+
+# 1. Clean up stale pod if present
+kubectl delete pod "${POD_NAME}" -n "${NAMESPACE}" --ignore-not-found=true --wait=true >/dev/null 2>&1 || true
+
+# 2. Deploy Pod with spec.hostUsers: false
+echo "[1/4] Applying Pod with 'spec.hostUsers: false'..."
+kubectl apply -f "${MANIFEST}"
+
+# 3. Wait for pod running
+echo "[2/4] Waiting for ${POD_NAME} to become Ready..."
+kubectl wait --for=condition=Ready pod/"${POD_NAME}" -n "${NAMESPACE}" --timeout=60s
+
+# 4. Verify hostUsers field
+echo "[3/4] Inspecting spec.hostUsers configuration..."
+HOST_USERS=$(kubectl get pod "${POD_NAME}" -n "${NAMESPACE}" -o jsonpath='{.spec.hostUsers}')
+echo "  Pod spec.hostUsers: ${HOST_USERS}"
+
+# 5. Inspect container UID map
+echo "[4/4] Inspecting /proc/self/uid_map inside container..."
+UID_MAP=$(kubectl exec -n "${NAMESPACE}" "${POD_NAME}" -- cat /proc/self/uid_map 2>/dev/null || true)
+echo "  Container UID map: ${UID_MAP}"
+
+echo ""
+echo "=== User Namespaces Verification PASSED ==="

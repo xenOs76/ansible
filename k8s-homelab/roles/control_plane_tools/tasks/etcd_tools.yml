@@ -31,9 +31,9 @@
   when: >-
     (control_plane_tools_installed_etcdctl.rc != 0) or
     (control_plane_tools_installed_etcdutl.rc != 0) or
-    ((control_plane_tools_installed_etcdctl.stdout | regex_search('etcdctl version:\s*([0-9.]+)', '\1') | first | default('')) !=
+    ((control_plane_tools_installed_etcdctl.stdout | regex_search('(?<=etcdctl version:\s)[0-9.]+') | default('')) !=
      (control_plane_tools_etcd_version | regex_replace('^v', ''))) or
-    ((control_plane_tools_installed_etcdutl.stdout | regex_search('etcdutl version:\s*([0-9.]+)', '\1') | first | default('')) !=
+    ((control_plane_tools_installed_etcdutl.stdout | regex_search('(?<=etcdutl version:\s)[0-9.]+') | default('')) !=
      (control_plane_tools_etcd_version | regex_replace('^v', '')))
   tags:
     - bootstrap

@@ -1,6 +1,8 @@
 # NFS CSI Driver Role (`nfs_csi`)
 
-Ansible role for deploying and managing the official Kubernetes SIG Storage NFS CSI Driver (`csi-driver-nfs/csi-driver-nfs`) via Helm on the Kubernetes control plane node, providing automated dynamic PersistentVolume provisioning backed by the homelab Linux kernel NFS server (`/exports`).
+Ansible role for deploying and managing the official Kubernetes SIG Storage NFS CSI Driver
+(`csi-driver-nfs/csi-driver-nfs`) via Helm on the Kubernetes control plane node, providing automated dynamic
+PersistentVolume provisioning backed by the homelab Linux kernel NFS server (`/exports`).
 
 ---
 
@@ -10,7 +12,8 @@ Ansible role for deploying and managing the official Kubernetes SIG Storage NFS 
 - **Helm Chart**: `csi-driver-nfs/csi-driver-nfs` (v4.9.0+)
 - **Target Namespace**: `kube-system`
 - **Dynamic Provisioner**: `nfs.csi.k8s.io`
-- **Controller Components**: `csi-provisioner` sidecar (watches PVCs and dynamically creates NFS subdirectories) and `csi-snapshotter`
+- **Controller Components**: `csi-provisioner` sidecar (watches PVCs and dynamically creates NFS subdirectories) and
+  `csi-snapshotter`
 - **Node Plugin**: `csi-nfs-node` DaemonSet mounting NFS volumes on worker nodes
 - **Dynamic StorageClass**: `nfs-csi` with parameters `server: nfs-server.local` and `share: /exports`
 

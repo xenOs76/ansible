@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# 02-etcd-quorum.sh: Inspect etcd Multi-Node Quorum & Endpoint Health
+# ==============================================================================
+set -euo pipefail
+
+ETCD_CA="/etc/kubernetes/pki/etcd/ca.crt"
+ETCD_CERT="/etc/kubernetes/pki/etcd/server.crt"
+ETCD_KEY="/etc/kubernetes/pki/etcd/server.key"
+
+echo "=== [Drill 2] Inspecting 3-Node Stacked etcd Cluster Quorum ==="
+
+# Check TLS certificate access
+if [[ ! -f "${ETCD_CA}" || ! -f "${ETCD_CERT}" || ! -f "${ETCD_KEY}" ]]; then
+  echo "Error: etcd PKI certificates not found at /etc/kubernetes/pki/etcd/. Must run with sudo or as root." >&2
+  exit 1
+fi
+
+export ETCDCTL_API=3
+
+# Collect endpoints of all control planes
+ENDPOINTS="https://127.0.0.1:2379"
+
+echo "1. Checking etcd cluster member list:"
+sudo ETCDCTL_API=3 etcdctl \
+  --cacert="${ETCD_CA}" \
+  --cert="${ETCD_CERT}" \
+  --key="${ETCD_KEY}" \
+  --endpoints="${ENDPOINTS}" \
+  member list -w table
+
+echo ""
+echo "2. Checking etcd endpoint health across members:"
+sudo ETCDCTL_API=3 etcdctl \
+  --cacert="${ETCD_CA}" \
+  --cert="${ETCD_CERT}" \
+  --key="${ETCD_KEY}" \
+  --endpoints="${ENDPOINTS}" \
+  endpoint health -w table
+
+echo ""
+echo "=== Drill 2 PASSED: etcd quorum verified ==="

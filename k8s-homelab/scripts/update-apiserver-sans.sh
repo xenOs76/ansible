@@ -86,7 +86,7 @@ for ip in ${INTERFACE_IPS}; do
     TARGET_SANS+=("${ip}")
   fi
 done
-TARGET_SANS+=("127.0.0.1" "192.168.56.10" "kube-control-plane" "localhost")
+TARGET_SANS+=("127.0.0.1" "192.168.56.9" "192.168.56.10" "192.168.56.11" "192.168.56.12" "kube-control-plane" "kube-cp-1" "kube-cp-2" "kube-cp-3" "localhost")
 
 HOST_SHORT="$(hostname -s 2>/dev/null || hostname 2>/dev/null || true)"
 HOST_FQDN="$(hostname -f 2>/dev/null || true)"

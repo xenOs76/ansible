@@ -2,6 +2,7 @@
 - name: Upgrade Kubernetes control plane
   hosts: control_plane
   become: true
+  serial: 1
   roles:
     - role: upgrade
   vars:

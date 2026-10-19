@@ -1,8 +1,10 @@
 # Kubernetes Homelab & Certification Lab Suite (`k8s-homelab`)
 
-Modular, production-grade Ansible automation suite to bootstrap, configure, manage, and tear down a multi-node Kubernetes 1.34+ cluster (`kubeadm` + `containerd` + Cilium CNI) on Libvirt/KVM via Vagrant or bare metal.
+Modular, production-grade Ansible automation suite to bootstrap, configure, manage, and tear down a multi-node
+Kubernetes 1.34+ cluster (`kubeadm` + `containerd` + Cilium CNI) on Libvirt/KVM via Vagrant or bare metal.
 
-The environment serves as both an enterprise-grade homelab foundation and a rapid-iteration training platform for the **Certified Kubernetes Administrator (CKA)** and **Certified Kubernetes Security Specialist (CKS)** certifications.
+The environment serves as both an enterprise-grade homelab foundation and a rapid-iteration training platform for the
+**Certified Kubernetes Administrator (CKA)** and **Certified Kubernetes Security Specialist (CKS)** certifications.
 
 ---
 
@@ -27,28 +29,39 @@ The environment serves as both an enterprise-grade homelab foundation and a rapi
 
 ### 1. Storage Architecture
 
-- **Rook-Ceph (`roles/rook_ceph`, `playbooks/ceph.yml`)**: Cloud-native Ceph orchestration backed by `/dev/vdb` on the control plane, dynamically provisioning block PVCs via `rook-ceph-block` StorageClass.
-- **NFS Shared Storage (`roles/nfs_server`, `playbooks/nfs.yml`)**: Linux kernel NFS server exporting `/exports` across cluster worker nodes.
-- **iSCSI Target Server (`roles/iscsi_target`, `playbooks/iscsi.yml`)**: Standalone Linux-IO (`LIO`) kernel target with file-backed LUNs for raw block and static PV testing.
+- **Rook-Ceph (`roles/rook_ceph`, `playbooks/ceph.yml`)**: Cloud-native Ceph orchestration backed by `/dev/vdb` on the
+  control plane, dynamically provisioning block PVCs via `rook-ceph-block` StorageClass.
+- **NFS Shared Storage (`roles/nfs_server`, `playbooks/nfs.yml`)**: Linux kernel NFS server exporting `/exports` across
+  cluster worker nodes.
+- **iSCSI Target Server (`roles/iscsi_target`, `playbooks/iscsi.yml`)**: Standalone Linux-IO (`LIO`) kernel target with
+  file-backed LUNs for raw block and static PV testing.
 
 ### 2. CKA Hands-on Lab Suite (`roles/cka_lab`)
 
 Deployed to `/home/vagrant/cka/` on `kube-control-plane` (`make preprod-cka-lab`):
 
-- **Workloads & Pods**: Advanced scheduling (taints, tolerations, affinity), sidecar containers, jobs, cronjobs, and ephemeral debug containers.
-- **Networking**: ClusterIP, NodePort, Ingress prefix routing, Gateway API (`HTTPRoute`), and multi-tier NetworkPolicies.
+- **Workloads & Pods**: Advanced scheduling (taints, tolerations, affinity), sidecar containers, jobs, cronjobs, and
+  ephemeral debug containers.
+- **Networking**: ClusterIP, NodePort, Ingress prefix routing, Gateway API (`HTTPRoute`), and multi-tier
+  NetworkPolicies.
 - **Storage Drills**: Static PV/PVC mounts across NFS, Ceph RBD, and iSCSI raw block devices.
-- **Cluster Maintenance**: Safe drain/cordon, etcd backup/restore drills (`etcdctl`/`etcdutl` v3.5.16), and rolling cluster upgrades.
-- **Dynamic Chaos Injection (`make preprod-cka-chaos`)**: Headless LitmusChaos drills (OOM kills, network latency, DNS blackholing, node memory pressure).
+- **Cluster Maintenance**: Safe drain/cordon, etcd backup/restore drills (`etcdctl`/`etcdutl` v3.5.16), and rolling
+  cluster upgrades.
+- **Dynamic Chaos Injection (`make preprod-cka-chaos`)**: Headless LitmusChaos drills (OOM kills, network latency, DNS
+  blackholing, node memory pressure).
 
 ### 3. CKS Certification Lab Suite (`roles/cks_lab`)
 
 Deployed to `/home/vagrant/cks/` on `kube-control-plane` (`make preprod-cks-lab`):
 
-- **Security Toolchain**: Pinned binaries with dual `amd64`/`arm64` support (`kube-bench`, `trivy`, `hadolint`, `kubesec`, `cosign`, `falco`).
-- **AppArmor Kernel Hardening**: Multi-node profile distribution and kernel enforcement (`k8s-deny-write`, `k8s-deny-network`) with Pod drills and automated test scripts.
-- **Seccomp Syscall Filtering**: Multi-node Seccomp profile placement in kubelet root (`audit.json`, `fine-grained.json`) and native Kubernetes 1.30+ `securityContext` Pod drills.
-- **Host Attack Surface Auditing**: Native audit utilities (`audit-ports.sh`, `audit-services.sh`, `audit-file-perms.sh`).
+- **Security Toolchain**: Pinned binaries with dual `amd64`/`arm64` support (`kube-bench`, `trivy`, `hadolint`,
+  `kubesec`, `cosign`, `falco`).
+- **AppArmor Kernel Hardening**: Multi-node profile distribution and kernel enforcement (`k8s-deny-write`,
+  `k8s-deny-network`) with Pod drills and automated test scripts.
+- **Seccomp Syscall Filtering**: Multi-node Seccomp profile placement in kubelet root (`audit.json`,
+  `fine-grained.json`) and native Kubernetes 1.30+ `securityContext` Pod drills.
+- **Host Attack Surface Auditing**: Native audit utilities (`audit-ports.sh`, `audit-services.sh`,
+  `audit-file-perms.sh`).
 
 ---
 

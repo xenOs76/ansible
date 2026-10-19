@@ -56,6 +56,61 @@
     - volumes
     - nfs
 
+- name: Check legacy NFS export directory status
+  ansible.builtin.stat:
+    path: "{{ cka_lab_nfs_legacy_export_dir }}"
+    follow: false
+  register: _cka_lab_legacy_export_stat
+  when: (cka_lab_nfs_legacy_export_dir | default('')) != '' and cka_lab_nfs_legacy_export_dir != cka_lab_nfs_export_dir
+  tags:
+    - cka_lab
+    - volumes
+    - nfs
+
+- name: Migrate existing files from legacy NFS directory to new export location
+  ansible.builtin.copy:
+    src: "{{ cka_lab_nfs_legacy_export_dir }}/"
+    dest: "{{ cka_lab_nfs_export_dir }}/"
+    remote_src: true
+    mode: preserve
+  when:
+    - (cka_lab_nfs_legacy_export_dir | default('')) != ''
+    - cka_lab_nfs_legacy_export_dir != cka_lab_nfs_export_dir
+    - _cka_lab_legacy_export_stat.stat.exists | default(false)
+    - _cka_lab_legacy_export_stat.stat.isdir | default(false)
+    - not (_cka_lab_legacy_export_stat.stat.islnk | default(false))
+  tags:
+    - cka_lab
+    - volumes
+    - nfs
+
+- name: Remove legacy physical NFS export directory prior to symlinking
+  ansible.builtin.file:
+    path: "{{ cka_lab_nfs_legacy_export_dir }}"
+    state: absent
+  when:
+    - (cka_lab_nfs_legacy_export_dir | default('')) != ''
+    - cka_lab_nfs_legacy_export_dir != cka_lab_nfs_export_dir
+    - _cka_lab_legacy_export_stat.stat.exists | default(false)
+    - _cka_lab_legacy_export_stat.stat.isdir | default(false)
+    - not (_cka_lab_legacy_export_stat.stat.islnk | default(false))
+  tags:
+    - cka_lab
+    - volumes
+    - nfs
+
+- name: Ensure legacy NFS export symlink exists for backward compatibility
+  ansible.builtin.file:
+    src: "{{ cka_lab_nfs_export_dir }}"
+    dest: "{{ cka_lab_nfs_legacy_export_dir }}"
+    state: link
+    force: true
+  when: (cka_lab_nfs_legacy_export_dir | default('')) != '' and cka_lab_nfs_legacy_export_dir != cka_lab_nfs_export_dir
+  tags:
+    - cka_lab
+    - volumes
+    - nfs
+
 - name: Ensure CKA lab volumes directories exist
   ansible.builtin.file:
     path: "{{ item }}"
@@ -70,8 +125,9 @@
     - "{{ cka_lab_volumes_dir }}/03-hostpath"
     - "{{ cka_lab_volumes_dir }}/04-configmap-secret"
     - "{{ cka_lab_volumes_dir }}/05-pv-pvc-lifecycle"
-    - "{{ cka_lab_volumes_dir }}/06-rbd"
+    - "{{ cka_lab_volumes_dir }}/06-ceph"
     - "{{ cka_lab_volumes_dir }}/07-iscsi"
+    - "{{ cka_lab_volumes_dir }}/08-fc"
   tags:
     - cka_lab
     - volumes
@@ -88,27 +144,47 @@
     - {src: "volumes_test_drills.sh.j2", dest: "test-volumes-drills.sh", mode: "0755"}
     - {src: "volumes_test_nfs_mounts.sh.j2", dest: "test-nfs-mounts.sh", mode: "0755"}
     - {src: "volumes_01_nfs_direct_pod.yaml.j2", dest: "01-nfs/01-nfs-direct-pod.yaml"}
+    - {src: "volumes_01_nfs_direct_pod.yaml.j2", dest: "01-nfs/nfs-direct-pod.yaml"}
     - {src: "volumes_01_nfs_deployment_shared.yaml.j2", dest: "01-nfs/02-nfs-deployment-shared.yaml"}
+    - {src: "volumes_01_nfs_deployment_shared.yaml.j2", dest: "01-nfs/nfs-shared-deployment.yaml"}
     - {src: "volumes_01_nfs_pv.yaml.j2", dest: "01-nfs/03-nfs-pv.yaml"}
     - {src: "volumes_01_nfs_pvc.yaml.j2", dest: "01-nfs/04-nfs-pvc.yaml"}
     - {src: "volumes_01_nfs_pvc_pod.yaml.j2", dest: "01-nfs/05-nfs-pvc-pod.yaml"}
+    - {src: "volumes_01_nfs_pvc_pod.yaml.j2", dest: "01-nfs/nfs-pvc-pod.yaml"}
+    - {src: "volumes_01_manual_nfs_pv.yaml.j2", dest: "01-nfs/manual-nfs-pv.yaml"}
+    - {src: "volumes_01_manual_nfs_pvc.yaml.j2", dest: "01-nfs/manual-nfs-pvc.yaml"}
     - {src: "volumes_02_emptydir_sidecar_pod.yaml.j2", dest: "02-emptydir/01-emptydir-sidecar-pod.yaml"}
+    - {src: "volumes_02_emptydir_sidecar_pod.yaml.j2", dest: "02-emptydir/emptydir-sidecar-pod.yaml"}
     - {src: "volumes_02_emptydir_memory_pod.yaml.j2", dest: "02-emptydir/02-emptydir-memory-pod.yaml"}
+    - {src: "volumes_02_emptydir_memory_pod.yaml.j2", dest: "02-emptydir/emptydir-memory-pod.yaml"}
     - {src: "volumes_03_hostpath_pod.yaml.j2", dest: "03-hostpath/01-hostpath-pod.yaml"}
+    - {src: "volumes_03_hostpath_pod.yaml.j2", dest: "03-hostpath/hostpath-pod.yaml"}
     - {src: "volumes_03_hostpath_log_viewer.yaml.j2", dest: "03-hostpath/02-hostpath-log-viewer.yaml"}
+    - {src: "volumes_03_hostpath_log_viewer.yaml.j2", dest: "03-hostpath/hostpath-log-viewer.yaml"}
     - {src: "volumes_04_configmap_volume_pod.yaml.j2", dest: "04-configmap-secret/01-configmap-volume-pod.yaml"}
+    - {src: "volumes_04_configmap_volume_pod.yaml.j2", dest: "04-configmap-secret/configmap-volume-pod.yaml"}
     - {src: "volumes_04_secret_volume_pod.yaml.j2", dest: "04-configmap-secret/02-secret-volume-pod.yaml"}
+    - {src: "volumes_04_secret_volume_pod.yaml.j2", dest: "04-configmap-secret/secret-volume-pod.yaml"}
     - {src: "volumes_05_local_pv_pvc.yaml.j2", dest: "05-pv-pvc-lifecycle/01-local-pv-pvc.yaml"}
     - {src: "volumes_05_pvc_expansion.yaml.j2", dest: "05-pv-pvc-lifecycle/02-pvc-expansion.yaml"}
+    - {src: "volumes_05_reclaim_pv.yaml.j2", dest: "05-pv-pvc-lifecycle/reclaim-pv.yaml"}
+    - {src: "volumes_05_reclaim_pvc.yaml.j2", dest: "05-pv-pvc-lifecycle/reclaim-pvc.yaml"}
+    - {src: "volumes_05_reclaim_pv_pvc.yaml.j2", dest: "05-pv-pvc-lifecycle/reclaim-pv-pvc.yaml"}
     - {src: "volumes_05_reclaim_policy_drill.md.j2", dest: "05-pv-pvc-lifecycle/03-reclaim-policy-drill.md"}
     - {src: "volumes_05_reclaim_mutation_drill.sh.j2", dest: "05-pv-pvc-lifecycle/reclaim-mutation-drill.sh", mode: "0755"}
     - {src: "volumes_05_test_reclaim_mutation.sh.j2", dest: "05-pv-pvc-lifecycle/test-reclaim-mutation.sh", mode: "0755"}
-    - {src: "volumes_06_rbd_readme.md.j2", dest: "06-rbd/README.md", mode: "0644"}
-    - {src: "volumes_06_test_rbd_volumes.sh.j2", dest: "06-rbd/test-rbd-volumes.sh", mode: "0755"}
-    - {src: "volumes_06_rbd_dynamic_filesystem.yaml.j2", dest: "06-rbd/01-rbd-dynamic-filesystem.yaml"}
-    - {src: "volumes_06_rbd_raw_block.yaml.j2", dest: "06-rbd/02-rbd-raw-block.yaml"}
-    - {src: "volumes_06_rbd_static_pv_pvc_pod.yaml.j2", dest: "06-rbd/03-rbd-static-pv-pvc-pod.yaml"}
-    - {src: "volumes_06_rbd_pvc_expansion.yaml.j2", dest: "06-rbd/04-rbd-pvc-expansion.yaml"}
+    - {src: "volumes_06_ceph_readme.md.j2", dest: "06-ceph/README.md", mode: "0644"}
+    - {src: "volumes_06_test_ceph_storage.sh.j2", dest: "06-ceph/test-ceph-storage.sh", mode: "0755"}
+    - {src: "volumes_06_rbd_dynamic_filesystem.yaml.j2", dest: "06-ceph/01-rbd-dynamic-filesystem.yaml"}
+    - {src: "volumes_06_rbd_raw_block.yaml.j2", dest: "06-ceph/02-rbd-raw-block.yaml"}
+    - {src: "volumes_06_rbd_static_pv_pvc_pod.yaml.j2", dest: "06-ceph/03-rbd-static-pv-pvc-pod.yaml"}
+    - {src: "volumes_06_rbd_pvc_expansion.yaml.j2", dest: "06-ceph/04-rbd-pvc-expansion.yaml"}
+    - {src: "volumes_06_cephfs_sc.yaml.j2", dest: "06-ceph/05-cephfs-sc.yaml"}
+    - {src: "volumes_06_cephfs_dynamic_pvc.yaml.j2", dest: "06-ceph/06-cephfs-dynamic-pvc.yaml"}
+    - {src: "volumes_06_cephfs_shared_deployment.yaml.j2", dest: "06-ceph/07-cephfs-shared-deployment.yaml"}
+    - {src: "volumes_06_ceph_nfs_sc.yaml.j2", dest: "06-ceph/08-ceph-nfs-sc.yaml"}
+    - {src: "volumes_06_ceph_nfs_dynamic_pvc.yaml.j2", dest: "06-ceph/09-ceph-nfs-dynamic-pvc.yaml"}
+    - {src: "volumes_06_ceph_nfs_shared_deployment.yaml.j2", dest: "06-ceph/10-ceph-nfs-shared-deployment.yaml"}
     - {src: "volumes_07_iscsi_readme.md.j2", dest: "07-iscsi/README.md", mode: "0644"}
     - {src: "volumes_07_test_iscsi_volumes.sh.j2", dest: "07-iscsi/test-iscsi-volumes.sh", mode: "0755"}
     - {src: "volumes_07_iscsi_01_direct_pod.yaml.j2", dest: "07-iscsi/01-iscsi-direct-pod.yaml"}
@@ -116,8 +192,76 @@
     - {src: "volumes_07_iscsi_03_raw_block.yaml.j2", dest: "07-iscsi/03-iscsi-raw-block.yaml"}
     - {src: "volumes_07_iscsi_04_rwo_conflict.yaml.j2", dest: "07-iscsi/04-iscsi-two-nodes-rwo.yaml"}
     - {src: "volumes_07_iscsi_05_chap_secret.yaml.j2", dest: "07-iscsi/05-iscsi-chap-secret.yaml"}
+    - {src: "volumes_08_fc_readme.md.j2", dest: "08-fc/README.md", mode: "0644"}
+    - {src: "volumes_08_test_fc_volumes.sh.j2", dest: "08-fc/test-fc-volumes.sh", mode: "0755"}
+    - {src: "volumes_08_fc_01_direct_pod.yaml.j2", dest: "08-fc/01-fc-direct-pod.yaml"}
+    - {src: "volumes_08_fc_02_pv_pvc_pod.yaml.j2", dest: "08-fc/02-fc-pv-pvc-pod.yaml"}
+    - {src: "volumes_08_fc_03_raw_block.yaml.j2", dest: "08-fc/03-fc-raw-block.yaml"}
+    - {src: "volumes_08_fc_04_multipath_pv_pvc.yaml.j2", dest: "08-fc/04-fc-multipath-pv-pvc.yaml"}
+    - {src: "volumes_08_fc_05_reclaim_recovery.md.j2", dest: "08-fc/05-fc-reclaim-recovery-drill.md", mode: "0644"}
+    - {src: "volumes_08_fc_06_lun_expansion.yaml.j2", dest: "08-fc/06-fc-lun-expansion.yaml"}
   loop_control:
     label: "volumes/{{ item.dest }}"
+  tags:
+    - cka_lab
+    - volumes
+
+- name: Check legacy 06-rbd directory status
+  ansible.builtin.stat:
+    path: "{{ cka_lab_volumes_dir }}/06-rbd"
+    follow: false
+  register: _cka_lab_legacy_rbd_stat
+  tags:
+    - cka_lab
+    - volumes
+
+- name: Remove legacy physical 06-rbd directory prior to symlinking
+  ansible.builtin.file:
+    path: "{{ cka_lab_volumes_dir }}/06-rbd"
+    state: absent
+  when:
+    - _cka_lab_legacy_rbd_stat.stat.exists | default(false)
+    - _cka_lab_legacy_rbd_stat.stat.isdir | default(false)
+    - not (_cka_lab_legacy_rbd_stat.stat.islnk | default(false))
+  tags:
+    - cka_lab
+    - volumes
+
+- name: Ensure backward compatibility symlink 06-rbd -> 06-ceph exists
+  ansible.builtin.file:
+    src: "06-ceph"
+    dest: "{{ cka_lab_volumes_dir }}/06-rbd"
+    state: link
+    owner: "{{ ansible_user | default('vagrant') }}"
+    group: "{{ ansible_user | default('vagrant') }}"
+  tags:
+    - cka_lab
+    - volumes
+
+- name: Ensure backward compatibility symlink test-rbd-volumes.sh -> test-ceph-storage.sh exists
+  ansible.builtin.file:
+    src: "test-ceph-storage.sh"
+    dest: "{{ cka_lab_volumes_dir }}/06-ceph/test-rbd-volumes.sh"
+    state: link
+    owner: "{{ ansible_user | default('vagrant') }}"
+    group: "{{ ansible_user | default('vagrant') }}"
+  tags:
+    - cka_lab
+    - volumes
+
+- name: Validate syntax of volumes shell scripts
+  ansible.builtin.command: >-
+    bash -n {{ cka_lab_volumes_dir }}/{{ item }}
+  loop:
+    - test-volumes-drills.sh
+    - test-nfs-mounts.sh
+    - 05-pv-pvc-lifecycle/reclaim-mutation-drill.sh
+    - 05-pv-pvc-lifecycle/test-reclaim-mutation.sh
+    - 06-ceph/test-ceph-storage.sh
+    - 07-iscsi/test-iscsi-volumes.sh
+    - 08-fc/test-fc-volumes.sh
+  register: cka_lab_volumes_syntax_check
+  changed_when: false
   tags:
     - cka_lab
     - volumes

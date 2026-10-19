@@ -1,16 +1,21 @@
 # CKA Lab Exercise: Specialized Workload Controllers & Multi-Container Pods
 
-Hands-on training scenario for the Certified Kubernetes Administrator (CKA) certification, covering DaemonSets, parallel Jobs, scheduled CronJobs, Gated Init Containers, and Native Sidecar Containers.
+Hands-on training scenario for the Certified Kubernetes Administrator (CKA) certification, covering DaemonSets, parallel
+Jobs, scheduled CronJobs, Gated Init Containers, and Native Sidecar Containers.
 
 ---
 
 ## 1. Overview & Objectives
 
-Kubernetes provides controllers tailored for batch processing, node daemon services, and multi-container lifecycle coordination:
+Kubernetes provides controllers tailored for batch processing, node daemon services, and multi-container lifecycle
+coordination:
 
-- **Section 1: DaemonSets**: Ensuring a copy of a pod runs on all (or subset of) nodes for logging, monitoring, or storage daemons.
-- **Section 2: Batch Processing (Jobs & CronJobs)**: Finite task execution with `completions`, `parallelism`, `backoffLimit`, and recurring CronJob scheduling policies.
-- **Section 3: Multi-Container Pod Patterns**: Sequential initialization via `initContainers`, and persistent background helper execution via native sidecar containers (`restartPolicy: Always` in `initContainers`).
+- **Section 1: DaemonSets**: Ensuring a copy of a pod runs on all (or subset of) nodes for logging, monitoring, or
+  storage daemons.
+- **Section 2: Batch Processing (Jobs & CronJobs)**: Finite task execution with `completions`, `parallelism`,
+  `backoffLimit`, and recurring CronJob scheduling policies.
+- **Section 3: Multi-Container Pod Patterns**: Sequential initialization via `initContainers`, and persistent background
+  helper execution via native sidecar containers (`restartPolicy: Always` in `initContainers`).
 
 ### Scenario Directory Structure
 

@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# Script: 01-ha-kubeadm-init.sh
+# Purpose: Initialize primary control plane for High Availability cluster.
+# ==============================================================================
+set -euo pipefail
+
+VIP="{{ cka_lab_ha_cluster_vip | default('192.168.56.9') }}"
+PORT="{{ cka_lab_ha_cluster_port | default(8443) }}"
+POD_CIDR="${1:-{{ cka_lab_cluster_install_pod_cidr }}}"
+SERVICE_CIDR="${2:-{{ cka_lab_cluster_install_service_cidr }}}"
+
+if [[ $EUID -ne 0 ]]; then
+  echo "Error: This script must be run as root (use sudo)." >&2
+  exit 1
+fi
+
+if [[ -f /etc/kubernetes/admin.conf ]]; then
+  echo "==> Control plane is already initialized (/etc/kubernetes/admin.conf exists)."
+  echo "    Skipping HA kubeadm init."
+  exit 0
+fi
+
+echo "==> [01-ha-kubeadm-init.sh] Initializing High-Availability Primary Control Plane..."
+echo "    Control Plane Endpoint: ${VIP}:${PORT}"
+echo "    Pod CIDR:               ${POD_CIDR}"
+echo "    Service CIDR:           ${SERVICE_CIDR}"
+
+kubeadm init \
+  --control-plane-endpoint="${VIP}:${PORT}" \
+  --upload-certs \
+  --pod-network-cidr="${POD_CIDR}" \
+  --service-cidr="${SERVICE_CIDR}" \
+  --apiserver-advertise-address=192.168.56.10 \
+  | tee /home/{{ ansible_user | default('vagrant') }}/ha-kubeadm-init.out
+
+# Configure kubeconfig for vagrant and root users
+for USER_HOME in "/home/{{ ansible_user | default('vagrant') }}" "/root"; do
+  mkdir -p "${USER_HOME}/.kube"
+  cp -f /etc/kubernetes/admin.conf "${USER_HOME}/.kube/config"
+  if [[ "${USER_HOME}" =~ vagrant ]]; then
+    chown -R {{ ansible_user | default('vagrant') }}:{{ ansible_user | default('vagrant') }} "${USER_HOME}/.kube"
+  fi
+  chmod 0600 "${USER_HOME}/.kube/config"
+done
+
+echo "==> [01-ha-kubeadm-init.sh] Primary control plane initialized successfully."
+echo "    Output saved to /home/{{ ansible_user | default('vagrant') }}/ha-kubeadm-init.out"
+echo "    Next steps:"
+echo "    1. Install CNI: ./02-install-cni-cilium.sh (or ./02-install-cni-calico.sh)"
+echo "    2. Join secondary control planes: ./03-join-workers.sh (append --apiserver-advertise-address <node_ip>)"
+echo "    3. Join worker nodes to ${VIP}:${PORT}"

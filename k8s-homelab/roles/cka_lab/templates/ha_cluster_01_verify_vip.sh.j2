@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# 01-verify-vip.sh: Verify HA VIP and HAProxy Endpoint Connectivity
+# ==============================================================================
+set -euo pipefail
+
+VIP="{{ cka_lab_ha_cluster_vip | default('192.168.56.9') }}"
+PORT="{{ cka_lab_ha_cluster_port | default(8443) }}"
+
+echo "=== [Drill 1] Verifying High-Availability VIP (${VIP}:${PORT}) ==="
+
+# 1. Ping test to VIP
+echo -n "1. Testing network reachability to VIP (${VIP})... "
+if ping -c 2 -W 2 "${VIP}" >/dev/null 2>&1; then
+  echo "OK (Reachable)"
+else
+  echo "FAIL (Unreachable)"
+  exit 1
+fi
+
+# 2. Querying livez probe through HAProxy port
+echo -n "2. Querying Kubernetes /livez probe via https://${VIP}:${PORT}/livez... "
+LIVEZ_OUTPUT=$(curl -sk -f "https://${VIP}:${PORT}/livez" 2>/dev/null || true)
+if [[ "${LIVEZ_OUTPUT}" == "ok" ]]; then
+  echo "OK (Livez passed)"
+else
+  echo "FAIL (Received: ${LIVEZ_OUTPUT:-none})"
+  exit 1
+fi
+
+# 3. Query cluster nodes via VIP
+echo "3. Querying control plane nodes via VIP kubectl context..."
+kubectl get nodes -l node-role.kubernetes.io/control-plane -o wide
+
+echo "=== Drill 1 PASSED: HA VIP and HAProxy routing operational ==="

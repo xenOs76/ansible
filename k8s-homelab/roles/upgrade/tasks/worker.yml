@@ -13,6 +13,25 @@
     - upgrade
     - upgrade_worker
 
+- name: Update Kubernetes apt repository key for target minor release on worker
+  ansible.builtin.get_url:
+    url: "https://pkgs.k8s.io/core:/stable:/{{ upgrade_target_k8s_version_major_minor }}/deb/Release.key"
+    dest: /etc/apt/keyrings/kubernetes-apt-keyring.asc
+    mode: "0644"
+  tags:
+    - upgrade
+    - upgrade_worker
+
+- name: Update Kubernetes apt repository source to target minor version on worker
+  ansible.builtin.apt_repository:
+    repo: "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.asc] https://pkgs.k8s.io/core:/stable:/{{ upgrade_target_k8s_version_major_minor }}/deb/ /"
+    state: present
+    filename: kubernetes
+    update_cache: true
+  tags:
+    - upgrade
+    - upgrade_worker
+
 - name: Unhold kubeadm package on worker
   ansible.builtin.dpkg_selections:
     name: kubeadm

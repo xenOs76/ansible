@@ -8,37 +8,70 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.4] - 2026-10-19
+
 ### Added
 
-- **ConfigMaps, Secrets & Pod Consumption Practice Module (`roles/cka_lab`, `~/cka/configmaps/`)**: Expanded CKA exam training lab with a comprehensive practice module synthesizing ConfigMap and Secret generation, granular environment variable binding (`valueFrom`), bulk environment variable binding with prefixes (`envFrom`), full directory volume mounts, single-file projections using `subPath`, specification immutability (`immutable: true`) with API server rejection tests, and an automated end-to-end verification test suite aligned with official Kubernetes documentation and CNCF curriculum competencies.
-- **Kubernetes Secrets & Workload Consumption Practice Module (`roles/cka_lab`, `~/cka/secrets/`)**: Expanded CKA exam training lab with an end-to-end Secrets module covering imperative creation across generic, TLS, and docker-registry types, fast Base64 JSONPath and Go-template decoding, granular environment variable binding (`valueFrom.secretKeyRef`), bulk injection (`envFrom.secretRef` with prefixes), restrictive volume file permissions (`defaultMode: 0400`), NGINX HTTPS web termination, specification immutability enforcement, and an automated verification test suite.
-- **Deployments & Workload Rollout Practice Module (`roles/cka_lab`, `~/cka/deployments/`)**: Expanded CKA exam training lab with an end-to-end Deployments module covering rapid imperative generation (`kubectl create deployment`, `kubectl set image`, `kubectl scale`), selector immutability diagnosis and pod quarantine autopsy debugging, zero-downtime rolling update strategy tuning (`maxSurge`, `maxUnavailable`) vs singleton `Recreate`, rollout revision history inspection with undo rollbacks, batch configuration changes via pause and resume, and an automated verification test suite.
-- **Storage, Volumes & Lifecycle Practice Module (`roles/cka_lab`, `~/cka/volumes/`)**: Expanded CKA exam training lab with a comprehensive Storage module covering static PersistentVolume and PersistentVolumeClaim binding phases, live reclaim policy mutation (`Retain` vs `Delete`) with manual recovery, ephemeral and in-memory scratch storage (`emptyDir`), host filesystem mounts (`hostPath`), ConfigMap and Secret projected volume consumption, online volume expansion, and an end-to-end automated verification test suite.
-- **Scheduling & Capacity Management Tutorial Guide (`roles/cka_lab`, `~/cka/05-scheduling/`)**: Enhanced the scheduling scenario master guide with an in-depth step-by-step tutorial covering node repellent taints (`NoSchedule`, `NoExecute`) and matching pod tolerations, hard and soft `nodeAffinity` with `podAntiAffinity` multi-replica spreading, Horizontal Pod Autoscaler metrics prerequisites and synthetic load generation, namespace capacity governance (`ResourceQuota` hard limits and `LimitRange` default injection/boundary enforcement), and `PriorityClass` workload preemption mechanics.
-- **Kubernetes v1.35 Alignment & Upgrade Tracking (`roles/cka_lab`, `docs/`)**: Integrated Kubernetes v1.35 GA features across CKA practice drills, adding an in-place pod resource resizing verification script (`~/cka/04-pods/05-spec-immutability/inplace-resize-drill.sh`), node-local traffic routing demonstration (`trafficDistribution: PreferSameNode`), `kubeadm.k8s.io/v1beta4` configuration schema updates, and comprehensive cluster upgrade tracking documentation (`docs/cluster_upgrade_todos.md`).
-- **Curriculum Architecture & Sequential Directory Numbering (`roles/cka_lab`, `~/cka/`)**: Restructured all 17 hands-on exam practice modules into a 2-digit zero-padded linear hierarchy (`01-jsonpath` through `17-cluster-troubleshooting`), ordered strictly by increasing architectural complexity and dependency prerequisites, accompanied by an interactive master index (`~/cka/README.md`) and automatic backward-compatibility symlinks for all legacy unnumbered paths.
-- **Default System Editor Configuration & YAML Indentation Standards (`roles/common`, `scripts/common.sh`)**: Enforced `vim` as the cluster-wide default editor across all provisioning stages (Vagrant initial bootstrap, Ansible common role, and control plane user environments) via Debian alternatives (`update-alternatives --set editor /usr/bin/vim.basic`), system-wide profile scripts (`/etc/profile.d/editor.sh`), `/etc/environment`, user `.bashrc` profiles, and global YAML-optimized vim defaults (`set tabstop=2 shiftwidth=2 expandtab number` in `/etc/vim/vimrc.local`).
-- **Networking Practice Module Tutorial Guide (`roles/cka_lab`, `~/cka/11-networking/`)**: Expanded the networking walkthrough drills with comprehensive step-by-step instructions, imperative `kubectl expose` and `kubectl create ingress` generation shortcuts, multi-port naming rules, EndpointSlice tracking, direct headless DNS resolution, Gateway API HTTPRoute URL rewriting, CoreDNS egress requirements, and multi-namespace NetworkPolicy isolation mechanics.
-- **Storage & Volumes Practice Walkthrough Guide (`roles/cka_lab`, `~/cka/12-storage/`)**: Expanded the Storage domain exam walkthrough drills with manual creation instructions, imperative Pod skeleton generation patterns (`kubectl run --dry-run=client -o yaml`), 3-point PV/PVC binding criteria breakdowns, `emptyDir` sidecar sharing and in-memory `tmpfs` mounts, hostPath security permissions (`readOnly: true`, `DirectoryOrCreate`), imperative ConfigMap/Secret projected volumes with strict permissions (`defaultMode: 0400`), live PV reclaim policy mutation via `kubectl patch`, and manual volume recovery by clearing `spec.claimRef`.
-- **StorageClasses & Dynamic Provisioning Practice Walkthrough Guide (`roles/cka_lab`, `~/cka/13-storage-classes/`)**: Expanded the Dynamic Provisioning exam walkthrough drills with manual StorageClass authoring, default provisioner designation via `is-default-class` annotations, detailed delayed binding diagnostics (`volumeBindingMode: WaitForFirstConsumer`), imperative consumer Pod skeletons triggering automated PV creation, live PVC storage expansion (`allowVolumeExpansion: true`), and dynamic ReadWriteMany NFS CSI shared deployment workflows.
-- **Cluster Maintenance & Node Troubleshooting Walkthrough Guide (`roles/cka_lab`, `~/cka/17-cluster-troubleshooting/`)**: Expanded the master troubleshooting guide with comprehensive diagnostic workflows, safe node draining flags (`--ignore-daemonsets`, `--delete-emptydir-data`, `--force`), static pod recovery mechanics in `/etc/kubernetes/manifests/` with Container Runtime Interface (`crictl`) triage when API server is unavailable, worker node kubelet systemd diagnostics (`journalctl -u kubelet`) and `/var/lib/kubelet/config.yaml` fixes, resource telemetry sorting (`kubectl top --sort-by`), CoreDNS `Corefile` syntax recovery, service selector and targetPort mismatch triage, worker static pod placement via `staticPodPath`, and runtime engine debugging.
-- **Manual Kubeadm Cluster Upgrade Walkthrough Guide (`roles/cka_lab`, `~/cka/16-upgrade/`)**: Expanded the upgrade guide with APT repository package discovery (`apt-cache madison kubeadm`), strict Kubernetes version skew rules, `kubeadm upgrade plan` diagnostic output interpretation, explicit control plane upgrade procedure (`kubeadm upgrade apply`), worker node kubelet upgrade steps (`kubeadm upgrade node`), and cluster-wide node status validation.
+- **High-Availability (HA) Multi-Master Control Plane (`roles/ha_control_plane`, `Makefile`)**:
+
+  Introduced a production-ready 3-node HA control plane profile (3 CPs @ 2560 MB RAM + 1 Worker @ 2048 MB RAM) within a
+  10 GB memory budget. Automated co-located HAProxy load balancing on port 8443, Keepalived VRRP floating VIP
+  (`192.168.56.9`), automated certificate key upload during `kubeadm init`, secondary control plane join orchestration,
+  and dedicated Makefile targets (`make preprod-ha-up`, `make preprod-switch-ha`).
+- **HAProxy Native Prometheus Metrics, Terminal Observability & Management (`roles/ha_control_plane`)**:
+  Integrated native Prometheus metrics exporter on dedicated port `8405` (`/metrics`) with root redirection and log
+  suppression, real-time web stats (`/stats`), administrative UNIX socket (`/run/haproxy/admin.sock`), and `hatop`
+  interactive CLI terminal monitor with system-wide alias support.
+- **Fibre Channel (FC) SAN Storage Emulator & Drills (`roles/fc_san`, `playbooks/fc.yml`, `roles/cka_lab`)**:
+  Introduced enterprise dual-fabric Fibre Channel SAN storage emulator role with backing sparse LUNs (`/srv/fc/`),
+  management CLI (`fc-san-ctl`), canonical udev path mappings (`/dev/disk/by-path/`), and CKA drills covering raw block
+  volumes, static PV/PVC lifecycles, multipath failover, and online LUN expansion.
+- **CKA Cluster Installation, HA Upgrade & Hands-on Modules (`roles/cka_lab`, `~/cka/`)**:
+  Expanded training suite to 19 sequentially numbered modules (`00-cluster-installation` through `19-ha-cluster`).
+  Added bare-node `kubeadm` bootstrapping, multi-master upgrade rehearsal scripts (`04-ha-upgrade-sequence.sh`,
+  `mock-secondary-cp-upgrade.sh`), secondary join multi-NIC advertise IP guidance, and hands-on drills for
+  Deployments, Pods, ConfigMaps, Secrets, Scheduling, and K8s v1.36 GA User Namespaces.
+- **Kubernetes v1.36 Baseline & v1.37 Rolling Upgrade Suite (`group_vars`, `roles/upgrade`)**:
+  Bumped baseline cluster installation to v1.36 across Vagrant provisioning and inventory defaults, and updated
+  automated rolling upgrade playbooks to target v1.37 with serialized control plane upgrades and node drain/uncordon.
+- **Documentation & Formatting Quality Gates (`scripts/check-readme-line-length.py`)**:
+  Introduced automated 120-character line length validation for READMEs and markdown templates with pre-commit hooks,
+  `scripts/format-readme-line-length.py`, cluster-wide `vim` editor defaults, and global YAML indentation standards.
 
 ### Changed
 
-- **CKA Lab Addon Prerequisites & Controller Collision Guidance (`roles/cka_lab`)**: Added explicit component prerequisite guidance and installer reminders across networking (`02-ingresses`, `03-gateway-api`, `04-network-policies`), scheduling (`03-hpa-autoscaling`), and troubleshooting (`04-metrics-monitoring`) scenarios. Documented NodePort `30080` mutual collision warnings between Ingress-NGINX and NGINX Gateway Fabric, added non-destructive prerequisite detection to `test-ingress.sh` and `test-gateway.sh`, added `nginx.ingress.kubernetes.io/rewrite-target` annotation to the Ingress template, and cross-referenced Metrics Server installer links for HPA and resource telemetry.
-- **CKA Lab Tutorial Guides Markdown Rendering & Vertical Spacing (`roles/cka_lab`)**: Restructured walkthrough drill steps across the entire suite of 22 CKA scenario guides and master README templates from tight ordered list items to dedicated H4/H5 subheadings with zero-indented code blocks and strict blank line margins, ensuring clean vertical spacing and trailing paragraph separation in terminal markdown viewers (`glow`) and web interfaces.
+- **HA Control Plane Deep Layer 7 Health Checking & Split-Brain Mitigation (`roles/ha_control_plane`)**:
+  Upgraded Keepalived to use active HTTP probes against HAProxy port 8443 (`curl -kfs ... /livez`) with priority
+  penalization (`weight -20`), `script_user nobody` security, and unified `state BACKUP` across all nodes to eliminate
+  split-brain election races. Upgraded HAProxy backend health checking to Layer 7 HTTP checks over SSL probing
+  Kubernetes `/readyz` with status 200 and body `ok` assertions.
+- **HA Preprod Scenarios, Make Aliases & NFS Decoupling (`group_vars/preprod_ha.yml`, `Makefile`)**:
+  Decoupled NFS server automation from HA cluster boot to keep VM lifecycle focused, added on-demand `preprod-ha-nfs`,
+  introduced `preprod-cka` and `preprod-ha-cka` Makefile aliases, and scoped enabled CKA lab scenarios dynamically
+  for HA preprod testing.
+- **Storage Export Standardization & Ceph Lab Consolidation (`roles/nfs_server`, `roles/cka_lab`)**:
+  Standardized cluster NFS export root to `/srv/nfsroot` with backward-compatible symlinks (`/exports`), and
+  consolidated Ceph block, CephFS, and Ceph NFS exercises into a unified on-demand storage module (`06-ceph/`).
+- **CKA Lab Walkthrough Guides & Terminal Formatting (`roles/cka_lab`)**:
+  Refactored all 22 walkthrough guides and master navigation templates to 120-character wrapping for optimized terminal
+  rendering in `glow`, enhanced addon prerequisite reminders, and resolved Gateway Fabric/Ingress port collisions.
 
 ### Fixed
 
-- **NGINX Gateway Fabric Server-Side Apply CRD Conflict (`roles/cka_lab`)**: Resolved Helm SSA manager conflicts (`conflicts with "kubectl"`) during `install-nginx-gateway-fabric.sh` by removing redundant out-of-band `kubectl apply --server-side` pre-installation, pinning chart and CRD versions to `2.8.0`/`v2.8.0`, and auto-reconciling any stale `kubectl`-managed `gateway.nginx.org` CRDs so Helm's bundled chart CRDs install cleanly.
-- **CKA Lab Scheduling Quotas & Admission Drill (`roles/cka_lab`, `~/cka/10-scheduling/04-quotas-limits/`)**: Fixed invalid `kubectl run --limits` syntax in the capacity governance tutorial guide by introducing a dedicated manifest (`cka-lab-oversized-pod.yaml`) and documenting inline heredoc and `--overrides` methods, eliminating CLI flag parse failures and aligning with Kubernetes admission control semantics.
+- **HAProxy & Keepalived Service Bootstrap Failures (`roles/ha_control_plane`)**:
+  Resolved HAProxy listener timing by replacing deferred restarts with immediate syntax checks and port wait assertions.
+  Fixed Keepalived startup issues via dynamic interface discovery, RFC 2338 8-character `auth_pass` truncation, and
+  pre-flight configuration tests.
+- **NGINX Gateway Fabric CRD Conflicts & Admission Syntax (`roles/cka_lab`)**:
+  Resolved Helm Server-Side Apply manager conflicts for `gateway.nginx.org` CRDs, and corrected `kubectl run` admission
+  flags in scheduling capacity governance tutorial guides.
 
 ## [1.4.3] - 2026-10-14
 
 ### Added
 
 - **Automated Daily etcd Backup & Retention (`roles/control_plane`, `roles/cka_lab`, `scripts/etcd-backup.sh`)**: Added automated daily etcd snapshot backups scheduled via systemd timer (`etcd-backup.timer`, `OnCalendar=daily`, `Persistent=true`) with health validation, endpoint TLS extraction, timestamped filenames, `etcdctl` status verification, and automated 7-day retention pruning, backed by a dedicated practice scenario (`02-automated-backup/`) with automated test validation.
+
 - **Hands-on CKA Exam Practice Scenarios & Curricula (`roles/cka_lab`, `~/cka/`)**: Expanded exam training suite with manual client certificate and context creation drills (`~/cka/rbac/manual-user/`), static pod TLS discovery and etcd restore workflows, kubeadm node maintenance drills, speed JSONPath challenge harnesses, CoreDNS break-fix scenarios, multi-namespace microsegmentation NetworkPolicies, faulty pod isolation autopsy patterns, and PriorityClass preemption testing, all cross-referenced with official CNCF exam documentation links.
 - **Ceph Cloud-Native Storage & Dynamic StorageClasses (`roles/rook_ceph`, `roles/nfs_server`, `roles/cka_lab`, `playbooks/ceph.yml`)**: Added dual Ceph block (RBD) and shared filesystem (CephFS / CephNFS) provisioning for multi-replica ReadWriteMany workloads with dynamic StorageClasses (`03-ceph-nfs-sc.yaml`, `03-cephfs-sc.yaml`) and verification suites.
 - **Control Plane CLI & Terminal Ergonomics (`roles/control_plane_tools`, `scripts/control-plane-tools.sh`)**: Configured system-wide and user bash alias (`glow="glow -s tokyo-night -w 150"`) for styled Tokyo-Night 150-column markdown rendering across `/etc/profile.d/glow.sh` and user `.bashrc`.

@@ -25,6 +25,16 @@
     - bootstrap
     - tools
 
+- name: 2b. Configure HAProxy and Keepalived for HA control plane
+  hosts: control_plane
+  become: true
+  roles:
+    - role: ha_control_plane
+      when: ha_control_plane_enabled | default(false) | bool
+  tags:
+    - ha
+    - ha_control_plane
+
 - name: 3. Initialize Kubernetes control plane
   hosts: control_plane
   become: true

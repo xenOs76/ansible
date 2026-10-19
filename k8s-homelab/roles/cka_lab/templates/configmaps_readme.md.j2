@@ -1,21 +1,28 @@
 # CKA Lab Exercise: ConfigMaps, Secrets & Pod Consumption
 
-Hands-on training scenario for the Certified Kubernetes Administrator (CKA) certification, covering configuration decoupling, imperative creation, environment variable injection, directory volume mounts, granular `subPath` projections, and specification immutability.
+Hands-on training scenario for the Certified Kubernetes Administrator (CKA) certification, covering configuration
+decoupling, imperative creation, environment variable injection, directory volume mounts, granular `subPath`
+projections, and specification immutability.
 
 ---
 
 ## 1. Overview & Curriculum Objectives
 
-In the CKA exam, application configuration must be decoupled from container images to ensure portability across environments (development, staging, production). The **ConfigMap** primitive stores non-confidential key-value pairs and configuration files, while **Secrets** store sensitive credentials (passwords, tokens, TLS certificates).
+In the CKA exam, application configuration must be decoupled from container images to ensure portability across
+environments (development, staging, production). The **ConfigMap** primitive stores non-confidential key-value pairs and
+configuration files, while **Secrets** store sensitive credentials (passwords, tokens, TLS certificates).
 
 Exam tasks routinely require:
 
-- Rapid imperative generation of ConfigMaps and Secrets using `kubectl create` from literals, files, and env-files without handwriting YAML.
+- Rapid imperative generation of ConfigMaps and Secrets using `kubectl create` from literals, files, and env-files
+  without handwriting YAML.
 - Granular environment variable injection using `valueFrom.configMapKeyRef` and `valueFrom.secretKeyRef`.
 - Bulk environment variable injection using `envFrom.configMapRef` and `envFrom.secretRef` with optional prefixes.
 - Mounting configuration as filesystem volumes with custom permissions (`defaultMode`).
-- Using `subPath` to inject individual configuration files into existing container directories without masking neighboring files.
-- Enforcing specification immutability with `immutable: true` to prevent accidental drift and optimize API server watch performance.
+- Using `subPath` to inject individual configuration files into existing container directories without masking
+  neighboring files.
+- Enforcing specification immutability with `immutable: true` to prevent accidental drift and optimize API server watch
+  performance.
 - Declarative configuration generation via Kustomize `configMapGenerator`.
 
 ### Scenario Directory Structure
@@ -91,7 +98,8 @@ kubectl explain pod.spec.containers.volumeMounts.subPath
 
 ### Drill 1: Rapid Imperative Creation (`01-imperative-creation/`)
 
-In the CKA exam, time is critical. Creating ConfigMaps and Secrets imperatively saves significant time over writing raw YAML:
+In the CKA exam, time is critical. Creating ConfigMaps and Secrets imperatively saves significant time over writing raw
+YAML:
 
 #### Step 1: Create from Literal Key-Value Pairs
 
@@ -120,7 +128,8 @@ kubectl create configmap game-env-config --from-env-file=game.env
 ```
 
 > [!IMPORTANT]
-> Notice the key difference: `--from-file=game.env` creates a **single key** named `game.env` containing the entire file content, whereas `--from-env-file=game.env` parses each `KEY=VALUE` line into a **distinct top-level key**.
+> Notice the key difference: `--from-file=game.env` creates a **single key** named `game.env` containing the entire file
+> content, whereas `--from-env-file=game.env` parses each `KEY=VALUE` line into a **distinct top-level key**.
 
 #### Step 4: Corresponding Secret Creation
 
@@ -160,7 +169,8 @@ containers:
 
 #### Step 2: Bulk Injection (`envFrom`)
 
-Inject all keys from a ConfigMap or Secret as environment variables in a single declaration. Use an optional `prefix` to prevent naming collisions:
+Inject all keys from a ConfigMap or Secret as environment variables in a single declaration. Use an optional `prefix` to
+prevent naming collisions:
 
 ```yaml
 containers:
@@ -197,7 +207,8 @@ volumes:
 ```
 
 > [!WARNING]
-> Full volume directory mounts **mask (overwrite)** any existing files in `mountPath`. If you mount to `/etc/nginx`, existing default configuration files in that container directory will become inaccessible!
+> Full volume directory mounts **mask (overwrite)** any existing files in `mountPath`. If you mount to `/etc/nginx`,
+> existing default configuration files in that container directory will become inaccessible!
 
 #### Step 2: Granular File Mount via `subPath`
 
@@ -231,19 +242,27 @@ data:
   max_connections: "50"
 ```
 
-- **Enforcement**: Any subsequent attempt to mutate `data` or `binaryData` via `kubectl apply` or `kubectl patch` will be rejected by the API server with a `422 Forbidden / Invalid value` error.
-- **Performance Benefit**: The kube-apiserver does not need to poll or maintain watch caches for immutable resources, reducing load on large clusters.
+- **Enforcement**: Any subsequent attempt to mutate `data` or `binaryData` via `kubectl apply` or `kubectl patch` will
+  be rejected by the API server with a `422 Forbidden / Invalid value` error.
+- **Performance Benefit**: The kube-apiserver does not need to poll or maintain watch caches for immutable resources,
+  reducing load on large clusters.
 - **Live Update Behavior**:
-- Containers consuming configuration via **environment variables** (`env`, `envFrom`) receive values only at container start; changes to the ConfigMap are **never** updated in running containers without pod recreation.
-- Containers consuming configuration via **volume mounts** receive periodic automatic file updates from kubelet (unless mounted via `subPath`, which disables automatic live updates).
+- Containers consuming configuration via **environment variables** (`env`, `envFrom`) receive values only at container
+  start; changes to the ConfigMap are **never** updated in running containers without pod recreation.
+- Containers consuming configuration via **volume mounts** receive periodic automatic file updates from kubelet (unless
+  mounted via `subPath`, which disables automatic live updates).
 
 ---
 
 ### Drill 5: Integration with Cross-Repo Scenarios
 
-- **Secrets Scenario (`{{ cka_lab_secrets_dir }}`)**: Examine `sample-secrets.yaml` containing Opaque, BasicAuth, TLS, and SSH keys.
-- **Volumes Scenario (`{{ cka_lab_volumes_dir }}`)**: Inspect `volumes_04_configmap_volume_pod.yaml` and `volumes_04_secret_volume_pod.yaml` for baseline volume mount patterns.
-- **Kustomize Scenario (`{{ cka_lab_kustomize_dir }}`)**: Review `base/` and `overlays/development/` demonstrating `configMapGenerator` with automated hash suffixing.
+- **Secrets Scenario (`{{ cka_lab_secrets_dir }}`)**: Examine `sample-secrets.yaml` containing Opaque, BasicAuth, TLS,
+  and SSH
+  keys.
+- **Volumes Scenario (`{{ cka_lab_volumes_dir }}`)**: Inspect `volumes_04_configmap_volume_pod.yaml` and
+  `volumes_04_secret_volume_pod.yaml` for baseline volume mount patterns.
+- **Kustomize Scenario (`{{ cka_lab_kustomize_dir }}`)**: Review `base/` and `overlays/development/` demonstrating
+  `configMapGenerator` with automated hash suffixing.
 
 ---
 

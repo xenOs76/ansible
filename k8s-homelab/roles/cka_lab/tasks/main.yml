@@ -1,4 +1,31 @@
 ---
+- name: Verify Kubernetes cluster admin.conf exists on control plane
+  ansible.builtin.stat:
+    path: /etc/kubernetes/admin.conf
+  register: cka_lab_admin_conf_stat
+  tags:
+    - always
+    - cka_lab
+
+- name: Determine cluster initialization state
+  ansible.builtin.set_fact:
+    cka_lab_cluster_initialized: "{{ cka_lab_admin_conf_stat.stat.exists | default(false) }}"
+  tags:
+    - always
+    - cka_lab
+
+- name: Announce cluster initialization state
+  ansible.builtin.debug:
+    msg: >-
+      {{
+        'Cluster is online on ' ~ inventory_hostname ~ '. Staging lab files and applying in-cluster practice resources.'
+        if cka_lab_cluster_initialized | bool
+        else 'Cluster is UNINITIALIZED on ' ~ inventory_hostname ~ '. Staging walkthrough guides, manifests, and cluster bootstrap drills in ~/cka.'
+      }}
+  tags:
+    - always
+    - cka_lab
+
 - name: Execute CKA Lab Scenario - Initial Steps Reminder MOTD (motd)
   ansible.builtin.include_tasks: scenario_motd.yml
   when: cka_lab_scenario_motd_enabled | bool
@@ -11,6 +38,15 @@
   tags:
     - cka_lab
     - directories
+
+- name: Execute CKA Lab Scenario - Cluster Installation & Bootstrapping (cluster_installation)
+  ansible.builtin.include_tasks: scenario_cluster_installation.yml
+  when: cka_lab_scenario_cluster_installation_enabled | bool
+  tags:
+    - cka_lab
+    - cluster_installation
+    - installation
+    - bootstrap
 
 - name: Execute CKA Lab Scenario - User Authentication & RBAC (user_rbac)
   ansible.builtin.include_tasks: scenario_user_rbac.yml
@@ -161,3 +197,11 @@
     - cka_lab
     - jsonpath
     - speed_drills
+
+- name: Execute CKA Lab Scenario - High-Availability Control Plane (ha_cluster)
+  ansible.builtin.include_tasks: scenario_ha_cluster.yml
+  when: cka_lab_scenario_ha_cluster_enabled | bool
+  tags:
+    - cka_lab
+    - ha_cluster
+    - ha

@@ -1,0 +1,40 @@
+global_defs {
+    router_id kube_api_{{ inventory_hostname | replace('-', '_') }}
+    enable_script_security
+    script_user {{ ha_control_plane_script_user | default('nobody') }}
+}
+
+vrrp_script chk_haproxy {
+    script "/usr/bin/curl -k -f -s --connect-timeout 2 --max-time 2 -o /dev/null https://127.0.0.1:{{ ha_control_plane_port }}/livez"
+    interval {{ ha_control_plane_check_interval | default(2) }}
+    timeout {{ ha_control_plane_check_timeout | default(3) }}
+    weight {{ ha_control_plane_check_weight | default(-20) }}
+    fall {{ ha_control_plane_check_fall | default(2) }}
+    rise {{ ha_control_plane_check_rise | default(2) }}
+}
+
+vrrp_instance VI_K8S_APISERVER {
+    state BACKUP
+{% if inventory_hostname == groups['control_plane'][0] %}
+    priority {{ 100 + (groups['control_plane'] | length) }}
+{% else %}
+    priority {{ 100 + (groups['control_plane'] | length) - (groups['control_plane'].index(inventory_hostname)) }}
+{% endif %}
+    interface {{ ha_control_plane_interface }}
+    virtual_router_id {{ ha_control_plane_vrrp_id }}
+    advert_int 1
+
+    authentication {
+        auth_type PASS
+        auth_pass {{ (ha_control_plane_auth_pass | string)[:8] }}
+    }
+
+    virtual_ipaddress {
+        {{ ha_control_plane_vip }}/24 dev {{ ha_control_plane_interface }}
+    }
+
+    track_script {
+        chk_haproxy
+    }
+}
+

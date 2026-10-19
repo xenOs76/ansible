@@ -1,8 +1,10 @@
 # Kustomize Practice Guide: ConfigMaps & Overlays (CKA / CKAD)
 
-This directory contains a complete, self-contained Kustomize lab designed for hands-on practice with Kubernetes declarative configuration customization, overlays, and `configMapGenerator`.
+This directory contains a complete, self-contained Kustomize lab designed for hands-on practice with Kubernetes
+declarative configuration customization, overlays, and `configMapGenerator`.
 
-Kustomize is natively integrated into `kubectl` (`kubectl kustomize` and `kubectl apply -k`). It allows you to customize raw, template-free YAML files for multiple environments without altering original base manifests.
+Kustomize is natively integrated into `kubectl` (`kubectl kustomize` and `kubectl apply -k`). It allows you to customize
+raw, template-free YAML files for multiple environments without altering original base manifests.
 
 ## Official Exam References & Quick Lookups
 
@@ -73,7 +75,8 @@ View the untransformed base manifests:
 kubectl kustomize base
 ```
 
-*Expected observation*: Generates `webapp-config`, `webapp-deployment` (1 replica, no prefix, default namespace), and `webapp-service`.
+*Expected observation*: Generates `webapp-config`, `webapp-deployment` (1 replica, no prefix, default namespace), and
+`webapp-service`.
 
 ---
 
@@ -182,4 +185,5 @@ kubectl delete -k overlays/production
 1. Edit `overlays/development/kustomization.yaml`.
 1. Change `disableNameSuffixHash: true` to `disableNameSuffixHash: false` (or remove the line).
 1. Run `kubectl kustomize overlays/development`.
-1. Notice how `dev-webapp-config-<HASH>` is generated and how `dev-webapp-deployment` automatically updates its `envFrom.configMapRef.name` to match the exact hash!
+1. Notice how `dev-webapp-config-<HASH>` is generated and how `dev-webapp-deployment` automatically updates its
+   `envFrom.configMapRef.name` to match the exact hash!

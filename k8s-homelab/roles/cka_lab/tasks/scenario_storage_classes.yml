@@ -32,16 +32,16 @@
     - {src: "storage_classes_02_sc_delete_wait.yaml.j2", dest: "02-storage-classes/cka-lab-sc-delete-wait.yaml"}
     - {src: "storage_classes_03_dynamic_pvc.yaml.j2", dest: "02-storage-classes/cka-lab-dynamic-pvc.yaml"}
     - {src: "storage_classes_03_consumer_pod.yaml.j2", dest: "02-storage-classes/cka-lab-consumer-pod.yaml"}
+    - {src: "storage_classes_02_sc_retain.yaml.j2", dest: "02-storage-classes/manual-sc-retain.yaml"}
+    - {src: "storage_classes_02_sc_delete_wait.yaml.j2", dest: "02-storage-classes/manual-sc-delete-wait.yaml"}
+    - {src: "storage_classes_03_dynamic_pvc.yaml.j2", dest: "02-storage-classes/manual-dynamic-pvc.yaml"}
+    - {src: "storage_classes_03_consumer_pod.yaml.j2", dest: "02-storage-classes/consumer-pod.yaml"}
+    - {src: "storage_classes_04_nfs_dynamic_pvc.yaml.j2", dest: "02-storage-classes/dynamic-nfs-pvc.yaml"}
     - {src: "storage_classes_02_test_storage.sh.j2", dest: "02-storage-classes/test-storage-classes.sh", mode: "0755"}
     - {src: "storage_classes_04_nfs_csi_sc.yaml.j2", dest: "02-storage-classes/03-nfs-csi-sc.yaml"}
     - {src: "storage_classes_04_nfs_dynamic_pvc.yaml.j2", dest: "02-storage-classes/04-nfs-dynamic-pvc.yaml"}
     - {src: "storage_classes_05_nfs_shared_deployment.yaml.j2", dest: "02-storage-classes/05-nfs-shared-deployment.yaml"}
     - {src: "storage_classes_06_test_nfs_csi.sh.j2", dest: "02-storage-classes/test-nfs-csi-drills.sh", mode: "0755"}
-    - {src: "storage_classes_04_ceph_nfs_sc.yaml.j2", dest: "02-storage-classes/03-ceph-nfs-sc.yaml"}
-    - {src: "storage_classes_04_cephfs_sc.yaml.j2", dest: "02-storage-classes/03-cephfs-sc.yaml"}
-    - {src: "storage_classes_04_ceph_dynamic_pvc.yaml.j2", dest: "02-storage-classes/04-ceph-dynamic-pvc.yaml"}
-    - {src: "storage_classes_05_ceph_shared_deployment.yaml.j2", dest: "02-storage-classes/05-ceph-shared-deployment.yaml"}
-    - {src: "storage_classes_06_test_ceph_nfs.sh.j2", dest: "02-storage-classes/test-ceph-nfs-drills.sh", mode: "0755"}
   loop_control:
     label: "storage_classes/{{ item.dest }}"
   tags:
@@ -67,6 +67,20 @@
 - name: Create symlink for dynamic NFS CSI drills in volumes directory
   ansible.builtin.file:
     src: "{{ cka_lab_storage_classes_dir }}/02-storage-classes"
+    dest: "{{ cka_lab_volumes_dir }}/09-nfs-csi"
+    state: link
+    owner: "{{ ansible_user | default('vagrant') }}"
+    group: "{{ ansible_user | default('vagrant') }}"
+  when: cka_lab_scenario_volumes_enabled | default(true) | bool
+  tags:
+    - cka_lab
+    - storage_classes
+    - volumes
+    - storage
+
+- name: Create backward compatibility symlink for 08-nfs-csi in volumes directory
+  ansible.builtin.file:
+    src: "{{ cka_lab_volumes_dir }}/09-nfs-csi"
     dest: "{{ cka_lab_volumes_dir }}/08-nfs-csi"
     state: link
     owner: "{{ ansible_user | default('vagrant') }}"
@@ -86,7 +100,6 @@
     - 01-provisioners/install-local-path-provisioner.sh
     - 02-storage-classes/test-storage-classes.sh
     - 02-storage-classes/test-nfs-csi-drills.sh
-    - 02-storage-classes/test-ceph-nfs-drills.sh
   register: cka_lab_storage_classes_syntax_check
   changed_when: false
   tags:

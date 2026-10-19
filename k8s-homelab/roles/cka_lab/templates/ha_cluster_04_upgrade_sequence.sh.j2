@@ -1,0 +1,138 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# 04-ha-upgrade-sequence.sh: High-Availability Cluster Upgrade Rehearsal & Verification
+# ==============================================================================
+set -euo pipefail
+
+VIP="{{ cka_lab_ha_cluster_vip }}"
+PORT="{{ cka_lab_ha_cluster_port }}"
+TARGET_VERSION="${1:-1.37.0-1.1}"
+TARGET_SEMVER="${TARGET_VERSION%%-*}"
+
+echo "=========================================================="
+echo " CKA Scenario 19: HA Cluster Upgrade Sequence Rehearsal"
+echo "=========================================================="
+echo "Target Kubernetes Release: v${TARGET_SEMVER} (Package: ${TARGET_VERSION})"
+echo "Floating Control Plane VIP: https://${VIP}:${PORT}"
+echo ""
+
+# 1. Inspect cluster topology and control plane discovery
+echo "[1/6] Discovering control plane and worker topology..."
+if kubectl cluster-info >/dev/null 2>&1; then
+    CP_NODES=$(kubectl get nodes --selector='node-role.kubernetes.io/control-plane' -o jsonpath='{.items[*].metadata.name}')
+    WORKER_NODES=$(kubectl get nodes --selector='!node-role.kubernetes.io/control-plane' -o jsonpath='{.items[*].metadata.name}' || true)
+    echo "  Control Plane Nodes: ${CP_NODES}"
+    echo "  Worker Nodes:        ${WORKER_NODES:-none}"
+else
+    echo "  Cluster API not currently reachable via kubectl context. Proceeding with static definitions."
+    CP_NODES="kube-cp-1 kube-cp-2 kube-cp-3"
+    WORKER_NODES="kube-worker-1"
+fi
+
+# 2. Check VIP / HAProxy Health Check Endpoint
+echo ""
+echo "[2/6] Checking floating VIP / HAProxy livez probe..."
+if command -v curl >/dev/null 2>&1; then
+    if curl -kfs --connect-timeout 2 --max-time 3 "https://${VIP}:${PORT}/livez" >/dev/null 2>&1; then
+        echo "  PASS: API Server responsive via VIP (https://${VIP}:${PORT}/livez)"
+    else
+        echo "  WARN: VIP probe failed or VIP unassigned. In Vagrant HA, ensure Keepalived is running."
+    fi
+else
+    echo "  curl not installed; skipping livez HTTP test."
+fi
+
+# 3. Verify etcd Quorum Readiness
+echo ""
+echo "[3/6] Verifying etcd quorum readiness..."
+ETCD_CA="/etc/kubernetes/pki/etcd/ca.crt"
+ETCD_CERT="/etc/kubernetes/pki/etcd/server.crt"
+ETCD_KEY="/etc/kubernetes/pki/etcd/server.key"
+
+if [[ -f "${ETCD_CA}" && -f "${ETCD_CERT}" && -f "${ETCD_KEY}" ]]; then
+    if command -v etcdctl >/dev/null 2>&1; then
+        echo "  etcd Member List:"
+        sudo ETCDCTL_API=3 etcdctl \
+            --cacert="${ETCD_CA}" \
+            --cert="${ETCD_CERT}" \
+            --key="${ETCD_KEY}" \
+            member list -w table || true
+    fi
+else
+    echo "  etcd PKI not accessible on current host; skipping direct member list."
+fi
+
+# 4. Display Immutable HA Upgrade Rules
+echo ""
+echo "[4/6] High-Availability Upgrade Golden Rules:"
+cat << 'EOF'
+  1. STRICT SEQUENTIAL ORDER: Upgrade control plane nodes one-by-one.
+     In a 3-node etcd cluster, quorum is 2. Upgrading 2 nodes at once destroys quorum.
+  2. PRIMARY CP UPGRADE: Run 'kubeadm upgrade apply vX.Y.Z --yes' ONLY on kube-cp-1.
+     This updates cluster-wide resources (CoreDNS, kube-proxy, kubeadm-config ConfigMap).
+  3. SECONDARY CP UPGRADE: Run 'kubeadm upgrade node' on kube-cp-2 and kube-cp-3.
+     NEVER run 'kubeadm upgrade apply' on secondary control plane nodes.
+  4. ZERO DOWNTIME ROUTING: The Keepalived VIP automatically routes traffic around
+     the control plane node currently being drained and restarted.
+EOF
+
+# 5. Validate Drain Dry-Run
+echo ""
+echo "[5/6] Testing drain dry-run syntax on control planes..."
+if kubectl cluster-info >/dev/null 2>&1; then
+    PRIMARY_CP=$(echo "${CP_NODES}" | awk '{print $1}')
+    echo "  Validating dry-run drain on primary CP (${PRIMARY_CP})..."
+    kubectl drain "${PRIMARY_CP}" --ignore-daemonsets --delete-emptydir-data --dry-run=client
+    echo "  Drain syntax validated successfully."
+else
+    echo "  Cluster offline; skipping live drain validation."
+fi
+
+# 6. Summary of Step-by-Step Commands
+echo ""
+echo "[6/6] Complete HA Upgrade Command Reference:"
+cat << EOF
+  --- STEP A: Primary Control Plane (kube-cp-1) ---
+  1. kubectl drain kube-cp-1 --ignore-daemonsets --delete-emptydir-data
+  2. sudo apt-mark unhold kubeadm
+  3. sudo apt-get update && sudo apt-get install -y kubeadm=${TARGET_VERSION}
+  4. sudo apt-mark hold kubeadm
+  5. sudo kubeadm upgrade plan
+  6. sudo kubeadm upgrade apply v${TARGET_SEMVER} --yes
+  7. sudo apt-mark unhold kubelet kubectl
+  8. sudo apt-get install -y kubelet=${TARGET_VERSION} kubectl=${TARGET_VERSION}
+  9. sudo apt-mark hold kubelet kubectl
+ 10. sudo systemctl daemon-reload && sudo systemctl restart kubelet
+ 11. kubectl uncordon kube-cp-1
+
+  --- STEP B: Secondary Control Planes (kube-cp-2, then kube-cp-3 sequentially) ---
+  1. kubectl drain <secondary-node> --ignore-daemonsets --delete-emptydir-data
+  2. ssh <secondary-node>
+  3. sudo apt-mark unhold kubeadm
+  4. sudo apt-get update && sudo apt-get install -y kubeadm=${TARGET_VERSION}
+  5. sudo apt-mark hold kubeadm
+  6. sudo kubeadm upgrade node
+  7. sudo apt-mark unhold kubelet kubectl
+  8. sudo apt-get install -y kubelet=${TARGET_VERSION} kubectl=${TARGET_VERSION}
+  9. sudo apt-mark hold kubelet kubectl
+ 10. sudo systemctl daemon-reload && sudo systemctl restart kubelet
+ 11. exit
+ 12. kubectl uncordon <secondary-node>
+
+  --- STEP C: Worker Nodes (kube-worker-1) ---
+  1. kubectl drain kube-worker-1 --ignore-daemonsets --delete-emptydir-data --force
+  2. ssh kube-worker-1
+  3. sudo apt-mark unhold kubeadm
+  4. sudo apt-get update && sudo apt-get install -y kubeadm=${TARGET_VERSION}
+  5. sudo apt-mark hold kubeadm
+  6. sudo kubeadm upgrade node
+  7. sudo apt-mark unhold kubelet kubectl
+  8. sudo apt-get install -y kubelet=${TARGET_VERSION} kubectl=${TARGET_VERSION}
+  9. sudo apt-mark hold kubelet kubectl
+ 10. sudo systemctl daemon-reload && sudo systemctl restart kubelet
+ 11. exit
+ 12. kubectl uncordon kube-worker-1
+EOF
+
+echo ""
+echo "=== HA Cluster Upgrade Sequence Rehearsal Complete ==="

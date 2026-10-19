@@ -1,22 +1,30 @@
 # CKA Drill: Manual Kubeadm Cluster Upgrade (`upgrade`)
 
-Hands-on rehearsal of the manual Kubernetes node and cluster upgrade sequence using `kubeadm`, `kubelet`, and `kubectl`.
+Hands-on rehearsal of the manual Kubernetes node and cluster upgrade sequence using `kubeadm`, `kubelet`, and `kubectl`
+from **v1.36** to **v1.37**.
 
 ---
 
 ## 1. Exam Importance & Version Skew Constraints
 
-Cluster upgrades represent a core competency in the **Cluster Architecture, Installation & Configuration** domain (25% exam scoring weight) and appear in almost every CKA exam session.
+Cluster upgrades represent a core competency in the **Cluster Architecture, Installation & Configuration** domain (25%
+exam scoring weight) and appear in almost every CKA exam session.
 
 ### The 4 Immutable Rules of Upgrading
 
-1. **Control Plane First**: Always upgrade the control plane node before any worker nodes.
-2. **Sequential Minor Versions**: Never skip minor versions (e.g. `1.33` $\to$ `1.34` $\to$ `1.35`; skipping directly from `1.33` to `1.35` is unsupported and fails preflight checks). Patch versions (e.g. `1.34.1` $\to$ `1.34.2`) can be upgraded directly.
+1. **Control Plane First**: Always upgrade the control plane node before any worker nodes. In High-Availability (HA)
+   clusters, upgrade the primary control plane first (`kubeadm upgrade apply`), followed by secondary control planes
+   (`kubeadm upgrade node`).
+2. **Sequential Minor Versions**: Never skip minor versions (e.g. `1.35` $\to$ `1.36` $\to$ `1.37`; skipping directly
+   from `1.35` to `1.37` is unsupported and fails preflight checks). Patch versions (e.g. `1.36.0` $\to$ `1.36.1`) can
+   be upgraded directly.
 3. **Version Skew Policy**:
    - `kubelet` must **never** be newer than `kube-apiserver`.
-   - `kubelet` can be at most **3 minor versions older** than `kube-apiserver` in production, but in the CKA exam, keep them within **1 minor version**.
+   - `kubelet` can be at most **3 minor versions older** than `kube-apiserver` in production, but in the CKA exam, keep
+     them within **1 minor version**.
    - `kubectl` can be 1 minor version older or newer than `kube-apiserver`.
-4. **Drain Before Worker Kubelet Upgrades**: Always drain a worker node prior to upgrading its `kubelet` binary to avoid workload disruption.
+4. **Drain Before Worker Kubelet Upgrades**: Always drain a worker node prior to upgrading its `kubelet` binary to avoid
+   workload disruption.
 
 ---
 
@@ -50,15 +58,31 @@ kubectl drain --help
 ```
 
 > [!NOTE]
-> Starting with Kubernetes 1.34/1.35, the legacy `kubeadm.k8s.io/v1beta3` configuration API has been removed. All declarative kubeadm configurations must use `apiVersion: kubeadm.k8s.io/v1beta4`. You can convert older configuration manifests using `kubeadm config migrate`.
+> When performing a minor version upgrade (e.g. v1.36 $\to$ v1.37), official Kubernetes Debian repositories hosted on
+> `pkgs.k8s.io` require updating the repository source URL to `/core:/stable:/v1.37/deb/` before `apt-get` can locate
+> the
+> target minor release packages.
 
 ---
 
 ## 3. Control Plane Node Upgrade Procedure
 
-Perform all control plane upgrade steps directly on `kube-control-plane`.
+Perform all control plane upgrade steps directly on `kube-control-plane` (or `kube-cp-1`).
 
-### Step 1: Discover Available Package Versions
+### Step 1: Update APT Repository to Target Minor Release (`v1.37`)
+
+If crossing a minor version boundary (`v1.36` $\to$ `v1.37`), update the repository source and GPG key:
+
+```bash
+# Update GPG release key and repository source to target minor release v1.37
+sudo curl -fsSL "https://pkgs.k8s.io/core:/stable:/v1.37/deb/Release.key" \
+  | sudo gpg --dearmor --yes -o /etc/apt/keyrings/kubernetes-apt-keyring.asc
+
+echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.asc] https://pkgs.k8s.io/core:/stable:/v1.37/deb/ /" \
+  | sudo tee /etc/apt/sources.list.d/kubernetes.list
+
+sudo apt-get update
+```
 
 Check the APT repository for the target release version string:
 
@@ -66,7 +90,7 @@ Check the APT repository for the target release version string:
 apt-cache madison kubeadm | head -n 5
 ```
 
-Note the exact version string (e.g. `1.34.2-1.1` or `1.35.0-1.1`).
+Note the exact version string (e.g. `1.37.0-1.1`).
 
 ### Step 2: Drain the Control Plane Node (If Scheduling Workloads)
 
@@ -83,7 +107,7 @@ kubectl drain "${CP_NODE}" --ignore-daemonsets --delete-emptydir-data
 Un-hold the `kubeadm` package, update repository metadata, install the target version, and re-hold the package:
 
 ```bash
-TARGET_VERSION="1.34.2-1.1" # Replace with target version from exam prompt
+TARGET_VERSION="1.37.0-1.1" # Target version from exam prompt
 
 sudo apt-mark unhold kubeadm
 sudo apt-get update && sudo apt-get install -y kubeadm="${TARGET_VERSION}"
@@ -103,7 +127,8 @@ sudo kubeadm upgrade plan
 
 The output checks:
 
-- Current control plane component versions (`kube-apiserver`, `kube-controller-manager`, `kube-scheduler`, `etcd`, `CoreDNS`).
+- Current control plane component versions (`kube-apiserver`, `kube-controller-manager`, `kube-scheduler`, `etcd`,
+  `CoreDNS`).
 - Target versions and API compatibility.
 - Certificate expiration dates.
 
@@ -112,12 +137,13 @@ The output checks:
 Apply the upgrade using the target semantic version:
 
 ```bash
-SEMVER="v1.34.2" # Replace with semantic version prefix 'v'
+SEMVER="v1.37.0" # Target semantic version prefix 'v'
 
 sudo kubeadm upgrade apply "${SEMVER}" --yes
 ```
 
-`kubeadm upgrade apply` updates static pod manifests in `/etc/kubernetes/manifests/`, renews internal control plane certificates, and updates cluster configuration ConfigMaps in `kube-system`.
+`kubeadm upgrade apply` updates static pod manifests in `/etc/kubernetes/manifests/`, renews internal control plane
+certificates, and updates cluster configuration ConfigMaps in `kube-system`.
 
 ### Step 6: Upgrade `kubelet` and `kubectl` on Control Plane
 
@@ -138,13 +164,98 @@ kubectl uncordon "${CP_NODE}"
 kubectl get nodes
 ```
 
-Verify that `kube-control-plane` reports the new target version and status `Ready`.
+Verify that the control plane reports `v1.37.0` and status `Ready`.
 
 ---
 
-## 4. Worker Node Upgrade Procedure
+## 4. Secondary Control Plane Node Upgrade Procedure (HA Clusters: `kube-cp-2`, `kube-cp-3`)
 
-Unlike the control plane, worker nodes do not execute `kubeadm upgrade apply`. Instead, they execute `kubeadm upgrade node` to update local kubelet configuration.
+In High-Availability clusters, secondary control plane nodes follow a distinct procedure from the primary control
+plane. They must be upgraded **one node at a time** to maintain etcd quorum.
+
+> [!IMPORTANT]
+> Secondary control planes must **never** run `kubeadm upgrade apply`. Only the first control plane executes `apply`.
+> Secondary control planes execute `kubeadm upgrade node` to update their local static pod manifests from the cluster
+> ConfigMap.
+
+### Step 1: Drain Secondary Control Plane Node
+
+From `kube-control-plane` (or `kube-cp-1`), evict workloads from the target secondary control plane:
+
+```bash
+CP2_NODE="kube-cp-2"
+
+kubectl drain "${CP2_NODE}" --ignore-daemonsets --delete-emptydir-data
+```
+
+### Step 2: SSH into Secondary Control Plane & Update Repository
+
+```bash
+ssh "${CP2_NODE}"
+
+# 1. Update APT repository source to v1.37 if crossing a minor version boundary
+sudo curl -fsSL "https://pkgs.k8s.io/core:/stable:/v1.37/deb/Release.key" \
+  | sudo gpg --dearmor --yes -o /etc/apt/keyrings/kubernetes-apt-keyring.asc
+
+echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.asc] https://pkgs.k8s.io/core:/stable:/v1.37/deb/ /" \
+  | sudo tee /etc/apt/sources.list.d/kubernetes.list
+
+# 2. Unhold and install target kubeadm version
+sudo apt-mark unhold kubeadm
+sudo apt-get update && sudo apt-get install -y kubeadm="${TARGET_VERSION}"
+sudo apt-mark hold kubeadm
+```
+
+### Step 3: Upgrade Control Plane Configuration on Secondary Node
+
+Execute `kubeadm upgrade node`:
+
+```bash
+sudo kubeadm upgrade node
+```
+
+This step fetches the cluster configuration from the `kubeadm-config` ConfigMap in `kube-system` and updates local
+static pod manifests (`kube-apiserver`, `kube-controller-manager`, `kube-scheduler`, `etcd`) on this secondary node.
+
+### Step 4: Upgrade `kubelet` and `kubectl` on Secondary Node
+
+```bash
+sudo apt-mark unhold kubelet kubectl
+sudo apt-get install -y kubelet="${TARGET_VERSION}" kubectl="${TARGET_VERSION}"
+sudo apt-mark hold kubelet kubectl
+
+# Reload systemd daemon and restart kubelet
+sudo systemctl daemon-reload
+sudo systemctl restart kubelet
+
+# Exit secondary control plane SSH session
+exit
+```
+
+### Step 5: Uncordon Secondary Node & Verify etcd Quorum
+
+From the primary control plane:
+
+```bash
+kubectl uncordon "${CP2_NODE}"
+kubectl get nodes -o wide
+
+# Verify all etcd endpoints report healthy before upgrading the next node
+sudo ETCDCTL_API=3 etcdctl \
+  --cacert=/etc/kubernetes/pki/etcd/ca.crt \
+  --cert=/etc/kubernetes/pki/etcd/server.crt \
+  --key=/etc/kubernetes/pki/etcd/server.key \
+  endpoint health
+```
+
+Repeat these steps sequentially for any remaining control plane nodes (e.g. `kube-cp-3`).
+
+---
+
+## 5. Worker Node Upgrade Procedure
+
+Unlike the primary control plane, worker nodes do not execute `kubeadm upgrade apply`. Instead, they execute `kubeadm
+upgrade node` to update local kubelet configuration.
 
 ### Step 1: Drain the Worker Node (From Control Plane)
 
@@ -159,12 +270,19 @@ kubectl get nodes
 
 The worker node status now reflects `Ready,SchedulingDisabled`.
 
-### Step 2: SSH into Worker Node & Upgrade `kubeadm`
+### Step 2: SSH into Worker Node & Update Repository
 
 ```bash
 ssh "${WORKER_NODE}"
 
-# 1. Unhold and install target kubeadm version
+# 1. Update APT repository source to v1.37
+sudo curl -fsSL "https://pkgs.k8s.io/core:/stable:/v1.37/deb/Release.key" \
+  | sudo gpg --dearmor --yes -o /etc/apt/keyrings/kubernetes-apt-keyring.asc
+
+echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.asc] https://pkgs.k8s.io/core:/stable:/v1.37/deb/ /" \
+  | sudo tee /etc/apt/sources.list.d/kubernetes.list
+
+# 2. Unhold and install target kubeadm version
 sudo apt-mark unhold kubeadm
 sudo apt-get update && sudo apt-get install -y kubeadm="${TARGET_VERSION}"
 sudo apt-mark hold kubeadm
@@ -178,7 +296,8 @@ Execute `kubeadm upgrade node`:
 sudo kubeadm upgrade node
 ```
 
-This step fetches the updated kubelet configuration from the cluster's `kubeadm-config` ConfigMap in `kube-system` and writes it to `/var/lib/kubelet/config.yaml`.
+This step fetches the updated kubelet configuration from the cluster's `kubeadm-config` ConfigMap in `kube-system` and
+writes it to `/var/lib/kubelet/config.yaml`.
 
 ### Step 4: Upgrade `kubelet` and `kubectl` Packages on Worker
 
@@ -209,16 +328,19 @@ kubectl uncordon "${WORKER_NODE}"
 kubectl get nodes -o wide
 ```
 
-Confirm that all upgraded nodes display `Ready` status and report the target Kubernetes release version.
+Confirm that all upgraded nodes display `Ready` status and report `v1.37.0`.
 
 ---
 
-## 5. Practice & Automated Validation
+## 6. Practice & Automated Validation
 
 Test your commands and validate prerequisite packages using the provided lab scripts:
 
-- `01-control-plane/mock-control-plane-upgrade.sh`: Simulates control plane upgrade readiness and package hold inspection.
+- `01-control-plane/mock-control-plane-upgrade.sh`: Simulates control plane upgrade readiness and package hold
+  inspection.
 - `02-worker-node/mock-worker-upgrade.sh`: Simulates worker node draining, upgrade commands, and uncordoning.
+- `03-secondary-control-plane/mock-secondary-cp-upgrade.sh`: Simulates secondary control plane draining, `upgrade node`,
+  and uncordoning in HA clusters.
 - `test-upgrade-drills.sh`: Automated test suite verifying `kubeadm upgrade plan` execution and package locks.
 
 ```bash

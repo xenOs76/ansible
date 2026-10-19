@@ -1,6 +1,8 @@
 # CKA Lab Exercise: iSCSI Storage Volume & Mount Drills
 
-Hands-on training scenarios for the Certified Kubernetes Administrator (CKA) exam covering iSCSI storage integration: direct in-tree Pod volume mounts, static PersistentVolumes and PersistentVolumeClaims with `ReadWriteOnce`, raw block volume mounts (`volumeMode: Block`), single-writer multi-attach fencing, and CHAP credentials.
+Hands-on training scenarios for the Certified Kubernetes Administrator (CKA) exam covering iSCSI storage integration:
+direct in-tree Pod volume mounts, static PersistentVolumes and PersistentVolumeClaims with `ReadWriteOnce`, raw block
+volume mounts (`volumeMode: Block`), single-writer multi-attach fencing, and CHAP credentials.
 
 ---
 
@@ -14,7 +16,8 @@ The storage target is hosted on `kube-control-plane` via the Linux-IO (`LIO`) ke
 - **LUN 2**: 512 MiB sparse volume &rarr; Raw block target (`volumeMode: Block`)
 - **Access Policy**: Subnet-filtered (`192.168.56.0/24`) without mandatory CHAP authentication
 
-In Kubernetes, the in-tree `iscsi` volume plugin leverages host-level `open-iscsi` (`iscsiadm`) and `iscsid` on worker nodes to log in and attach block devices under `/dev/disk/by-path/`.
+In Kubernetes, the in-tree `iscsi` volume plugin leverages host-level `open-iscsi` (`iscsiadm`) and `iscsid` on worker
+nodes to log in and attach block devices under `/dev/disk/by-path/`.
 
 ---
 
@@ -57,7 +60,9 @@ kubectl explain pod.spec.volumes.iscsi
 
 ### Exam Context & Permissibility Notes
 
-- Linux-IO (`LIO`) target and `iscsiadm` provide the backing block system `[HOMELAB AUXILIARY]`. In the CKA exam, candidates configure the standard Kubernetes volume access modes (`ReadWriteOnce`, `ReadOnlyMany`, `ReadWriteMany`) and understand single-node attachment constraints.
+- Linux-IO (`LIO`) target and `iscsiadm` provide the backing block system `[HOMELAB AUXILIARY]`. In the CKA exam,
+  candidates configure the standard Kubernetes volume access modes (`ReadWriteOnce`, `ReadOnlyMany`, `ReadWriteMany`)
+  and understand single-node attachment constraints.
 
 ---
 
@@ -103,7 +108,8 @@ kubectl delete -f 01-iscsi-direct-pod.yaml
 
 ### Drill 2: Static PersistentVolume & PersistentVolumeClaim
 
-Standard CKA exam pattern: declare an administrator-managed PV with `ReadWriteOnce` access mode, bind it with a PVC, and mount it inside a workload:
+Standard CKA exam pattern: declare an administrator-managed PV with `ReadWriteOnce` access mode, bind it with a PVC, and
+mount it inside a workload:
 
 #### Step 1: Deploy PV, PVC, and Consumer Pod
 

@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# Script: 02-install-cni-calico.sh
+# Purpose: Deploy Project Calico CNI via Tigera Operator with cluster CIDR.
+# ==============================================================================
+set -euo pipefail
+
+POD_CIDR="${1:-{{ cka_lab_cluster_install_pod_cidr }}}"
+CALICO_VERSION="v3.29.1"
+
+echo "==> [02-install-cni-calico.sh] Installing Calico CNI (${CALICO_VERSION})..."
+echo "    Configured Pod CIDR: ${POD_CIDR}"
+
+# 1. Install Tigera Operator
+echo "    Applying Tigera Operator manifests..."
+kubectl create -f "https://raw.githubusercontent.com/projectcalico/calico/${CALICO_VERSION}/manifests/tigera-operator.yaml"
+
+# 2. Download, configure, and apply Calico custom resources
+TMP_DIR="$(mktemp -d)"
+trap 'rm -rf "${TMP_DIR}"' EXIT
+
+CUSTOM_RES="${TMP_DIR}/calico-custom-resources.yaml"
+echo "    Configuring Calico custom resources with CIDR: ${POD_CIDR}..."
+wget -q "https://raw.githubusercontent.com/projectcalico/calico/${CALICO_VERSION}/manifests/custom-resources.yaml" -O "${CUSTOM_RES}"
+sed -i "s~cidr: 192\.168\.0\.0/16~cidr: ${POD_CIDR}~g" "${CUSTOM_RES}"
+
+echo "    Applying custom resources to start Calico..."
+kubectl create -f "${CUSTOM_RES}"
+
+echo "==> [02-install-cni-calico.sh] Calico CNI deployed successfully."
+echo "    Monitor rollout via: kubectl get pods -n calico-system -w"

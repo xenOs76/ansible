@@ -1,0 +1,139 @@
+# CKA Lab Exercise: Fibre Channel (FC) SAN Storage Volume & Mount Drills
+
+Hands-on training scenarios for the Certified Kubernetes Administrator (CKA) exam covering enterprise Fibre Channel (FC)
+SAN storage integration: direct in-tree Pod volume mounts, static PersistentVolumes and PersistentVolumeClaims with
+`ReadWriteOnce`, raw block volume mounts (`volumeMode: Block`), dual-fabric multipathing, and SAN LUN expansion.
+
+---
+
+## 1. Overview & Architecture
+
+The Fibre Channel SAN storage emulator provides an enterprise dual-fabric SAN environment across cluster nodes:
+
+- **Target WWNN**: `20000025b5000001` (World Wide Node Name)
+- **Fabric A Target WWPN**: `{{ cka_lab_fc_target_wwns[0] }}` (Primary Fabric Controller)
+- **Fabric B Target WWPN**: `{{ cka_lab_fc_target_wwns[1] | default('5001438024266302') }}` (Secondary Controller for
+  Multipath)
+- **LUN 0**: 512 MiB volume &rarr; Filesystem target (`ext4`)
+- **LUN 1**: 512 MiB volume &rarr; Raw block target (`volumeMode: Block`)
+- **LUN 2**: 1024 MiB volume &rarr; Dynamic expansion and data recovery target
+
+In Kubernetes, the in-tree `fc` volume plugin (`k8s.io/kubernetes/pkg/volume/fc`) resolves device paths automatically
+under
+`/dev/disk/by-path/` matching `*-fc-0x${targetWWN}-lun-${lun}` or `/dev/disk/by-id/wwn-0x${wwid}`.
+
+---
+
+## 2. Directory Layout
+
+```text
+{{ cka_lab_volumes_dir }}/08-fc/
+├── README.md                          # This practice guide
+├── test-fc-volumes.sh                 # Non-interactive automated test suite
+├── 01-fc-direct-pod.yaml              # Direct in-tree pod volume mount
+├── 02-fc-pv-pvc-pod.yaml              # Static PV, PVC (ReadWriteOnce), and Pod mount
+├── 03-fc-raw-block.yaml               # Raw block mode (volumeMode: Block) with volumeDevices
+├── 04-fc-multipath-pv-pvc.yaml         # Dual-fabric multipath PV/PVC configuration
+├── 05-fc-reclaim-recovery-drill.md     # Retain policy & orphaned SAN LUN data recovery
+└── 06-fc-lun-expansion.yaml           # Online SAN LUN growth & PVC capacity expansion
+```
+
+---
+
+## 3. Official Exam References & Quick Lookups
+
+### Permitted Exam Documentation
+
+- **Persistent Volumes**: [Persistent Volumes](https://kubernetes.io/docs/concepts/storage/persistent-volumes/) `[EXAM ALLOWED]`
+- **Access Modes (ReadWriteOnce)**: [Persistent Volumes - Access Modes](https://kubernetes.io/docs/concepts/storage/persistent-volumes/#access-modes) `[EXAM ALLOWED]`
+- **Volume Mode (Block vs Filesystem)**: [Persistent Volumes - Volume Mode](https://kubernetes.io/docs/concepts/storage/persistent-volumes/#volume-mode) `[EXAM ALLOWED]`
+
+### In-Exam Search Keywords
+
+- `"persistent volume fc"`
+- `"volume mode block"`
+- `"readwriteonce"`
+
+### Terminal Fast Lookups (`kubectl explain`)
+
+```bash
+kubectl explain pv.spec.fc
+kubectl explain pod.spec.volumes.fc
+kubectl explain pv.spec.volumeMode
+kubectl explain pod.spec.containers.volumeDevices
+```
+
+### Exam Context & Permissibility Notes
+
+- Fibre Channel SAN storage is an auxiliary enterprise storage option `[HOMELAB AUXILIARY]`. In the CKA exam,
+  the questions test core decoupled Kubernetes concepts (`PersistentVolume`, `PersistentVolumeClaim`, `accessModes:
+  [ReadWriteOnce]`,
+  `volumeMode: Filesystem` vs `volumeMode: Block`, and `persistentVolumeReclaimPolicy: Retain`).
+
+---
+
+## 4. Host Discovery & Sanity Checks
+
+Before applying Kubernetes manifests, verify that the SAN emulator has provisioned the required FC target paths on the
+node:
+
+```bash
+# Inspect SAN target status and device mappings
+fc-san-ctl status
+
+# Verify by-path device presence
+ls -la /dev/disk/by-path/*fc*
+```
+
+---
+
+## 5. Hands-on Drills
+
+### Drill 1: Direct In-Tree Pod Volume Mount (`01-fc-direct-pod.yaml`)
+
+Mounts LUN 0 directly in a pod spec without an intermediary PersistentVolume:
+
+```bash
+kubectl apply -f 01-fc-direct-pod.yaml
+kubectl wait --for=condition=Ready pod/fc-direct-pod --timeout=120s
+kubectl exec fc-direct-pod -- cat /mnt/storage/direct-test.txt
+```
+
+### Drill 2: Decoupled Static PV & PVC Filesystem Mount (`02-fc-pv-pvc-pod.yaml`)
+
+Decouples storage administration (PV) from workload consumption (PVC):
+
+```bash
+kubectl apply -f 02-fc-pv-pvc-pod.yaml
+kubectl wait --for=condition=Ready pod/fc-pvc-consumer-pod --timeout=120s
+kubectl exec fc-pvc-consumer-pod -- df -h /mnt/storage
+```
+
+### Drill 3: Raw SAN Block Mode (`03-fc-raw-block.yaml`)
+
+Exposes LUN 1 directly as a block device `/dev/fcblock` inside the container without a filesystem:
+
+```bash
+kubectl apply -f 03-fc-raw-block.yaml
+kubectl wait --for=condition=Ready pod/fc-raw-block-consumer-pod --timeout=120s
+kubectl exec fc-raw-block-consumer-pod -- ls -l /dev/fcblock
+```
+
+### Drill 4: Dual-Fabric Multipath PV (`04-fc-multipath-pv-pvc.yaml`)
+
+Configures dual WWPN targets (`targetWWNs: ["5001438024266301", "5001438024266302"]`) representing redundant SAN
+fabrics:
+
+```bash
+kubectl apply -f 04-fc-multipath-pv-pvc.yaml
+kubectl wait --for=condition=Ready pod/fc-multipath-pod --timeout=120s
+kubectl exec fc-multipath-pod -- df -h /mnt/storage
+```
+
+### Drill 5: Automated Verification Suite
+
+Execute the comprehensive non-interactive verification script:
+
+```bash
+./test-fc-volumes.sh
+```

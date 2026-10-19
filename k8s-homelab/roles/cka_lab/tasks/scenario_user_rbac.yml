@@ -49,6 +49,7 @@
     openssl genrsa -out {{ cka_lab_user_rbac_cert_dir }}/{{ cka_lab_user_rbac_name }}.key 2048
   args:
     creates: "{{ cka_lab_user_rbac_cert_dir }}/{{ cka_lab_user_rbac_name }}.key"
+  when: inventory_hostname == groups['control_plane'][0]
   tags:
     - cka_lab
     - user_rbac
@@ -59,6 +60,7 @@
     owner: "{{ cka_lab_user_rbac_name }}"
     group: "{{ cka_lab_user_rbac_name }}"
     mode: "0600"
+  when: inventory_hostname == groups['control_plane'][0]
   tags:
     - cka_lab
     - user_rbac
@@ -71,6 +73,7 @@
     -subj "/CN={{ cka_lab_user_rbac_name }}/O={{ cka_lab_user_rbac_k8s_group }}"
   args:
     creates: "{{ cka_lab_user_rbac_cert_dir }}/{{ cka_lab_user_rbac_name }}.csr"
+  when: inventory_hostname == groups['control_plane'][0]
   tags:
     - cka_lab
     - user_rbac
@@ -81,6 +84,7 @@
     owner: "{{ cka_lab_user_rbac_name }}"
     group: "{{ cka_lab_user_rbac_name }}"
     mode: "0644"
+  when: inventory_hostname == groups['control_plane'][0]
   tags:
     - cka_lab
     - user_rbac
@@ -97,7 +101,9 @@
   ansible.builtin.slurp:
     src: "{{ cka_lab_user_rbac_cert_dir }}/{{ cka_lab_user_rbac_name }}.csr"
   register: cka_lab_user_csr
-  when: not cka_lab_user_cert_stat.stat.exists
+  when:
+    - inventory_hostname == groups['control_plane'][0]
+    - not cka_lab_user_cert_stat.stat.exists
   tags:
     - cka_lab
     - user_rbac
@@ -109,7 +115,9 @@
     owner: "{{ cka_lab_user_rbac_name }}"
     group: "{{ cka_lab_user_rbac_name }}"
     mode: "0644"
-  when: not cka_lab_user_cert_stat.stat.exists
+  when:
+    - inventory_hostname == groups['control_plane'][0]
+    - not cka_lab_user_cert_stat.stat.exists
   tags:
     - cka_lab
     - user_rbac
@@ -119,7 +127,9 @@
     kubectl delete csr {{ cka_lab_user_rbac_name }} --ignore-not-found=true
   environment:
     KUBECONFIG: /etc/kubernetes/admin.conf
-  when: not cka_lab_user_cert_stat.stat.exists
+  when:
+    - inventory_hostname == groups['control_plane'][0]
+    - not cka_lab_user_cert_stat.stat.exists
   changed_when: false
   tags:
     - cka_lab
@@ -130,7 +140,9 @@
     kubectl apply -f {{ cka_lab_user_rbac_cert_dir }}/{{ cka_lab_user_rbac_name }}-csr.yaml
   environment:
     KUBECONFIG: /etc/kubernetes/admin.conf
-  when: not cka_lab_user_cert_stat.stat.exists
+  when:
+    - inventory_hostname == groups['control_plane'][0]
+    - not cka_lab_user_cert_stat.stat.exists
   changed_when: true
   tags:
     - cka_lab
@@ -141,7 +153,9 @@
     kubectl certificate approve {{ cka_lab_user_rbac_name }}
   environment:
     KUBECONFIG: /etc/kubernetes/admin.conf
-  when: not cka_lab_user_cert_stat.stat.exists
+  when:
+    - inventory_hostname == groups['control_plane'][0]
+    - not cka_lab_user_cert_stat.stat.exists
   changed_when: true
   tags:
     - cka_lab
@@ -159,8 +173,48 @@
   retries: 5
   delay: 1
   until: cka_lab_extract_cert.rc == 0
-  when: not cka_lab_user_cert_stat.stat.exists
+  when:
+    - inventory_hostname == groups['control_plane'][0]
+    - not cka_lab_user_cert_stat.stat.exists
   changed_when: true
+  tags:
+    - cka_lab
+    - user_rbac
+
+- name: Slurp user credentials from primary control plane
+  ansible.builtin.slurp:
+    src: "{{ cka_lab_user_rbac_cert_dir }}/{{ item }}"
+  loop:
+    - "{{ cka_lab_user_rbac_name }}.key"
+    - "{{ cka_lab_user_rbac_name }}.csr"
+    - "{{ cka_lab_user_rbac_name }}.crt"
+    - "{{ cka_lab_user_rbac_name }}-csr.yaml"
+  register: cka_lab_user_rbac_primary_creds
+  when:
+    - inventory_hostname == groups['control_plane'][0]
+    - (groups['control_plane'] | length) > 1
+  tags:
+    - cka_lab
+    - user_rbac
+
+- name: Distribute user credentials to secondary control plane nodes
+  ansible.builtin.copy:
+    content: >-
+      {{
+        (hostvars[groups['control_plane'][0]]['cka_lab_user_rbac_primary_creds']['results']
+         | selectattr('item', 'equalto', item) | first)['content'] | b64decode
+      }}
+    dest: "{{ cka_lab_user_rbac_cert_dir }}/{{ item }}"
+    owner: "{{ cka_lab_user_rbac_name }}"
+    group: "{{ cka_lab_user_rbac_name }}"
+    mode: "{{ '0600' if item.endswith('.key') else '0644' }}"
+  loop:
+    - "{{ cka_lab_user_rbac_name }}.key"
+    - "{{ cka_lab_user_rbac_name }}.csr"
+    - "{{ cka_lab_user_rbac_name }}.crt"
+    - "{{ cka_lab_user_rbac_name }}-csr.yaml"
+  when:
+    - inventory_hostname != groups['control_plane'][0]
   tags:
     - cka_lab
     - user_rbac

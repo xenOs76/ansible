@@ -6,7 +6,8 @@ Practice the etcd v3 snapshot lifecycle, TLS credential discovery, and data-dir 
 
 - **Exam Domain**: Cluster Architecture, Installation & Configuration (25%).
 - **Frequency**: Present in nearly every CKA exam session.
-- **Key Habit**: Never memorize certificate paths; always extract them directly from the static pod manifest at `/etc/kubernetes/manifests/etcd.yaml`.
+- **Key Habit**: Never memorize certificate paths; always extract them directly from the static pod manifest at
+  `/etc/kubernetes/manifests/etcd.yaml`.
 - **API Version**: Always set `ETCDCTL_API=3` (or rely on the system-wide profile export).
 
 ---
@@ -91,7 +92,8 @@ ETCDCTL_API=3 etcdctl --write-out=table snapshot status /var/lib/etcd-backup/etc
 ### 4. Restore the Snapshot to a New Directory
 
 > [!IMPORTANT]
-> Always restore to a **new target directory** (e.g., `/var/lib/etcd-restored`) rather than overwriting the live `/var/lib/etcd`.
+> Always restore to a **new target directory** (e.g., `/var/lib/etcd-restored`) rather than overwriting the live
+> `/var/lib/etcd`.
 
 ```bash
 sudo ETCDCTL_API=3 etcdctl snapshot restore /var/lib/etcd-backup/etcd-snapshot.db \
@@ -129,15 +131,20 @@ kubectl get pods -A
 
 ## Automated Daily etcd Backup & Systemd Timer (`02-automated-backup`)
 
-In enterprise and production clusters, taking daily automated snapshots of the etcd database is essential for disaster recovery.
+In enterprise and production clusters, taking daily automated snapshots of the etcd database is essential for disaster
+recovery.
 
 ### Automation Mechanics
 
-- **Service Check**: Verifies `/etc/kubernetes/manifests/etcd.yaml` exists, TLS credentials are valid, and etcd endpoint health returns OK. If etcd is not running, it skips execution gracefully without triggering systemd service failures.
-- **Timestamped Naming**: Snapshots are saved to `/var/lib/etcd-backup` with a common prefix and timestamp: `etcd-snapshot-YYYYMMDD_HHMMSS.db`.
+- **Service Check**: Verifies `/etc/kubernetes/manifests/etcd.yaml` exists, TLS credentials are valid, and etcd endpoint
+  health returns OK. If etcd is not running, it skips execution gracefully without triggering systemd service failures.
+- **Timestamped Naming**: Snapshots are saved to `/var/lib/etcd-backup` with a common prefix and timestamp:
+  `etcd-snapshot-YYYYMMDD_HHMMSS.db`.
 - **Integrity Status**: Verifies the newly written snapshot using `etcdctl snapshot status`.
-- **Retention Pruning**: Automatically prunes snapshot files older than 7 days (`find /var/lib/etcd-backup -maxdepth 1 -type f -name "etcd-snapshot-*.db" -mtime +7 -delete`).
-- **Systemd Timer Scheduling**: Managed by systemd timer unit `etcd-backup.timer` (`OnCalendar=daily`, `Persistent=true`) triggering `etcd-backup.service`.
+- **Retention Pruning**: Automatically prunes snapshot files older than 7 days (`find /var/lib/etcd-backup -maxdepth 1
+  -type f -name "etcd-snapshot-*.db" -mtime +7 -delete`).
+- **Systemd Timer Scheduling**: Managed by systemd timer unit `etcd-backup.timer` (`OnCalendar=daily`,
+  `Persistent=true`) triggering `etcd-backup.service`.
 
 ### Inspection & Management Commands
 
@@ -164,9 +171,12 @@ sudo ls -lh /var/lib/etcd-backup/
 
 - `01-backup-restore/backup-etcd.sh`: Manual snapshot creation and verification.
 - `01-backup-restore/restore-etcd.sh`: Manual snapshot restoration to new data-dir.
-- `01-backup-restore/simulate-loss-drill.sh`: Complete end-to-end rehearsal drill creating test data, backing up, simulating loss, and restoring.
-- `02-automated-backup/backup-etcd-daily.sh`: Automated daily backup script with health checks, timestamped naming, and 7-day retention pruning.
+- `01-backup-restore/simulate-loss-drill.sh`: Complete end-to-end rehearsal drill creating test data, backing up,
+  simulating loss, and restoring.
+- `02-automated-backup/backup-etcd-daily.sh`: Automated daily backup script with health checks, timestamped naming, and
+  7-day retention pruning.
 - `02-automated-backup/etcd-backup.service`: Systemd service unit executing the daily backup script.
 - `02-automated-backup/etcd-backup.timer`: Systemd timer unit running the backup service on a daily schedule.
 - `02-automated-backup/install-timer.sh`: Setup script installing the binary, systemd units, and activating the timer.
-- `test-etcd-drills.sh`: Automated test suite checking etcdctl connectivity, manual snapshot/restore logic, daily automated backups, 7-day retention pruning, and systemd timer state.
+- `test-etcd-drills.sh`: Automated test suite checking etcdctl connectivity, manual snapshot/restore logic, daily
+  automated backups, 7-day retention pruning, and systemd timer state.

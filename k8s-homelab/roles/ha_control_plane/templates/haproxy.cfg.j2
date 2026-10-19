@@ -1,0 +1,48 @@
+global
+    log /dev/log local0
+    log /dev/log local1 notice
+    daemon
+    stats socket /run/haproxy/admin.sock mode 660 level admin expose-fd listeners
+    stats timeout 30s
+
+defaults
+    log     global
+    mode    tcp
+    option  dontlognull
+    timeout connect 5000ms
+    timeout client  50000ms
+    timeout server  50000ms
+
+frontend kubernetes-apiserver
+    bind 0.0.0.0:{{ ha_control_plane_port }}
+    mode tcp
+    option tcplog
+    default_backend kubernetes-apiserver-backend
+
+backend kubernetes-apiserver-backend
+    mode tcp
+    option httpchk
+    http-check connect ssl
+    http-check send meth GET uri {{ ha_control_plane_health_endpoint | default('/readyz') }} ver HTTP/1.1 hdr Host kubernetes.default.svc hdr User-Agent HAProxy-HealthCheck
+    http-check expect status 200
+    http-check expect string ok
+    balance roundrobin
+    timeout check {{ ha_control_plane_health_timeout | default('2s') }}
+    default-server inter {{ ha_control_plane_health_interval | default('2s') }} fall {{ ha_control_plane_health_fall | default(3) }} rise {{ ha_control_plane_health_rise | default(2) }}
+{% for host in groups['control_plane'] %}
+    server {{ host }} {{ hostvars[host]['node_ip'] | default(hostvars[host]['ansible_host']) }}:{{ ha_control_plane_apiserver_port }} check check-ssl verify none
+{% endfor %}
+
+{% if ha_control_plane_metrics_enabled | default(true) | bool %}
+
+frontend prometheus-metrics
+    bind 0.0.0.0:{{ ha_control_plane_metrics_port }}
+    mode http
+    no log
+    http-request redirect location /metrics if { path / }
+    http-request use-service prometheus-exporter if { path /metrics }
+    stats enable
+    stats uri /stats
+    stats refresh 10s
+{% endif %}
+

@@ -24,7 +24,8 @@ In the Certified Kubernetes Administrator (CKA) exam, candidates are frequently 
 1. Submitting a Kubernetes `CertificateSigningRequest` (`certificates.k8s.io/v1`).
 1. Approving the request with `kubectl certificate approve`.
 1. Extracting and decoding the issued certificate from `.status.certificate`.
-1. Registering credentials (`kubectl config set-credentials`) and contexts (`kubectl config set-context`) in `~/.kube/config`.
+1. Registering credentials (`kubectl config set-credentials`) and contexts (`kubectl config set-context`) in
+   `~/.kube/config`.
 1. Verifying authorization failures and binding targeted `Role` or `ClusterRole` objects.
 
 ---
@@ -58,7 +59,8 @@ kubectl config set-context --help
 
 ## Step-by-Step Exercise Procedure
 
-Practice creating user `{{ cka_lab_rbac_manual_user | default('developer') }}` (or substitute with any exam-specified username).
+Practice creating user `{{ cka_lab_rbac_manual_user | default('developer') }}` (or substitute with any exam-specified
+username).
 
 ### Step 1: Generate Private Key and CSR (`openssl`)
 
@@ -75,7 +77,8 @@ Practice creating user `{{ cka_lab_rbac_manual_user | default('developer') }}` (
    chmod 0600 {{ cka_lab_rbac_manual_user | default('developer') }}.key
    ```
 
-1. Generate a Certificate Signing Request (CSR) with Subject `/CN={{ cka_lab_rbac_manual_user | default('developer') }}/O={{ cka_lab_rbac_manual_group | default('developers') }}`:
+1. Generate a Certificate Signing Request (CSR) with Subject `/CN={{ cka_lab_rbac_manual_user | default('developer')
+   }}/O={{ cka_lab_rbac_manual_group | default('developers') }}`:
 
    ```bash
    openssl req -new -key {{ cka_lab_rbac_manual_user | default('developer') }}.key \
@@ -138,7 +141,11 @@ Practice creating user `{{ cka_lab_rbac_manual_user | default('developer') }}` (
    kubectl get csr {{ cka_lab_rbac_manual_user | default('developer') }}
    ```
 
-   > **CKA Architecture Note**: `kubectl certificate approve` only updates the status condition to `Approved`. The certificate itself is signed asynchronously by the `csrsigning` controller inside `kube-controller-manager`. Once signed, the condition transitions to `Approved,Issued` and `.status.certificate` is populated. If the condition remains stuck at `Approved` without `Issued`, check `kubectl get pods -n kube-system -l component=kube-controller-manager` and review controller logs.
+   > **CKA Architecture Note**: `kubectl certificate approve` only updates the status condition to `Approved`. The
+   certificate itself is signed asynchronously by the `csrsigning` controller inside `kube-controller-manager`. Once
+   signed, the condition transitions to `Approved,Issued` and `.status.certificate` is populated. If the condition
+   remains stuck at `Approved` without `Issued`, check `kubectl get pods -n kube-system -l
+   component=kube-controller-manager` and review controller logs.
 
 1. Extract the signed client certificate from the CSR status field and decode it:
 

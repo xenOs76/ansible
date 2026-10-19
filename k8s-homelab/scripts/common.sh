@@ -13,11 +13,11 @@
 # Usage:
 #   sudo /vagrant/scripts/common.sh
 #   # Or with explicit Kubernetes version:
-#   sudo K8S_VERSION="1.34.1-1.1" /vagrant/scripts/common.sh
+#   sudo K8S_VERSION="1.36.0-1.1" /vagrant/scripts/common.sh
 #
 # Environment Variables:
 #   K8S_VERSION - Pinned package version for kubeadm, kubelet, and kubectl.
-#                 Default: 1.34.1-1.1
+#                 Default: 1.36.0-1.1
 #
 # Key Subsystems Configured:
 #   1. Container Runtime:
@@ -51,7 +51,7 @@
 set -euo pipefail
 
 if [ -z "${K8S_VERSION+x}" ]; then
-  K8S_VERSION="1.34.1-1.1"
+  K8S_VERSION="1.36.0-1.1"
 fi
 
 echo "==> [common.sh] Starting common node provisioning (Kubernetes ${K8S_VERSION})..."

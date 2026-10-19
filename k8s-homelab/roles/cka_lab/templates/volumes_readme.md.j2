@@ -22,7 +22,9 @@ All NFS examples connect to the control plane NFS export at:
 │   ├── 02-nfs-deployment-shared.yaml # Deployment with ReadWriteMany shared volume
 │   ├── 03-nfs-pv.yaml                # PersistentVolume (nfs-server.local, RWX, 1Gi)
 │   ├── 04-nfs-pvc.yaml               # PersistentVolumeClaim matching the NFS PV
-│   └── 05-nfs-pvc-pod.yaml           # Pod consuming the NFS PVC
+│   ├── 05-nfs-pvc-pod.yaml           # Pod consuming the NFS PVC
+│   ├── manual-nfs-pv.yaml            # Manual PersistentVolume manifest for Drill 3
+│   └── manual-nfs-pvc.yaml           # Manual PersistentVolumeClaim manifest for Drill 3
 ├── 02-emptydir/
 │   ├── 01-emptydir-sidecar-pod.yaml  # Shared emptyDir between app writer & reader sidecar
 │   └── 02-emptydir-memory-pod.yaml   # In-memory tmpfs volume (medium: Memory)
@@ -36,15 +38,25 @@ All NFS examples connect to the control plane NFS export at:
 │   ├── 01-local-pv-pvc.yaml          # Local PV with storageClassName: manual & Retain policy
 │   ├── 02-pvc-expansion.yaml         # StorageClass & PVC demonstrating volume expansion
 │   ├── 03-reclaim-policy-drill.md    # Reclaim policy lifecycle drill (Retain vs Delete)
+│   ├── reclaim-pv.yaml               # Reclaim drill test PersistentVolume manifest
+│   ├── reclaim-pvc.yaml              # Reclaim drill matching PersistentVolumeClaim manifest
+│   ├── reclaim-pv-pvc.yaml           # Combined test PV and PVC manifest
 │   ├── reclaim-mutation-drill.sh     # Interactive PV reclaim policy mutation script
 │   └── test-reclaim-mutation.sh      # Automated test for reclaim policy mutation
-├── 06-rbd/
-│   ├── README.md                     # Dedicated Ceph RBD drills guide
-│   ├── test-rbd-volumes.sh           # Automated Ceph RBD test script
-│   ├── 01-rbd-dynamic-filesystem.yaml # Dynamic PVC & consumer Pod (Filesystem mode)
-│   ├── 02-rbd-raw-block.yaml         # Raw block PVC & consumer Pod (Block mode)
+├── 06-ceph/                          # Dedicated Ceph Unified Storage guide & drills (symlinked as 06-rbd/)
+│   ├── README.md                     # Dedicated Ceph drills guide (RBD, CephFS & Ceph NFS)
+│   ├── test-ceph-storage.sh          # Non-interactive automated test suite for all Ceph backends
+│   ├── test-rbd-volumes.sh -> test-ceph-storage.sh # Backward compatibility test link
+│   ├── 01-rbd-dynamic-filesystem.yaml # Dynamic PVC & consumer Pod (RBD Filesystem mode)
+│   ├── 02-rbd-raw-block.yaml         # Raw block PVC & consumer Pod (RBD Block mode)
 │   ├── 03-rbd-static-pv-pvc-pod.yaml # Static Ceph CSI PV, PVC, and consumer Pod
-│   └── 04-rbd-pvc-expansion.yaml     # Online volume expansion drill
+│   ├── 04-rbd-pvc-expansion.yaml     # Online volume expansion drill
+│   ├── 05-cephfs-sc.yaml             # Native CephFS distributed filesystem StorageClass
+│   ├── 06-cephfs-dynamic-pvc.yaml    # Dynamic ReadWriteMany PVC (Native CephFS)
+│   ├── 07-cephfs-shared-deployment.yaml # Multi-replica shared workload (Native CephFS)
+│   ├── 08-ceph-nfs-sc.yaml           # Ceph NFS-Ganesha StorageClass via NFS CSI
+│   ├── 09-ceph-nfs-dynamic-pvc.yaml  # Dynamic ReadWriteMany PVC (Ceph NFS)
+│   └── 10-ceph-nfs-shared-deployment.yaml # Multi-replica shared workload (Ceph NFS)
 ├── 07-iscsi/
 │   ├── README.md                     # Dedicated iSCSI drills guide
 │   ├── test-iscsi-volumes.sh         # Automated iSCSI test script
@@ -53,7 +65,16 @@ All NFS examples connect to the control plane NFS export at:
 │   ├── 03-iscsi-raw-block.yaml       # Raw block mode (volumeMode: Block) with volumeDevices
 │   ├── 04-iscsi-two-nodes-rwo.yaml   # Multi-node RWO attach conflict demonstration
 │   └── 05-iscsi-chap-secret.yaml     # Reference CHAP secret and authenticated PV
-└── 08-nfs-csi -> ../storage-classes/02-storage-classes # Dynamic NFS CSI StorageClass & RWX drills
+├── 08-fc/
+│   ├── README.md                     # Dedicated FC SAN drills guide
+│   ├── test-fc-volumes.sh            # Automated FC SAN test script
+│   ├── 01-fc-direct-pod.yaml         # Direct in-tree pod volume mount
+│   ├── 02-fc-pv-pvc-pod.yaml         # Static PV, PVC (ReadWriteOnce), and Pod mount
+│   ├── 03-fc-raw-block.yaml          # Raw block mode (volumeMode: Block) with volumeDevices
+│   ├── 04-fc-multipath-pv-pvc.yaml   # Dual-fabric multipath PV/PVC configuration
+│   ├── 05-fc-reclaim-recovery-drill.md # Retain policy & orphaned SAN LUN data recovery
+│   └── 06-fc-lun-expansion.yaml     # Online SAN LUN growth & PVC capacity expansion
+└── 09-nfs-csi -> ../storage-classes/02-storage-classes # Dynamic NFS CSI StorageClass & RWX drills
 ```
 
 ---
@@ -91,19 +112,33 @@ kubectl explain pod.spec.volumes.hostPath
 
 ### Exam Context & Permissibility Notes
 
-- Ceph RBD (`06-rbd/`) and iSCSI (`07-iscsi/`) represent homelab block storage simulators `[HOMELAB AUXILIARY]`. In the CKA exam, candidates interact with standard Kubernetes PersistentVolumes (`accessModes`, `capacity`, `hostPath`, `nfs`, `persistentVolumeReclaimPolicy`) and volume mounts.
+- Ceph Unified Storage (`06-ceph/`, symlinked as `06-rbd/`), iSCSI (`07-iscsi/`), and Fibre Channel SAN (`08-fc/`)
+  represent homelab auxiliary storage backends `[HOMELAB AUXILIARY]`.
+  In the CKA exam, candidates interact with standard Kubernetes PersistentVolumes (`accessModes`, `capacity`,
+  `hostPath`, `nfs`, `persistentVolumeReclaimPolicy`) and volume mounts.
+- **NFS in the CKA Exam**: In production and on the actual CKA exam, network storage like NFS is almost never attached
+  directly as an inline Pod volume (`spec.volumes[].nfs`). The exam tests storage decoupling via
+  **PersistentVolume (`spec.nfs`) $\rightarrow$ PersistentVolumeClaim $\rightarrow$ Pod mount**
+  (`persistentVolumeClaim.claimName`, see Drill 3). Drills 1 & 2 illustrate the direct volume plugin syntax for
+  diagnostic verification and understanding volume mounting mechanics.
 
 ---
 
 ## CKA Exam Drills
 
-### Drill 1: Inline NFS Volume Mount (`01-nfs/`)
+### Drill 1: Inline NFS Volume Mount (`01-nfs/`) [Diagnostic Pattern]
 
-In Kubernetes, you can directly mount an external NFS export inside a Pod definition (`spec.volumes[].nfs`) without pre-creating cluster-scoped PersistentVolumes. This pattern is commonly used for quick test shares, shared configuration directories, or legacy integrations.
+In Kubernetes, you can directly mount an external NFS export inside a Pod definition (`spec.volumes[].nfs`) without
+pre-creating cluster-scoped PersistentVolumes. While production standards and CKA exam tasks prioritize decoupled
+PersistentVolumes (`spec.nfs`) and PersistentVolumeClaims (Drill 3), inline mounts serve as a fast diagnostic pattern
+for verifying network share connectivity and practicing container volume mounting syntax.
 
 #### Why Manual Practice Matters
 
-In the CKA exam, you may be tasked with adding an external NFS share directly to an existing Pod or creating a Pod that mounts an NFS export. Because `kubectl run` does **not** provide flags for configuring volumes or mounts, you must know how to generate an imperative Pod skeleton and manually edit the YAML.
+On the CKA exam, `kubectl run` does **not** provide flags for configuring volumes or mounts
+(`volumeMounts` / `volumes`). Whether attaching a PersistentVolumeClaim (`spec.volumes[].persistentVolumeClaim`),
+an `emptyDir` scratch volume for a multi-container logging sidecar, a `ConfigMap`/`Secret`, or a diagnostic share,
+you must know how to quickly generate an imperative Pod skeleton and manually edit the YAML.
 
 #### Step 1: Generate Pod Skeleton Imperatively
 
@@ -171,7 +206,10 @@ A fundamental CKA exam competency is understanding storage access modes:
 
 #### The Multi-Attach Exam Trap
 
-If a multi-replica Deployment uses block storage (such as AWS EBS, Ceph RBD, or local disks) with `ReadWriteOnce`, pods scheduled across different worker nodes will fail to start with `Multi-Attach error for volume`. Network filesystems like NFS natively support `ReadWriteMany`, enabling distributed pods across `kube-worker-1` and `kube-worker-2` to share live data.
+If a multi-replica Deployment uses block storage (such as AWS EBS, Ceph RBD, or local disks) with `ReadWriteOnce`,
+pods scheduled across different worker nodes will fail to start with `Multi-Attach error for volume`. Network
+filesystems like NFS natively support `ReadWriteMany`, enabling distributed pods across `kube-worker-1` and
+`kube-worker-2` to share live data.
 
 #### Step 1: Imperatively Generate the Deployment Skeleton
 
@@ -243,7 +281,8 @@ PersistentVolumes (PVs) decouple storage provisioning (cluster admin) from stora
 
 #### Critical CKA Exam Note
 
-Kubernetes has **no** `kubectl create pv` or `kubectl create pvc` CLI command. You must write the manifests manually or quickly look up the schema via `kubectl explain pv.spec` and `kubectl explain pvc.spec`.
+Kubernetes has **no** `kubectl create pv` or `kubectl create pvc` CLI command. You must write the manifests manually
+or quickly look up the schema via `kubectl explain pv.spec` and `kubectl explain pvc.spec`.
 
 #### The 3-Point Binding Criteria
 
@@ -255,7 +294,8 @@ A PersistentVolumeClaim (PVC) automatically binds to a PersistentVolume (PV) whe
 
 #### Step 1: Manually Create the PersistentVolume
 
-Create a static PV pointing to the NFS export:
+Create a static PV pointing to the NFS export (pre-created at `manual-nfs-pv.yaml`, or inspect/recreate via the
+heredoc):
 
 ```bash
 cd {{ cka_lab_volumes_dir }}/01-nfs
@@ -288,7 +328,8 @@ Notice that the status of the PV is `Available` (waiting for a matching claim).
 
 #### Step 2: Manually Create the PersistentVolumeClaim
 
-Create a matching claim requesting 1Gi of storage:
+Create a matching claim requesting 1Gi of storage (pre-created at `manual-nfs-pvc.yaml`, or inspect/recreate via the
+heredoc):
 
 ```bash
 cat <<'EOF' > manual-nfs-pvc.yaml
@@ -311,7 +352,8 @@ kubectl get pvc nfs-storage-pvc
 kubectl get pv nfs-storage-pv
 ```
 
-Notice the phase transition: both PVC and PV immediately transition to `Bound`. The PV's `CLAIM` field points to `default/nfs-storage-pvc`.
+Notice the phase transition: both PVC and PV immediately transition to `Bound`. The PV's `CLAIM` field points
+to `default/nfs-storage-pvc`.
 
 #### Step 3: Consume the PVC in a Pod
 
@@ -357,11 +399,13 @@ kubectl exec nfs-pvc-consumer -- cat /data/shared/shared-data.txt
 
 ### Drill 4: Multi-Container `emptyDir` Sharing & In-Memory `tmpfs` (`02-emptydir/`)
 
-An `emptyDir` volume is initialized when a Pod is assigned to a Node, and persists as long as that Pod runs on that Node. All containers within the Pod share read and write access to the volume.
+An `emptyDir` volume is initialized when a Pod is assigned to a Node, and persists as long as that Pod runs on that
+Node. All containers within the Pod share read and write access to the volume.
 
 #### Exam Concept: Survives Container Restarts
 
-If a container crashes or restarts inside the Pod, files in the `emptyDir` are **not** lost. The volume is only deleted when the Pod itself is terminated or evicted.
+If a container crashes or restarts inside the Pod, files in the `emptyDir` are **not** lost. The volume is only
+deleted when the Pod itself is terminated or evicted.
 
 #### Step 1: Sidecar Logging Pattern with `emptyDir`
 
@@ -411,7 +455,8 @@ kubectl logs emptydir-sidecar-pod -c log-reader-sidecar
 
 #### Step 2: In-Memory `tmpfs` Storage (`medium: Memory`)
 
-Specifying `medium: Memory` mounts a RAM-backed `tmpfs` filesystem instead of disk storage. This is ideal for ephemeral high-speed caches or temporary sensitive data:
+Specifying `medium: Memory` mounts a RAM-backed `tmpfs` filesystem instead of disk storage. This is ideal for
+ephemeral high-speed caches or temporary sensitive data:
 
 ```yaml
 cat <<'EOF' > emptydir-memory-pod.yaml
@@ -458,9 +503,12 @@ A `hostPath` volume mounts a file or directory from the host worker node's files
 
 #### Exam Warnings & Use Cases
 
-- **Node Specificity**: `hostPath` ties a Pod to a single node's filesystem. Pods running on different nodes will see different files.
-- **Typical Use Cases**: System DaemonSets (such as Fluentd collecting `/var/log` or monitoring agents inspecting `/proc`), or accessing host container runtimes (`/run/containerd/containerd.sock`).
-- **Security Trap**: Always set `readOnly: true` when mounting sensitive host directories to prevent containers from modifying the host system.
+- **Node Specificity**: `hostPath` ties a Pod to a single node's filesystem. Pods running on different nodes will
+  see different files.
+- **Typical Use Cases**: System DaemonSets (such as Fluentd collecting `/var/log` or monitoring agents inspecting
+  `/proc`), or accessing host container runtimes (`/run/containerd/containerd.sock`).
+- **Security Trap**: Always set `readOnly: true` when mounting sensitive host directories to prevent containers from
+  modifying the host system.
 
 #### Key `hostPath.type` Values
 
@@ -539,7 +587,8 @@ kubectl logs hostpath-log-viewer
 
 ### Drill 6: Projected Volumes via ConfigMaps & Secrets (`04-configmap-secret/`)
 
-Mounting ConfigMaps and Secrets as volume files provides declarative, file-based configuration injection with granular UNIX file permissions (`defaultMode`).
+Mounting ConfigMaps and Secrets as volume files provides declarative, file-based configuration injection with
+granular UNIX file permissions (`defaultMode`).
 
 #### Step 1: Create the ConfigMap and Secret Imperatively
 
@@ -596,7 +645,8 @@ kubectl exec configmap-volume-pod -- cat /etc/config/app.conf
 
 #### Step 3: Restrictive Secret Volume Permissions (`defaultMode: 0400` / `256`)
 
-In CKA security drills, sensitive credentials mounted from Secrets must often have strict read-only permissions (`0400` / decimal `256`):
+In CKA security drills, sensitive credentials mounted from Secrets must often have strict read-only permissions
+(`0400` / decimal `256`):
 
 ```yaml
 cat <<'EOF' > secret-volume-pod.yaml
@@ -637,15 +687,23 @@ When a PVC bound to a PV is deleted, the PV's `persistentVolumeReclaimPolicy` de
 
 - **`Delete`**: The PV and underlying storage are automatically removed.
 - **`Retain`**: The PV is preserved in `Released` phase, allowing manual recovery and reuse.
-- **`Recycle`** *(Deprecated)*: Performs basic directory scrub (`rm -rf /volume/*`) to make the volume `Available` again.
+- **`Recycle`** *(Deprecated)*: Performs basic directory scrub (`rm -rf /volume/*`) to make the volume
+  `Available` again.
 
 #### Step 1: Practice Reclaim Policy Lifecycle Manually
+
+Create a test PV with `reclaimPolicy: Delete` and a matching PVC (pre-created at `reclaim-pv.yaml` and
+`reclaim-pvc.yaml`, or apply combined `reclaim-pv-pvc.yaml`, or inspect/recreate via heredoc):
 
 ```bash
 cd {{ cka_lab_volumes_dir }}/05-pv-pvc-lifecycle
 
-# 1. Create a test PV with reclaimPolicy Delete and a matching PVC
-kubectl apply -f - <<'EOF'
+# 1. Apply pre-staged manifests (or apply combined: kubectl apply -f reclaim-pv-pvc.yaml)
+kubectl apply -f reclaim-pv.yaml
+kubectl apply -f reclaim-pvc.yaml
+
+# Alternatively, inspect/recreate via heredoc:
+cat <<'EOF' > reclaim-pv-pvc.yaml
 apiVersion: v1
 kind: PersistentVolume
 metadata:
@@ -698,7 +756,8 @@ kubectl delete pvc cka-reclaim-pvc
 kubectl get pv cka-reclaim-pv
 ```
 
-Notice that the PV status is `Released` (not `Available`). The volume retains data, but cannot be bound to a new PVC because `spec.claimRef` still points to the deleted claim.
+Notice that the PV status is `Released` (not `Available`). The volume retains data, but cannot be bound to a new
+PVC because `spec.claimRef` still points to the deleted claim.
 
 #### Step 4: Unlock the PV by Clearing `claimRef`
 
@@ -719,9 +778,10 @@ kubectl delete pv cka-reclaim-pv
 
 ---
 
-### Drill 8: Dynamic NFS CSI Driver & StorageClasses (`08-nfs-csi/`)
+### Drill 8: Dynamic NFS CSI Driver & StorageClasses (`09-nfs-csi/`)
 
-Dynamic volume provisioning eliminates the need to manually author static PersistentVolumes. When a PVC requests a `storageClassName`, the CSI storage provisioner creates the volume and PV automatically.
+Dynamic volume provisioning eliminates the need to manually author static PersistentVolumes. When a PVC requests
+a `storageClassName`, the CSI storage provisioner creates the volume and PV automatically.
 
 #### Step 1: Deploy Dynamic StorageClass and Claim
 
@@ -729,8 +789,8 @@ Dynamic volume provisioning eliminates the need to manually author static Persis
 cd {{ cka_lab_volumes_dir }}
 
 # Deploy Dynamic NFS StorageClass & ReadWriteMany PVC
-kubectl apply -f 08-nfs-csi/03-nfs-csi-sc.yaml
-kubectl apply -f 08-nfs-csi/04-nfs-dynamic-pvc.yaml
+kubectl apply -f 09-nfs-csi/03-nfs-csi-sc.yaml
+kubectl apply -f 09-nfs-csi/04-nfs-dynamic-pvc.yaml
 
 # Verify StorageClass and PVC binding
 kubectl get sc {{ cka_lab_nfs_csi_storage_class | default('nfs-csi') }}
@@ -740,7 +800,7 @@ kubectl get pvc nfs-dynamic-claim
 #### Step 2: Mount in Multi-Replica Workload & Verify Shared Data
 
 ```bash
-kubectl apply -f 08-nfs-csi/05-nfs-shared-deployment.yaml
+kubectl apply -f 09-nfs-csi/05-nfs-shared-deployment.yaml
 kubectl rollout status deployment/nfs-shared-app --timeout=60s
 kubectl get pods -l app=nfs-shared-app -o wide
 ```
@@ -749,7 +809,8 @@ kubectl get pods -l app=nfs-shared-app -o wide
 
 ### Drill 9: Automated Verification
 
-Run the comprehensive test suite to automatically validate all standard CKA volume types (NFS, emptyDir, hostPath, ConfigMap/Secret projected volumes, and PV/PVC lifecycle):
+Run the comprehensive test suite to automatically validate all standard CKA volume types (NFS, emptyDir, hostPath,
+ConfigMap/Secret projected volumes, and PV/PVC lifecycle):
 
 ```bash
 cd {{ cka_lab_volumes_dir }}
@@ -764,25 +825,39 @@ To independently verify NFS connectivity, export mounts, and RPC ports:
 
 ---
 
-### Drill 10: Homelab Auxiliary Block Storage (Ceph RBD & iSCSI)
+### Drill 10: Homelab Auxiliary Storage (Ceph Unified Storage, iSCSI & Fibre Channel SAN)
 
-Practice block storage simulators (`volumeMode: Block`) and raw block devices:
+Practice cloud-native and homelab auxiliary storage backends deployed on demand:
 
-#### Ceph RBD Operations (`06-rbd/`)
+#### Ceph Unified Storage Operations (`06-ceph/` or `06-rbd/`)
+
+Ceph must be active in the cluster (`make preprod-ceph` / `make preprod-ceph-status`):
 
 ```bash
-# 1. Dynamic Filesystem Pod
-kubectl apply -f 06-rbd/01-rbd-dynamic-filesystem.yaml
+# 1. Dynamic Block Storage (RBD Filesystem mode)
+kubectl apply -f 06-ceph/01-rbd-dynamic-filesystem.yaml
 kubectl wait --for=condition=Ready pod/rbd-fs-consumer-pod --timeout=120s
 kubectl exec rbd-fs-consumer-pod -- cat /mnt/storage/data.txt
 
-# 2. Raw Block Device Pod
-kubectl apply -f 06-rbd/02-rbd-raw-block.yaml
+# 2. Raw Block Device (RBD Block mode)
+kubectl apply -f 06-ceph/02-rbd-raw-block.yaml
 kubectl wait --for=condition=Ready pod/rbd-raw-block-consumer-pod --timeout=120s
 kubectl exec rbd-raw-block-consumer-pod -- test -b /dev/rbdblock && echo "Block device OK"
 
-# 3. Automated RBD Verification
-06-rbd/test-rbd-volumes.sh
+# 3. Dynamic Shared Filesystem (Native CephFS RWX)
+kubectl apply -f 06-ceph/05-cephfs-sc.yaml
+kubectl apply -f 06-ceph/06-cephfs-dynamic-pvc.yaml
+kubectl apply -f 06-ceph/07-cephfs-shared-deployment.yaml
+kubectl rollout status deployment/cephfs-shared-app --timeout=60s
+
+# 4. Ceph NFS Shared Storage (NFS-Ganesha RWX)
+kubectl apply -f 06-ceph/08-ceph-nfs-sc.yaml
+kubectl apply -f 06-ceph/09-ceph-nfs-dynamic-pvc.yaml
+kubectl apply -f 06-ceph/10-ceph-nfs-shared-deployment.yaml
+kubectl rollout status deployment/ceph-nfs-shared-app --timeout=60s
+
+# 5. Automated Ceph Test Suite (all Ceph storage engines)
+06-ceph/test-ceph-storage.sh
 ```
 
 #### iSCSI Operations (`07-iscsi/`)
@@ -805,4 +880,31 @@ kubectl exec iscsi-raw-block-consumer-pod -- ls -l /dev/iscsiblock
 
 # 4. Automated iSCSI Verification
 07-iscsi/test-iscsi-volumes.sh
+```
+
+#### Fibre Channel SAN Operations (`08-fc/`)
+
+```bash
+# 1. Direct In-tree Pod Mount
+kubectl apply -f 08-fc/01-fc-direct-pod.yaml
+kubectl wait --for=condition=Ready pod/fc-direct-pod --timeout=120s
+kubectl exec fc-direct-pod -- cat /mnt/storage/direct-test.txt
+
+# 2. Static PV & PVC Mount
+kubectl apply -f 08-fc/02-fc-pv-pvc-pod.yaml
+kubectl wait --for=condition=Ready pod/fc-pvc-consumer-pod --timeout=120s
+kubectl exec fc-pvc-consumer-pod -- df -h /mnt/storage
+
+# 3. Raw Block Mode (volumeMode: Block)
+kubectl apply -f 08-fc/03-fc-raw-block.yaml
+kubectl wait --for=condition=Ready pod/fc-raw-block-consumer-pod --timeout=120s
+kubectl exec fc-raw-block-consumer-pod -- ls -l /dev/fcblock
+
+# 4. Dual-Fabric Multipath PV Mount
+kubectl apply -f 08-fc/04-fc-multipath-pv-pvc.yaml
+kubectl wait --for=condition=Ready pod/fc-multipath-pod --timeout=120s
+kubectl exec fc-multipath-pod -- df -h /mnt/storage
+
+# 5. Automated FC SAN Verification
+08-fc/test-fc-volumes.sh
 ```

@@ -26,6 +26,76 @@
     - nfs_server
     - storage
 
+- name: Check legacy NFS export directory status
+  ansible.builtin.stat:
+    path: "{{ nfs_server_legacy_symlink }}"
+    follow: false
+  register: _nfs_server_legacy_stat
+  when: (nfs_server_legacy_symlink | default('')) != '' and nfs_server_legacy_symlink != nfs_server_export_dir
+  tags:
+    - nfs
+    - nfs_server
+    - storage
+
+- name: Migrate existing files from legacy NFS directory to new export location
+  ansible.builtin.copy:
+    src: "{{ nfs_server_legacy_symlink }}/"
+    dest: "{{ nfs_server_export_dir }}/"
+    remote_src: true
+    mode: preserve
+  when:
+    - (nfs_server_legacy_symlink | default('')) != ''
+    - nfs_server_legacy_symlink != nfs_server_export_dir
+    - _nfs_server_legacy_stat.stat.exists | default(false)
+    - _nfs_server_legacy_stat.stat.isdir | default(false)
+    - not (_nfs_server_legacy_stat.stat.islnk | default(false))
+  tags:
+    - nfs
+    - nfs_server
+    - storage
+
+- name: Remove legacy physical NFS export directory prior to symlinking
+  ansible.builtin.file:
+    path: "{{ nfs_server_legacy_symlink }}"
+    state: absent
+  when:
+    - (nfs_server_legacy_symlink | default('')) != ''
+    - nfs_server_legacy_symlink != nfs_server_export_dir
+    - _nfs_server_legacy_stat.stat.exists | default(false)
+    - _nfs_server_legacy_stat.stat.isdir | default(false)
+    - not (_nfs_server_legacy_stat.stat.islnk | default(false))
+  tags:
+    - nfs
+    - nfs_server
+    - storage
+
+- name: Ensure legacy NFS export symlink exists for backward compatibility
+  ansible.builtin.file:
+    src: "{{ nfs_server_export_dir }}"
+    dest: "{{ nfs_server_legacy_symlink }}"
+    state: link
+    force: true
+  when: (nfs_server_legacy_symlink | default('')) != '' and nfs_server_legacy_symlink != nfs_server_export_dir
+  tags:
+    - nfs
+    - nfs_server
+    - storage
+
+- name: Remove legacy NFS export path from /etc/exports
+  ansible.builtin.lineinfile:
+    path: /etc/exports
+    regexp: '^{{ nfs_server_legacy_symlink | regex_escape }}\s+'
+    state: absent
+  notify: Reload NFS exports
+  when:
+    - (storage_nfs_provider | default('kernel')) == 'kernel'
+    - (nfs_server_legacy_symlink | default('')) != ''
+    - nfs_server_legacy_symlink != nfs_server_export_dir
+  tags:
+    - nfs
+    - nfs_server
+    - storage
+
 - name: Configure NFS export for cluster subnet in /etc/exports
   ansible.builtin.lineinfile:
     path: /etc/exports

@@ -18,8 +18,14 @@
     {% if control_plane_apiserver_cert_extra_sans | default('') %}
     --apiserver-cert-extra-sans={{ control_plane_apiserver_cert_extra_sans }}
     {% endif %}
+    {% if ha_control_plane_enabled | default(false) | bool %}
+    --control-plane-endpoint={{ ha_control_plane_vip }}:{{ ha_control_plane_port }}
+    --upload-certs
+    {% endif %}
     {{ control_plane_kubeadm_init_extra_args }}
-  when: not (control_plane_admin_conf.stat.exists | default(false))
+  when:
+    - inventory_hostname == groups['control_plane'][0]
+    - not (control_plane_admin_conf.stat.exists | default(false))
   register: control_plane_init_output
   changed_when: true
   tags:
@@ -137,6 +143,60 @@
       delay: 3
       until: control_plane_apiserver_livez.rc == 0 and control_plane_apiserver_livez.stdout == 'ok'
 
+- name: Generate fresh kubeadm join command
+  ansible.builtin.command: kubeadm token create --print-join-command
+  register: control_plane_join_cmd_raw
+  changed_when: false
+  when: inventory_hostname == groups['control_plane'][0]
+  tags:
+    - control_plane
+    - join_token
+
+- name: Set kubeadm join command fact on control plane
+  ansible.builtin.set_fact:
+    control_plane_join_command: "{{ control_plane_join_cmd_raw.stdout }}"
+  when: inventory_hostname == groups['control_plane'][0]
+  tags:
+    - control_plane
+    - join_token
+
+- name: Upload certificates and generate certificate key for HA control planes
+  ansible.builtin.command: kubeadm init phase upload-certs --upload-certs
+  register: control_plane_upload_certs_raw
+  changed_when: true
+  when:
+    - ha_control_plane_enabled | default(false) | bool
+    - inventory_hostname == groups['control_plane'][0]
+  tags:
+    - control_plane
+    - join_token
+
+- name: Set certificate key fact on primary control plane
+  ansible.builtin.set_fact:
+    control_plane_certificate_key: "{{ control_plane_upload_certs_raw.stdout_lines[-1] | trim }}"
+  when:
+    - ha_control_plane_enabled | default(false) | bool
+    - inventory_hostname == groups['control_plane'][0]
+  tags:
+    - control_plane
+    - join_token
+
+- name: Join secondary control plane node to cluster
+  ansible.builtin.command: >-
+    {{ hostvars[groups['control_plane'][0]]['control_plane_join_command'] }}
+    --control-plane
+    --certificate-key {{ hostvars[groups['control_plane'][0]]['control_plane_certificate_key'] }}
+    --apiserver-advertise-address={{ node_ip | default(ansible_default_ipv4.address) }}
+  when:
+    - ha_control_plane_enabled | default(false) | bool
+    - inventory_hostname != groups['control_plane'][0]
+    - not (control_plane_admin_conf.stat.exists | default(false))
+  register: control_plane_secondary_join_output
+  changed_when: true
+  tags:
+    - control_plane
+    - join
+
 - name: Create .kube directory for root
   ansible.builtin.file:
     path: /root/.kube
@@ -188,21 +248,6 @@
   tags:
     - control_plane
     - completion
-
-- name: Generate fresh kubeadm join command
-  ansible.builtin.command: kubeadm token create --print-join-command
-  register: control_plane_join_cmd_raw
-  changed_when: false
-  tags:
-    - control_plane
-    - join_token
-
-- name: Set kubeadm join command fact on control plane
-  ansible.builtin.set_fact:
-    control_plane_join_command: "{{ control_plane_join_cmd_raw.stdout }}"
-  tags:
-    - control_plane
-    - join_token
 
 - name: Configure automated daily etcd backup service and systemd timer
   ansible.builtin.include_tasks: etcd_backup.yml

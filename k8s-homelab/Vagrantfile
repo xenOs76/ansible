@@ -1,12 +1,35 @@
 # -*- mode: ruby -*-
 # vi: set ft=ruby :
 
+# Read topology from ENV or .topology dotfile (default: standard)
+TOPOLOGY_FILE = File.expand_path(".topology", __dir__)
+TOPOLOGY = ENV["TOPOLOGY"] || (File.exist?(TOPOLOGY_FILE) ? File.read(TOPOLOGY_FILE).strip : "standard")
+
 BOX_IMAGE = ENV.fetch("BOX_IMAGE", "cloud-image/ubuntu-26.04")
-WORKER_COUNT = ENV.fetch("WORKER_COUNT", "2").to_i
-K8S_VERSION = ENV.fetch("K8S_VERSION", "1.34.1-1.1")
+K8S_VERSION = ENV.fetch("K8S_VERSION", "1.36.0-1.1")
 K9S_VERSION = ENV.fetch("K9S_VERSION", "v0.51.0")
 ETCD_VERSION = ENV.fetch("ETCD_VERSION", "v3.5.16")
 ROOT_DISK_SIZE = ENV.fetch("ROOT_DISK_SIZE", "25").to_i
+
+if TOPOLOGY == "ha"
+  CP_NODES = {
+    "kube-cp-1" => { ip: "192.168.56.10", ram: 2560, cpu: 2, secondary_disk: true },
+    "kube-cp-2" => { ip: "192.168.56.11", ram: 2560, cpu: 2, secondary_disk: false },
+    "kube-cp-3" => { ip: "192.168.56.12", ram: 2560, cpu: 2, secondary_disk: false }
+  }
+  WORKER_NODES = {
+    "kube-worker-1" => { ip: "192.168.56.21", ram: 2048, cpu: 2 }
+  }
+else
+  CP_NODES = {
+    "kube-control-plane" => { ip: "192.168.56.10", ram: 4096, cpu: 2, secondary_disk: true }
+  }
+  WORKER_COUNT = ENV.fetch("WORKER_COUNT", "2").to_i
+  WORKER_NODES = {}
+  (1..WORKER_COUNT).each do |i|
+    WORKER_NODES["kube-worker-#{i}"] = { ip: "192.168.56.#{i + 20}", ram: 2048, cpu: 2 }
+  end
+end
 
 Vagrant.configure("2") do |config|
   config.vm.box = BOX_IMAGE
@@ -16,35 +39,41 @@ Vagrant.configure("2") do |config|
 
   config.vm.synced_folder ".", "/vagrant", type: "9p", disabled: false, accessmode: "squash"
 
-  config.vm.define "kube-control-plane" do |node|
-    node.vm.hostname = "kube-control-plane"
-    node.vm.network :private_network, ip: "192.168.56.10"
-
-    node.vm.provider :libvirt do |lv|
-      lv.driver = "kvm"
-      lv.memory = 4096
-      lv.cpus = 2
-      lv.machine_virtual_size = ROOT_DISK_SIZE
-      lv.storage :file, size: '20G', type: 'qcow2', device: 'vdb', allow_existing: true
-    end
-
-    node.vm.provision "file", source: "scripts/cni-install-cilium.sh", destination: "/home/vagrant/cni-install-cilium.sh"
-    node.vm.provision "file", source: "scripts/cni-install-calico.sh", destination: "/home/vagrant/cni-install-calico.sh"
-    node.vm.provision "shell", inline: "chmod +x /home/vagrant/*.sh && chown vagrant:vagrant /home/vagrant/*.sh"
-
-    node.vm.provision "shell", path: "scripts/common.sh", env: { "K8S_VERSION" => K8S_VERSION }
-    node.vm.provision "shell", path: "scripts/control-plane-tools.sh", env: { "K9S_VERSION" => K9S_VERSION, "ETCD_VERSION" => ETCD_VERSION }
-  end
-
-  (1..WORKER_COUNT).each do |i|
-    config.vm.define "kube-worker-#{i}" do |node|
-      node.vm.hostname = "kube-worker-#{i}"
-      node.vm.network :private_network, ip: "192.168.56.#{i + 20}"
+  # Control plane node(s) definition
+  CP_NODES.each do |name, props|
+    config.vm.define name do |node|
+      node.vm.hostname = name
+      node.vm.network :private_network, ip: props[:ip]
 
       node.vm.provider :libvirt do |lv|
         lv.driver = "kvm"
-        lv.memory = 2048
-        lv.cpus = 2
+        lv.memory = props[:ram]
+        lv.cpus = props[:cpu]
+        lv.machine_virtual_size = ROOT_DISK_SIZE
+        if props[:secondary_disk]
+          lv.storage :file, size: '20G', type: 'qcow2', device: 'vdb', allow_existing: true
+        end
+      end
+
+      node.vm.provision "file", source: "scripts/cni-install-cilium.sh", destination: "/home/vagrant/cni-install-cilium.sh"
+      node.vm.provision "file", source: "scripts/cni-install-calico.sh", destination: "/home/vagrant/cni-install-calico.sh"
+      node.vm.provision "shell", inline: "chmod +x /home/vagrant/*.sh && chown vagrant:vagrant /home/vagrant/*.sh"
+
+      node.vm.provision "shell", path: "scripts/common.sh", env: { "K8S_VERSION" => K8S_VERSION }
+      node.vm.provision "shell", path: "scripts/control-plane-tools.sh", env: { "K9S_VERSION" => K9S_VERSION, "ETCD_VERSION" => ETCD_VERSION }
+    end
+  end
+
+  # Worker node(s) definition
+  WORKER_NODES.each do |name, props|
+    config.vm.define name do |node|
+      node.vm.hostname = name
+      node.vm.network :private_network, ip: props[:ip]
+
+      node.vm.provider :libvirt do |lv|
+        lv.driver = "kvm"
+        lv.memory = props[:ram]
+        lv.cpus = props[:cpu]
         lv.machine_virtual_size = ROOT_DISK_SIZE
       end
 

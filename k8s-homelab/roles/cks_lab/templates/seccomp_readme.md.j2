@@ -1,6 +1,7 @@
 # CKS Exam Drill: Seccomp System Call Filtering
 
-Seccomp (Secure Computing Mode) restricts the system calls (syscalls) a process running in a container can make to the Linux host kernel. In the CKS exam, you must be comfortable reading, creating, and applying seccomp profiles to Pods.
+Seccomp (Secure Computing Mode) restricts the system calls (syscalls) a process running in a container can make to the
+Linux host kernel. In the CKS exam, you must be comfortable reading, creating, and applying seccomp profiles to Pods.
 
 ---
 
@@ -42,9 +43,11 @@ The kubelet loads the file located at:
 
 ## 3. Practice Drills
 
-1. Inspect the profile `/var/lib/kubelet/seccomp/profiles/fine-grained.json`. Notice how `mkdir` and `chmod` syscalls return `SCMP_ACT_ERRNO`.
+1. Inspect the profile `/var/lib/kubelet/seccomp/profiles/fine-grained.json`. Notice how `mkdir` and `chmod` syscalls
+   return `SCMP_ACT_ERRNO`.
 2. Apply `01-pod-unconfined.yaml` and verify the directory `/tmp/seccomp-test-dir` is created.
-3. Apply `02-pod-runtime-default.yaml` and observe that common syscalls operate cleanly under the container runtime's default profile.
+3. Apply `02-pod-runtime-default.yaml` and observe that common syscalls operate cleanly under the container runtime's
+   default profile.
 4. Apply `03-pod-custom-profile.yaml` and observe that `mkdir` is blocked with `Operation not permitted`.
 5. Run the automated test script:
 

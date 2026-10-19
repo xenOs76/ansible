@@ -1,0 +1,53 @@
+# CKA Storage Drill: SAN LUN Data Recovery & Reclaim Policy (Retain)
+
+This drill demonstrates enterprise storage data preservation and disaster recovery:
+
+1. Provisioning a PersistentVolume with `persistentVolumeReclaimPolicy: Retain`.
+2. Writing mission-critical data to the SAN LUN.
+3. Deleting the application Pod and PersistentVolumeClaim.
+4. Observing the PersistentVolume transition to `Released` status.
+5. Recovering the persistent data by binding a new claim to the surviving SAN LUN.
+
+---
+
+## Step 1: Deploy Workload with Retain Policy
+
+Deploy the static FC PV, PVC, and consumer pod:
+
+```bash
+kubectl apply -f 02-fc-pv-pvc-pod.yaml
+kubectl wait --for=condition=Ready pod/fc-pvc-consumer-pod --timeout=120s
+kubectl exec fc-pvc-consumer-pod -- cat /mnt/storage/san-data.txt
+```
+
+---
+
+## Step 2: Delete Claim and Observe Released Phase
+
+Delete the application Pod and Claim:
+
+```bash
+kubectl delete pod fc-pvc-consumer-pod
+kubectl delete pvc fc-claim
+```
+
+Inspect the PersistentVolume status:
+
+```bash
+kubectl get pv fc-static-pv
+```
+
+Notice that `STATUS` is `Released`, NOT deleted. The underlying SAN LUN (`/srv/fc/lun0.img`) remains intact with all data preserved.
+
+---
+
+## Step 3: Re-claim the Storage Volume
+
+To make the volume available to a new claim, clear the existing `claimRef`:
+
+```bash
+kubectl patch pv fc-static-pv -p '{"spec":{"claimRef": null}}'
+kubectl get pv fc-static-pv
+```
+
+The PV transitions back to `Available`, ready for a new workload to bind and access the preserved persistent data.

@@ -1,6 +1,7 @@
 # Drill Guide: Pod Lifecycle Phases and Container States
 
-Understanding the distinction between Pod lifecycle phases and individual container states is essential for CKA troubleshooting.
+Understanding the distinction between Pod lifecycle phases and individual container states is essential for CKA
+troubleshooting.
 
 ---
 
@@ -10,8 +11,10 @@ Understanding the distinction between Pod lifecycle phases and individual contai
 
 The `phase` is a high-level summary of where the Pod is in its lifecycle:
 
-- **`Pending`**: Pod accepted by the cluster, but one or more containers are not yet running (e.g. downloading images, awaiting node scheduling).
-- **`Running`**: Pod bound to a node, all containers created, and at least one container is currently running or starting/restarting.
+- **`Pending`**: Pod accepted by the cluster, but one or more containers are not yet running (e.g. downloading images,
+  awaiting node scheduling).
+- **`Running`**: Pod bound to a node, all containers created, and at least one container is currently running or
+  starting/restarting.
 - **`Succeeded`**: All containers in the Pod have terminated successfully (exit code 0) and will not be restarted.
 - **`Failed`**: All containers have terminated, and at least one container failed (non-zero exit code).
 - **`Unknown`**: State cannot be obtained, typically due to communication failure between kubelet and API server.
@@ -63,7 +66,8 @@ kubectl explain pod.status.containerStatuses.state
 
 ### Step 1: Create a Finite Batch Pod Imperatively (`restartPolicy: Never`)
 
-In the CKA exam, finite tasks (like batch migrations or database schema updates) should run to completion and exit without restarting. Use `--restart=Never` with `kubectl run` to automatically set `spec.restartPolicy: Never`:
+In the CKA exam, finite tasks (like batch migrations or database schema updates) should run to completion and exit
+without restarting. Use `--restart=Never` with `kubectl run` to automatically set `spec.restartPolicy: Never`:
 
 ```bash
 # Imperative generation with --restart=Never
@@ -75,7 +79,9 @@ kubectl run manual-batch-job \
 ```
 
 > [!TIP]
-> Notice that `kubectl run` translates `--restart=Never` directly to `spec.restartPolicy: Never`. Without this flag, `kubectl run` defaults to `Always`, which would cause Kubelet to loop infinitely even if the container finishes with exit code `0`.
+> Notice that `kubectl run` translates `--restart=Never` directly to `spec.restartPolicy: Never`. Without this flag,
+> `kubectl run` defaults to `Always`, which would cause Kubelet to loop infinitely even if the container finishes with
+> exit code `0`.
 
 Inspect and apply the pre-staged finite workload:
 
@@ -90,7 +96,8 @@ Watch the pod transition across its lifecycle phases:
 kubectl get pod cka-lab-finite-worker -w
 ```
 
-Observe the phase progression: `Pending` (scheduling and image pull) -> `Running` (executing) -> `Completed` (pod phase `Succeeded`).
+Observe the phase progression: `Pending` (scheduling and image pull) -> `Running` (executing) -> `Completed` (pod phase
+`Succeeded`).
 
 Query the high-level phase directly using JSONPath:
 
@@ -101,7 +108,9 @@ echo ""
 
 ### Step 2: Trigger and Diagnose `CrashLoopBackOff` (`restartPolicy: OnFailure`)
 
-When a container fails (exits non-zero) and `restartPolicy` is `Always` or `OnFailure`, Kubelet attempts to restart it. To protect cluster nodes from denial-of-service, Kubelet applies an **exponential back-off delay** (10s, 20s, 40s, up to 300s/5m):
+When a container fails (exits non-zero) and `restartPolicy` is `Always` or `OnFailure`, Kubelet attempts to restart it.
+To protect cluster nodes from denial-of-service, Kubelet applies an **exponential back-off delay** (10s, 20s, 40s, up to
+300s/5m):
 
 ```bash
 # Imperative dry-run generation for a failing container
@@ -133,7 +142,8 @@ Notice the status transitions:
 
 ### Step 3: Inspect Container State vs Last State (`kubectl describe`)
 
-A vital exam skill is identifying the difference between the **current state** (why it isn't running now) and the **last state** (what caused it to crash):
+A vital exam skill is identifying the difference between the **current state** (why it isn't running now) and the **last
+state** (what caused it to crash):
 
 ```bash
 kubectl describe pod cka-lab-failing-worker | grep -A 10 "Containers:"
@@ -158,7 +168,9 @@ echo ""
 
 ### Step 4: Retrieve Post-Crash Autopsy Logs (`kubectl logs -p`)
 
-When a container is stuck in `CrashLoopBackOff`, running `kubectl logs <pod>` may fail or return empty if the current container instance is in a waiting state. To view the logs from the container instance that actually crashed, pass the **`-p`** (`--previous`) flag:
+When a container is stuck in `CrashLoopBackOff`, running `kubectl logs <pod>` may fail or return empty if the current
+container instance is in a waiting state. To view the logs from the container instance that actually crashed, pass the
+**`-p`** (`--previous`) flag:
 
 ```bash
 # Retrieve logs of the previous crashed container instance

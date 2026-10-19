@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# mock-secondary-cp-upgrade.sh: Secondary Control Plane Mock Upgrade Script
+# ==============================================================================
+set -euo pipefail
+
+SECONDARY_CP="${1:-kube-cp-2}"
+
+echo "=== CKA Practice: Secondary Control Plane Node Upgrade (HA Clusters) ==="
+echo "Target Secondary Control Plane Node: ${SECONDARY_CP}"
+
+# 1. Drain verification from primary control plane
+echo ""
+echo "[1/5] Testing secondary control plane drain validation..."
+if kubectl cluster-info >/dev/null 2>&1; then
+    if kubectl get node "${SECONDARY_CP}" >/dev/null 2>&1; then
+        echo "Validating dry-run drain on ${SECONDARY_CP}:"
+        kubectl drain "${SECONDARY_CP}" --ignore-daemonsets --delete-emptydir-data --dry-run=client
+    else
+        echo "Node ${SECONDARY_CP} not present in active cluster; displaying reference command:"
+        echo "  kubectl drain ${SECONDARY_CP} --ignore-daemonsets --delete-emptydir-data"
+    fi
+else
+    echo "Cluster offline; displaying reference drain command:"
+    echo "  kubectl drain ${SECONDARY_CP} --ignore-daemonsets --delete-emptydir-data"
+fi
+
+# 2. Package upgrade and node upgrade commands
+echo ""
+echo "[2/5] Commands to execute directly on ${SECONDARY_CP}:"
+cat << 'EOF'
+  sudo apt-mark unhold kubeadm
+  sudo apt-get update && sudo apt-get install -y kubeadm=<version>
+  sudo apt-mark hold kubeadm
+
+  # CRITICAL: Run 'kubeadm upgrade node', NEVER 'kubeadm upgrade apply'
+  sudo kubeadm upgrade node
+
+  sudo apt-mark unhold kubelet kubectl
+  sudo apt-get install -y kubelet=<version> kubectl=<version>
+  sudo apt-mark hold kubelet kubectl
+  sudo systemctl daemon-reload
+  sudo systemctl restart kubelet
+  exit
+EOF
+
+# 3. Uncordon command from primary control plane
+echo ""
+echo "[3/5] Command to restore scheduling from primary control plane:"
+echo "  kubectl uncordon ${SECONDARY_CP}"
+
+# 4. etcd Quorum check
+echo ""
+echo "[4/5] Command to verify etcd quorum before proceeding to next node:"
+cat << 'EOF'
+  sudo ETCDCTL_API=3 etcdctl \
+    --cacert=/etc/kubernetes/pki/etcd/ca.crt \
+    --cert=/etc/kubernetes/pki/etcd/server.crt \
+    --key=/etc/kubernetes/pki/etcd/server.key \
+    endpoint health
+EOF
+
+# 5. Node status verification
+echo ""
+echo "[5/5] Verifying node readiness command:"
+echo "  kubectl get nodes -o wide"
+
+echo ""
+echo "=== Mock Secondary Control Plane Upgrade Validation PASSED ==="

@@ -1,18 +1,26 @@
 # CKA Lab Exercise: Advanced Scheduling & Capacity Management
 
-Hands-on training scenario for the Certified Kubernetes Administrator (CKA) certification, covering Taints & Tolerations, NodeAffinity, PodAntiAffinity, Horizontal Pod Autoscaling (HPA), ResourceQuotas, LimitRanges, and PriorityClass preemption.
+Hands-on training scenario for the Certified Kubernetes Administrator (CKA) certification, covering Taints &
+Tolerations, NodeAffinity, PodAntiAffinity, Horizontal Pod Autoscaling (HPA), ResourceQuotas, LimitRanges, and
+PriorityClass preemption.
 
 ---
 
 ## 1. Overview & Objectives
 
-Kubernetes scheduling governs how the control plane places workloads across cluster nodes based on resource capacity, hardware topology, operational isolation policies, and workload priority:
+Kubernetes scheduling governs how the control plane places workloads across cluster nodes based on resource capacity,
+hardware topology, operational isolation policies, and workload priority:
 
-- **Section 1: Taints & Tolerations**: Node repellent mechanics, applying `NoSchedule` / `NoExecute` taints, and specifying matching pod tolerations.
-- **Section 2: NodeAffinity & PodAntiAffinity**: Hard (`requiredDuringSchedulingIgnoredDuringExecution`) and soft (`preferredDuringSchedulingIgnoredDuringExecution`) node matching expressions, and multi-replica spreading across nodes via `podAntiAffinity`.
+- **Section 1: Taints & Tolerations**: Node repellent mechanics, applying `NoSchedule` / `NoExecute` taints, and
+  specifying matching pod tolerations.
+- **Section 2: NodeAffinity & PodAntiAffinity**: Hard (`requiredDuringSchedulingIgnoredDuringExecution`) and soft
+  (`preferredDuringSchedulingIgnoredDuringExecution`) node matching expressions, and multi-replica spreading across
+  nodes via `podAntiAffinity`.
 - **Section 3: Horizontal Pod Autoscaler (HPA)**: Declarative v2 autoscaling based on observed CPU resource utilization.
-- **Section 4: Capacity Governance**: Namespace-scoped `ResourceQuota` limits and `LimitRange` default resource request/limit injection and boundary enforcement.
-- **Section 5: PriorityClass & Preemption**: Prioritizing mission-critical workloads and configuring preemption policies when node compute is contended.
+- **Section 4: Capacity Governance**: Namespace-scoped `ResourceQuota` limits and `LimitRange` default resource
+  request/limit injection and boundary enforcement.
+- **Section 5: PriorityClass & Preemption**: Prioritizing mission-critical workloads and configuring preemption policies
+  when node compute is contended.
 
 ### Scenario Directory Structure
 
@@ -100,10 +108,14 @@ Taints and tolerations work together to ensure pods are not scheduled onto inapp
 - **Taints** are applied to **Nodes** to repel a set of Pods (`<key>=<value>:<effect>` or `<key>:<effect>`).
 - **Tolerations** are declared on **Pods** under `spec.tolerations` to allow (not force) scheduling onto tainted nodes.
 - **Effects**:
-  - `NoSchedule`: Kubernetes will not schedule new pods onto the node unless they tolerate the taint. Existing running pods remain untouched.
-  - `PreferNoSchedule`: Soft constraint; kube-scheduler tries to avoid placing intolerant pods on the node, but will do so if no alternative exists.
-  - `NoExecute`: Intolerant pods cannot be scheduled, AND any currently running pods without matching tolerations are evicted immediately (or after optional `tolerationSeconds`).
-- **Removing Taints**: Append a minus sign `-` to the taint key and effect (e.g. `kubectl taint nodes <node> key:effect-`).
+  - `NoSchedule`: Kubernetes will not schedule new pods onto the node unless they tolerate the taint. Existing running
+    pods remain untouched.
+  - `PreferNoSchedule`: Soft constraint; kube-scheduler tries to avoid placing intolerant pods on the node, but will do
+    so if no alternative exists.
+  - `NoExecute`: Intolerant pods cannot be scheduled, AND any currently running pods without matching tolerations are
+    evicted immediately (or after optional `tolerationSeconds`).
+- **Removing Taints**: Append a minus sign `-` to the taint key and effect (e.g. `kubectl taint nodes <node>
+  key:effect-`).
 
 #### Step 1: Identify and Taint a Worker Node
 
@@ -155,7 +167,8 @@ kubectl get pods -o wide -l app.kubernetes.io/part-of=cka-lab
 
 #### Step 4: Active Pod Eviction with `NoExecute` and `tolerationSeconds`
 
-Unlike `NoSchedule` (which only prevents new pods from scheduling), **`NoExecute`** actively evicts currently running pods if they lack a matching toleration.
+Unlike `NoSchedule` (which only prevents new pods from scheduling), **`NoExecute`** actively evicts currently running
+pods if they lack a matching toleration.
 
 ##### Deploy an intolerant workload on the target node
 
@@ -209,8 +222,10 @@ kubectl taint nodes "${NODE}" maintenance=planned:NoExecute
 kubectl get pods -o wide
 ```
 
-- `cka-lab-eviction-victim` is evicted immediately by the node controller because it lacks a toleration for `maintenance=planned:NoExecute`.
-- `cka-lab-graceful-pod` continues running for up to 30 seconds after the taint was applied. Once the 30-second window expires, Kubernetes terminates it.
+- `cka-lab-eviction-victim` is evicted immediately by the node controller because it lacks a toleration for
+  `maintenance=planned:NoExecute`.
+- `cka-lab-graceful-pod` continues running for up to 30 seconds after the taint was applied. Once the 30-second window
+  expires, Kubernetes terminates it.
 
 ##### Remove the `NoExecute` taint
 
@@ -241,9 +256,13 @@ Control pod distribution based on node labels (node affinity) and co-located wor
 #### Core Concepts
 
 - **`nodeAffinity`**: Uses expressive set-based operators (`In`, `NotIn`, `Exists`, `DoesNotExist`, `Gt`, `Lt`).
-  - `requiredDuringSchedulingIgnoredDuringExecution` (**Hard**): Mandatory requirement. If no node matches the expression, the pod remains `Pending`.
-  - `preferredDuringSchedulingIgnoredDuringExecution` (**Soft**): Weighted preference (1–100). The scheduler scores candidate nodes, preferring nodes with higher scores while still scheduling elsewhere if preferred nodes are unavailable.
-- **`podAntiAffinity`**: Prevents co-locating pods of the same service on the same node or topology domain, ensuring fault tolerance and high availability across failure boundaries.
+  - `requiredDuringSchedulingIgnoredDuringExecution` (**Hard**): Mandatory requirement. If no node matches the
+    expression, the pod remains `Pending`.
+  - `preferredDuringSchedulingIgnoredDuringExecution` (**Soft**): Weighted preference (1–100). The scheduler scores
+    candidate nodes, preferring nodes with higher scores while still scheduling elsewhere if preferred nodes are
+    unavailable.
+- **`podAntiAffinity`**: Prevents co-locating pods of the same service on the same node or topology domain, ensuring
+  fault tolerance and high availability across failure boundaries.
 
 #### Step 1: Label the Target Worker Node
 
@@ -292,7 +311,8 @@ Confirm that the pod scheduled strictly onto `${NODE}` matching `cka.zone=zone-a
 
 #### Step 3: Deploy PodAntiAffinity Multi-Replica Workload
 
-In `cka-lab-pod-anti-affinity-deploy.yaml`, a 2-replica Deployment specifies hard pod anti-affinity using `topologyKey: "kubernetes.io/hostname"`:
+In `cka-lab-pod-anti-affinity-deploy.yaml`, a 2-replica Deployment specifies hard pod anti-affinity using `topologyKey:
+"kubernetes.io/hostname"`:
 
 ```bash
 kubectl apply -f cka-lab-pod-anti-affinity-deploy.yaml
@@ -300,7 +320,8 @@ kubectl rollout status deployment/cka-lab-anti-affinity-deploy --timeout=60s
 kubectl get pods -l app=cka-lab-anti-affinity-app -o wide
 ```
 
-Notice that the two replicas are scheduled onto distinct worker nodes. If you attempt to scale this deployment beyond the number of available nodes, additional replicas remain `Pending`.
+Notice that the two replicas are scheduled onto distinct worker nodes. If you attempt to scale this deployment beyond
+the number of available nodes, additional replicas remain `Pending`.
 
 #### Step 4: Clean Up Workloads and Labels
 
@@ -324,8 +345,10 @@ Scale pod replicas automatically in response to observed CPU utilization.
 
 #### Core Requirements for HPA
 
-- **Metrics Server**: HPA queries the Metrics API (`metrics.k8s.io`). If not yet installed, deploy it via `/home/vagrant/cka/helm/install-kube-metrics.sh`. Verify availability with `kubectl top nodes`.
-- **Pod Resource Requests**: Target pods **must** declare `resources.requests.cpu`. HPA calculates target utilization as a percentage of the requested capacity. Without requests, HPA displays `<unknown>` and cannot make scaling decisions.
+- **Metrics Server**: HPA queries the Metrics API (`metrics.k8s.io`). If not yet installed, deploy it via
+  `/home/vagrant/cka/helm/install-kube-metrics.sh`. Verify availability with `kubectl top nodes`.
+- **Pod Resource Requests**: Target pods **must** declare `resources.requests.cpu`. HPA calculates target utilization as
+  a percentage of the requested capacity. Without requests, HPA displays `<unknown>` and cannot make scaling decisions.
 
 #### Step 1: Inspect Target Application
 
@@ -350,7 +373,8 @@ kubectl rollout status deployment/cka-lab-autoscale-app --timeout=60s
 Use `--cpu` with percentage syntax (e.g. `50%` for utilization) or resource quantity format (e.g. `500m` for milliCPU).
 
 > [!NOTE]
-> In modern Kubernetes, the legacy `--cpu-percent` flag has been deprecated in favor of `--cpu` (which accepts percentage or milliCPU values) and `--memory` (e.g., `--memory=70%` or `--memory=200Mi`).
+> In modern Kubernetes, the legacy `--cpu-percent` flag has been deprecated in favor of `--cpu` (which accepts
+> percentage or milliCPU values) and `--memory` (e.g., `--memory=70%` or `--memory=200Mi`).
 
 ```bash
 kubectl autoscale deployment cka-lab-autoscale-app \
@@ -407,9 +431,12 @@ Govern resource allocations and prevent noisy neighbor exhaustion in multi-tenan
 
 #### Core Principles & Admission Interactions
 
-- **`ResourceQuota`**: Enforces aggregate namespace limits on compute requests/limits (`requests.cpu`, `limits.memory`), storage, and object counts (`pods`, `services`).
-- **`LimitRange`**: Sets per-container minimums, maximums, and default requests/limits automatically injected when pods omit them.
-- **Critical Admission Rule**: If a namespace enforces a compute `ResourceQuota`, pods submitted without explicit resource specifications are **rejected by admission control** unless a `LimitRange` is defined to inject defaults.
+- **`ResourceQuota`**: Enforces aggregate namespace limits on compute requests/limits (`requests.cpu`, `limits.memory`),
+  storage, and object counts (`pods`, `services`).
+- **`LimitRange`**: Sets per-container minimums, maximums, and default requests/limits automatically injected when pods
+  omit them.
+- **Critical Admission Rule**: If a namespace enforces a compute `ResourceQuota`, pods submitted without explicit
+  resource specifications are **rejected by admission control** unless a `LimitRange` is defined to inject defaults.
 
 #### Step 1: Create Capacity Namespace and ResourceQuota
 
@@ -456,7 +483,8 @@ Confirm that the `LimitRange` automatically injected `requests.cpu: 50m` and `li
 
 #### Step 4: Test Admission Boundary Enforcement
 
-Inspect the pre-staged manifest specifying a container limit of 500m CPU (exceeding the `max: 250m` LimitRange threshold):
+Inspect the pre-staged manifest specifying a container limit of 500m CPU (exceeding the `max: 250m` LimitRange
+threshold):
 
 ```bash
 cat cka-lab-oversized-pod.yaml
@@ -490,11 +518,15 @@ Manage workload criticality and configure preemption policies when node compute 
 
 #### Core Concepts
 
-- **`PriorityClass`**: A cluster-scoped object mapping a name to an integer priority (e.g. 1000000 vs 1000). Higher numbers indicate higher priority.
-- **Preemption Flow**: When a high-priority pod cannot find a node with sufficient unallocated capacity, kube-scheduler identifies a node where evicting lower-priority pods frees enough resources, triggers graceful eviction, and schedules the high-priority pod.
+- **`PriorityClass`**: A cluster-scoped object mapping a name to an integer priority (e.g. 1000000 vs 1000). Higher
+  numbers indicate higher priority.
+- **Preemption Flow**: When a high-priority pod cannot find a node with sufficient unallocated capacity, kube-scheduler
+  identifies a node where evicting lower-priority pods frees enough resources, triggers graceful eviction, and schedules
+  the high-priority pod.
 - **`preemptionPolicy`**:
   - `PreemptLowerPriority` (default): Preempts lower-priority pods when needed.
-  - `Never`: Non-preempting; queues ahead of lower-priority pods in the scheduling queue, but does not evict running workloads.
+  - `Never`: Non-preempting; queues ahead of lower-priority pods in the scheduling queue, but does not evict running
+    workloads.
 
 #### Step 1: Inspect and Apply PriorityClasses
 

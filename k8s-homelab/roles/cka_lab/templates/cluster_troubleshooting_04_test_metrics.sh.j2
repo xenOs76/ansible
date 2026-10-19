@@ -6,7 +6,7 @@ set -euo pipefail
 
 echo "==> [Metrics Drill] Verifying Metrics Server availability..."
 
-if ! kubectl get apiservice v1beta1.metrics.k8s.io >/dev/null 2>&1; then
+if ! kubectl get apiservice v1.metrics.k8s.io >/dev/null 2>&1 && ! kubectl get apiservice v1beta1.metrics.k8s.io >/dev/null 2>&1; then
   echo "    Notice: Metrics Server API service not yet registered."
   echo "    Run ~/cka/helm/install-kube-metrics.sh to deploy Metrics Server."
   exit 0

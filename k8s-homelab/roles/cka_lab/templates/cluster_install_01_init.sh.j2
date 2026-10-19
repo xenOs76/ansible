@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# Script: 01-kubeadm-init.sh
+# Purpose: Initialize single-node Kubernetes control plane via kubeadm init.
+# ==============================================================================
+set -euo pipefail
+
+POD_CIDR="${1:-{{ cka_lab_cluster_install_pod_cidr }}}"
+SERVICE_CIDR="${2:-{{ cka_lab_cluster_install_service_cidr }}}"
+API_ADV_ADDRESS="${3:-{{ cka_lab_cluster_install_apiserver_ip }}}"
+
+if [[ $EUID -ne 0 ]]; then
+  echo "Error: This script must be run as root (use sudo)." >&2
+  exit 1
+fi
+
+if [[ -f /etc/kubernetes/admin.conf ]]; then
+  echo "==> Control plane is already initialized (/etc/kubernetes/admin.conf exists)."
+  echo "    Skipping kubeadm init."
+  exit 0
+fi
+
+echo "==> [01-kubeadm-init.sh] Initializing Kubernetes Control Plane..."
+echo "    Pod CIDR:          ${POD_CIDR}"
+echo "    Service CIDR:      ${SERVICE_CIDR}"
+echo "    Advertise Address: ${API_ADV_ADDRESS}"
+
+# Discover all non-loopback IPv4 addresses for SANs
+INTERFACE_IPS=$(ip -4 -o addr show 2>/dev/null | awk '$2 != "lo" && $2 !~ /^(cilium|lxc|flannel|cbr|docker|calico|cni|veth)/ {print $4}' | cut -d/ -f1 | sort -u || true)
+EXTRA_SANS=$(printf '%s\n' "${API_ADV_ADDRESS}" "127.0.0.1" "localhost" "$(hostname)" "${INTERFACE_IPS}" | grep -v '^[[:space:]]*$' | sort -u | paste -sd, -)
+
+kubeadm init \
+  --pod-network-cidr="${POD_CIDR}" \
+  --service-cidr="${SERVICE_CIDR}" \
+  --apiserver-advertise-address="${API_ADV_ADDRESS}" \
+  --apiserver-cert-extra-sans="${EXTRA_SANS}" \
+  | tee /home/{{ ansible_user | default('vagrant') }}/kubeadm-init.out
+
+# Configure kubeconfig for vagrant and root users
+for USER_HOME in "/home/{{ ansible_user | default('vagrant') }}" "/root"; do
+  mkdir -p "${USER_HOME}/.kube"
+  cp -f /etc/kubernetes/admin.conf "${USER_HOME}/.kube/config"
+  if [[ "${USER_HOME}" =~ vagrant ]]; then
+    chown -R {{ ansible_user | default('vagrant') }}:{{ ansible_user | default('vagrant') }} "${USER_HOME}/.kube"
+  fi
+  chmod 0600 "${USER_HOME}/.kube/config"
+done
+
+echo "==> [01-kubeadm-init.sh] Control plane initialized successfully."
+echo "    Next step: Run ./02-install-cni-cilium.sh (or ./02-install-cni-calico.sh)"

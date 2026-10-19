@@ -1,0 +1,79 @@
+---
+- name: Ensure Fibre Channel storage directory exists
+  ansible.builtin.file:
+    path: "{{ fc_san_storage_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  tags:
+    - fc
+    - fc_san
+    - storage
+
+- name: Create sparse backing image files for SAN LUNs
+  ansible.builtin.command:
+    cmd: "truncate -s {{ item.size }} {{ fc_san_storage_dir }}/{{ item.name }}"
+    creates: "{{ fc_san_storage_dir }}/{{ item.name }}"
+  loop: "{{ fc_san_luns }}"
+  loop_control:
+    label: "{{ item.name }} ({{ item.size }})"
+  tags:
+    - fc
+    - fc_san
+    - storage
+
+- name: Deploy fc-san-ctl management utility
+  ansible.builtin.template:
+    src: fc_san_ctl.sh.j2
+    dest: /usr/local/bin/fc-san-ctl
+    owner: root
+    group: root
+    mode: "0755"
+  tags:
+    - fc
+    - fc_san
+    - storage
+
+- name: Deploy udev rules for Fibre Channel SAN device paths
+  ansible.builtin.template:
+    src: 99-fc-san.rules.j2
+    dest: /etc/udev/rules.d/99-fc-san.rules
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload udev rules
+  tags:
+    - fc
+    - fc_san
+    - storage
+
+- name: Deploy systemd service unit for FC SAN emulator
+  ansible.builtin.template:
+    src: fc-san.service.j2
+    dest: /etc/systemd/system/fc-san.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd daemon
+  tags:
+    - fc
+    - fc_san
+    - storage
+
+- name: Flush handlers to reload systemd and udev immediately
+  ansible.builtin.meta: flush_handlers
+  tags:
+    - fc
+    - fc_san
+    - storage
+
+- name: Ensure fc-san service is enabled and started
+  ansible.builtin.systemd:
+    name: fc-san
+    enabled: true
+    state: started
+  tags:
+    - fc
+    - fc_san
+    - storage

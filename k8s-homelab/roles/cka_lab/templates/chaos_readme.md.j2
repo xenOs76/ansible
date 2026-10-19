@@ -1,17 +1,23 @@
 # CKA Lab Exercise: Chaos Engineering & Dynamic Troubleshooting
 
-Hands-on training scenario using Headless LitmusChaos to generate on-demand, realistic runtime failure drills for CKA exam preparation.
+Hands-on training scenario using Headless LitmusChaos to generate on-demand, realistic runtime failure drills for CKA
+exam preparation.
 
 ---
 
 ## 1. Overview & Architecture
 
-While traditional CKA questions test static configuration errors in `/etc/kubernetes/manifests/` or systemd, modern troubleshooting requires diagnosing live dynamic degradations:
+While traditional CKA questions test static configuration errors in `/etc/kubernetes/manifests/` or systemd, modern
+troubleshooting requires diagnosing live dynamic degradations:
 
-- **Drill 1: Container OOMKills (`01-memory-oom`)**: Diagnosing `OOMKilled` (ExitCode 137), inspecting container limits vs usage, and right-sizing memory requests.
-- **Drill 2: Inter-Pod Network Degradation (`02-network-latency`)**: Diagnosing severe packet drops (70%) and connection timeouts using ephemeral debug containers (`kubectl debug`).
-- **Drill 3: CoreDNS Blackholing (`03-dns-chaos`)**: Diagnosing intermittent DNS resolution failures for target services.
-- **Drill 4: Node MemoryPressure & Eviction (`04-node-pressure`)**: Observing node conditions (`MemoryPressure`), understanding QoS classes (`BestEffort`, `Burstable`, `Guaranteed`), and tracking eviction order.
+- **Drill 1: Container OOMKills (`01-memory-oom`)**: Diagnosing `OOMKilled` (ExitCode 137), inspecting container limits
+  vs usage, and right-sizing memory requests.
+- **Drill 2: Inter-Pod Network Degradation (`02-network-latency`)**: Diagnosing severe packet drops (70%) and connection
+  timeouts using ephemeral debug containers (`kubectl debug`).
+- **Drill 3: CoreDNS Blackholing (`03-dns-chaos`)**: Diagnosing intermittent DNS resolution failures for target
+  services.
+- **Drill 4: Node MemoryPressure & Eviction (`04-node-pressure`)**: Observing node conditions (`MemoryPressure`),
+  understanding QoS classes (`BestEffort`, `Burstable`, `Guaranteed`), and tracking eviction order.
 
 ### Headless Operator Footprint
 
@@ -19,7 +25,8 @@ To prevent memory starvation on local 2GB worker VMs, this lab runs LitmusChaos 
 
 - **No UI / MongoDB Portal**: Saves ~1.5–2.5 GB of RAM.
 - **Operator Footprint**: ~50–60 MB in namespace `litmus`.
-- **Automatic Timeouts**: Every experiment defaults to `TOTAL_CHAOS_DURATION=300` (5 minutes) so that experiments self-heal automatically.
+- **Automatic Timeouts**: Every experiment defaults to `TOTAL_CHAOS_DURATION=300` (5 minutes) so that experiments
+  self-heal automatically.
 
 ### Directory Structure
 
@@ -73,7 +80,9 @@ kubectl describe node <node-name> | grep -A 6 Conditions
 
 ### Exam Context & Permissibility Notes
 
-- Headless LitmusChaos is a homelab failure injection simulator `[HOMELAB AUXILIARY]`. The exam environment will never have Litmus installed or permitted in the browser; all troubleshooting drills must be diagnosed and resolved using standard Kubernetes primitives and inspection commands.
+- Headless LitmusChaos is a homelab failure injection simulator `[HOMELAB AUXILIARY]`. The exam environment will never
+  have Litmus installed or permitted in the browser; all troubleshooting drills must be diagnosed and resolved using
+  standard Kubernetes primitives and inspection commands.
 
 ---
 

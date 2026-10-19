@@ -1,6 +1,8 @@
 # CKA Lab Exercise: Cluster Maintenance & Node Troubleshooting
 
-Hands-on training scenario for the Certified Kubernetes Administrator (CKA) certification, covering node cordon and drain workflows, static pod recovery in `/etc/kubernetes/manifests`, systemd kubelet diagnostics, cluster resource telemetry, CoreDNS recovery, service endpoints triage, worker static pods, and container runtime diagnostics.
+Hands-on training scenario for the Certified Kubernetes Administrator (CKA) certification, covering node cordon and
+drain workflows, static pod recovery in `/etc/kubernetes/manifests`, systemd kubelet diagnostics, cluster resource
+telemetry, CoreDNS recovery, service endpoints triage, worker static pods, and container runtime diagnostics.
 
 ---
 
@@ -8,14 +10,22 @@ Hands-on training scenario for the Certified Kubernetes Administrator (CKA) cert
 
 Troubleshooting makes up the largest scoring weight (30%) of the CKA exam:
 
-- **Section 1: Node Maintenance**: Safely evacuating worker nodes for OS patching via `kubectl cordon` and `kubectl drain`, and restoring scheduling via `kubectl uncordon`.
-- **Section 2: Static Pod Recovery**: Diagnosing and repairing control plane static pod failures (`kube-scheduler`, `kube-apiserver`) directly on the host using `crictl` and `/etc/kubernetes/manifests`.
-- **Section 3: Kubelet Diagnostics**: Diagnosing failing worker node daemons using `systemctl status kubelet`, `journalctl -u kubelet`, and `/var/lib/kubelet/config.yaml`.
-- **Section 4: Resource Telemetry**: Identifying resource-constrained nodes and pods using `kubectl top nodes` and `kubectl top pods`.
-- **Section 5: CoreDNS Recovery**: Diagnosing and repairing CoreDNS ConfigMap `Corefile` syntax errors and upstream forwarders.
-- **Section 6: Service & Endpoints Triage**: Resolving mismatched label selectors and targetPort definitions causing unreachable services.
-- **Section 7: Worker Static Pods**: Configuring a worker node's kubelet `staticPodPath` and deploying static pods directly on the worker node.
-- **Section 8: Container Runtime (CRI) Diagnostics**: Using `crictl` and inspecting `/var/log/pods/` when the container engine is degraded.
+- **Section 1: Node Maintenance**: Safely evacuating worker nodes for OS patching via `kubectl cordon` and `kubectl
+  drain`, and restoring scheduling via `kubectl uncordon`.
+- **Section 2: Static Pod Recovery**: Diagnosing and repairing control plane static pod failures (`kube-scheduler`,
+  `kube-apiserver`) directly on the host using `crictl` and `/etc/kubernetes/manifests`.
+- **Section 3: Kubelet Diagnostics**: Diagnosing failing worker node daemons using `systemctl status kubelet`,
+  `journalctl -u kubelet`, and `/var/lib/kubelet/config.yaml`.
+- **Section 4: Resource Telemetry**: Identifying resource-constrained nodes and pods using `kubectl top nodes` and
+  `kubectl top pods`.
+- **Section 5: CoreDNS Recovery**: Diagnosing and repairing CoreDNS ConfigMap `Corefile` syntax errors and upstream
+  forwarders.
+- **Section 6: Service & Endpoints Triage**: Resolving mismatched label selectors and targetPort definitions causing
+  unreachable services.
+- **Section 7: Worker Static Pods**: Configuring a worker node's kubelet `staticPodPath` and deploying static pods
+  directly on the worker node.
+- **Section 8: Container Runtime (CRI) Diagnostics**: Using `crictl` and inspecting `/var/log/pods/` when the container
+  engine is degraded.
 
 ### Scenario Directory Structure
 
@@ -104,19 +114,25 @@ crictl logs <container-id>
 
 ### Drill 1: Safe Node Evacuation & Maintenance (`01-node-maintenance/`)
 
-In the CKA exam, maintenance tasks (such as host OS patching, kernel upgrades, or hardware maintenance) require safely taking worker nodes offline without causing downtime for scheduled workloads.
+In the CKA exam, maintenance tasks (such as host OS patching, kernel upgrades, or hardware maintenance) require safely
+taking worker nodes offline without causing downtime for scheduled workloads.
 
 #### The Cordon vs Drain Distinction
 
-- **`kubectl cordon <node>`**: Marks the node as unschedulable (`SchedulingDisabled`). Existing running pods are left untouched; only new pod scheduling is blocked.
-- **`kubectl drain <node>`**: Cordons the node and simultaneously evicts all non-DaemonSet workloads gracefully to other available nodes.
+- **`kubectl cordon <node>`**: Marks the node as unschedulable (`SchedulingDisabled`). Existing running pods are left
+  untouched; only new pod scheduling is blocked.
+- **`kubectl drain <node>`**: Cordons the node and simultaneously evicts all non-DaemonSet workloads gracefully to other
+  available nodes.
 - **`kubectl uncordon <node>`**: Removes the unschedulable restriction and restores the node to active scheduling.
 
 #### Mandatory Drain Flags (Avoid CKA Exam Traps)
 
-1. `--ignore-daemonsets`: DaemonSet-managed pods cannot be evicted by draining because their controller immediately recreates them on the same node. You **must** supply this flag or `kubectl drain` will abort.
-2. `--delete-emptydir-data`: If any pod utilizes `emptyDir` volumes, Kubernetes refuses to evict it by default because local ephemeral data will be destroyed. This flag explicitly authorizes data loss.
-3. `--force`: Required if standalone pods (pods created directly via `kubectl run` without a Deployment, ReplicaSet, or Job controller) reside on the node.
+1. `--ignore-daemonsets`: DaemonSet-managed pods cannot be evicted by draining because their controller immediately
+   recreates them on the same node. You **must** supply this flag or `kubectl drain` will abort.
+2. `--delete-emptydir-data`: If any pod utilizes `emptyDir` volumes, Kubernetes refuses to evict it by default because
+   local ephemeral data will be destroyed. This flag explicitly authorizes data loss.
+3. `--force`: Required if standalone pods (pods created directly via `kubectl run` without a Deployment, ReplicaSet, or
+   Job controller) reside on the node.
 
 #### Step 1: Cordon the Node
 
@@ -148,11 +164,13 @@ The node status returns to `Ready`.
 
 ### Drill 2: Control Plane Static Pod Recovery (`02-static-pod-recovery/`)
 
-Control plane components (`etcd`, `kube-apiserver`, `kube-controller-manager`, and `kube-scheduler`) are managed directly by the local `kubelet` daemon as **Static Pods** defined in `/etc/kubernetes/manifests/`.
+Control plane components (`etcd`, `kube-apiserver`, `kube-controller-manager`, and `kube-scheduler`) are managed
+directly by the local `kubelet` daemon as **Static Pods** defined in `/etc/kubernetes/manifests/`.
 
 #### Exam Symptom: Applications Stuck in Pending
 
-When the scheduler fails, new Deployments or Pods remain stuck in `Pending` indefinitely with zero scheduling events recorded in `kubectl describe pod`.
+When the scheduler fails, new Deployments or Pods remain stuck in `Pending` indefinitely with zero scheduling events
+recorded in `kubectl describe pod`.
 
 #### Step 1: Simulate Scheduler Manifest Corruption
 
@@ -177,11 +195,13 @@ Notice the status shows `CrashLoopBackOff` or `Error`.
 kubectl logs -n kube-system -l component=kube-scheduler --tail=50
 ```
 
-Notice the error message pointing to an invalid configuration flag or bad file path (e.g. `--authentication-kubeconfig` or bad volume mount).
+Notice the error message pointing to an invalid configuration flag or bad file path (e.g. `--authentication-kubeconfig`
+or bad volume mount).
 
 > [!TIP]
 > **What if `kube-apiserver` is down?**
-> If the API server itself is broken, `kubectl` commands fail with `The connection to the server was refused`. In this scenario, you must inspect the container runtime directly on the host using `crictl`:
+> If the API server itself is broken, `kubectl` commands fail with `The connection to the server was refused`. In this
+> scenario, you must inspect the container runtime directly on the host using `crictl`:
 >
 > ```bash
 > sudo crictl ps -a | grep -E "apiserver|scheduler"
@@ -200,7 +220,8 @@ sudo vim /etc/kubernetes/manifests/kube-scheduler.yaml
 sudo ./fix-scheduler.sh
 ```
 
-Upon saving the file, the local `kubelet` detects the change via inotify file watchers and automatically recreates the static pod within seconds.
+Upon saving the file, the local `kubelet` detects the change via inotify file watchers and automatically recreates the
+static pod within seconds.
 
 #### Step 5: Verify Recovery
 
@@ -208,7 +229,8 @@ Upon saving the file, the local `kubelet` detects the change via inotify file wa
 kubectl get pods -n kube-system -l component=kube-scheduler
 ```
 
-Confirm that the scheduler returns to `1/1 Running`. Any previously `Pending` workloads will now be scheduled immediately.
+Confirm that the scheduler returns to `1/1 Running`. Any previously `Pending` workloads will now be scheduled
+immediately.
 
 ---
 
@@ -291,11 +313,13 @@ Confirm that the node transitions back to `Ready` status.
 
 ### Drill 4: Cluster Resource Telemetry (`04-metrics-monitoring/`)
 
-A recurring CKA exam requirement is querying node and pod resource consumption (CPU and memory) to identify capacity bottlenecks.
+A recurring CKA exam requirement is querying node and pod resource consumption (CPU and memory) to identify capacity
+bottlenecks.
 
 #### Step 1: Verify Metrics Server API
 
-Ensure Metrics Server is collecting resource telemetry (if not deployed, run `/home/vagrant/cka/helm/install-kube-metrics.sh`):
+Ensure Metrics Server is collecting resource telemetry (if not deployed, run
+`/home/vagrant/cka/helm/install-kube-metrics.sh`):
 
 ```bash
 kubectl top nodes
@@ -331,7 +355,8 @@ cd {{ cka_lab_cluster_troubleshooting_dir }}/04-metrics-monitoring
 
 ### Drill 5: CoreDNS Diagnostics & Recovery (`05-coredns-recovery/`)
 
-Cluster-wide DNS failures cause applications to fail with `cannot resolve host` or connection timeouts when resolving service names (e.g. `service.namespace.svc.cluster.local`).
+Cluster-wide DNS failures cause applications to fail with `cannot resolve host` or connection timeouts when resolving
+service names (e.g. `service.namespace.svc.cluster.local`).
 
 #### Step 1: Simulate CoreDNS Syntax Error
 
@@ -388,8 +413,10 @@ kubectl rollout status deployment coredns -n kube-system --timeout=60s
 
 When a Service is created but traffic cannot reach the backend pods, the root cause is almost always:
 
-1. **Selector Mismatch**: `spec.selector` on the Service does not match `metadata.labels` on the target Pods, causing `Endpoints` to remain `<none>`.
-2. **Port Mismatch**: `spec.ports[*].targetPort` does not match the port the container application is actually listening on.
+1. **Selector Mismatch**: `spec.selector` on the Service does not match `metadata.labels` on the target Pods, causing
+   `Endpoints` to remain `<none>`.
+2. **Port Mismatch**: `spec.ports[*].targetPort` does not match the port the container application is actually listening
+   on.
 
 #### Step 1: Deploy Broken Service Scenario
 
@@ -449,11 +476,13 @@ kubectl get endpoints cka-order-svc
 
 ### Drill 7: Worker Node Static Pods (`07-worker-static-pods/`)
 
-In the CKA exam, you may be instructed to deploy a static pod specifically on a **worker node** rather than the control plane.
+In the CKA exam, you may be instructed to deploy a static pod specifically on a **worker node** rather than the control
+plane.
 
 #### Critical Exam Principle: Static Pods Bypass the API Server
 
-Static pods are managed exclusively by the node's local `kubelet`. You do **not** run `kubectl apply` to create a static pod! Instead, you place a Pod manifest file into the directory configured by `staticPodPath` on the host node.
+Static pods are managed exclusively by the node's local `kubelet`. You do **not** run `kubectl apply` to create a static
+pod! Instead, you place a Pod manifest file into the directory configured by `staticPodPath` on the host node.
 
 #### Step 1: Discover the Worker Node's `staticPodPath`
 
@@ -464,7 +493,8 @@ SSH into the target worker node and inspect its kubelet configuration:
 grep -i "staticPodPath" /var/lib/kubelet/config.yaml
 ```
 
-If `staticPodPath` is set (e.g. `/etc/kubernetes/manifests`), files placed in that directory become static pods. If unset, add `staticPodPath: /etc/kubernetes/manifests` to `/var/lib/kubelet/config.yaml` and restart kubelet.
+If `staticPodPath` is set (e.g. `/etc/kubernetes/manifests`), files placed in that directory become static pods. If
+unset, add `staticPodPath: /etc/kubernetes/manifests` to `/var/lib/kubelet/config.yaml` and restart kubelet.
 
 #### Step 2: Generate the Static Pod Manifest
 
@@ -495,7 +525,8 @@ Return to the control plane and list pods:
 kubectl get pods -o wide
 ```
 
-Notice that a mirror pod named `static-web-<node-name>` automatically appears in the API server with its node set to the target worker node.
+Notice that a mirror pod named `static-web-<node-name>` automatically appears in the API server with its node set to the
+target worker node.
 
 #### Step 5: Test and Validate
 
@@ -507,7 +538,8 @@ Notice that a mirror pod named `static-web-<node-name>` automatically appears in
 
 ### Drill 8: Container Runtime (CRI) Diagnostics (`08-containerd-diagnostics/`)
 
-When Kubernetes daemons (`kubelet` or API server) cannot provide telemetry, you must diagnose container lifecycle directly via `crictl`.
+When Kubernetes daemons (`kubelet` or API server) cannot provide telemetry, you must diagnose container lifecycle
+directly via `crictl`.
 
 #### Step 1: Configure `crictl` Endpoints
 

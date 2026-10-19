@@ -1,14 +1,17 @@
 # CKA Troubleshooting: Deployment Label Selectors & Immutability
 
-This practice drill focuses on one of the most frequent manifest validation errors encountered during Kubernetes deployments and CKA troubleshooting questions: **selector-to-template label mismatches**.
+This practice drill focuses on one of the most frequent manifest validation errors encountered during Kubernetes
+deployments and CKA troubleshooting questions: **selector-to-template label mismatches**.
 
 ---
 
 ## 1. Background & Architecture Mechanics
 
-A Kubernetes Deployment does not manage Pods directly; it delegates pod lifecycle management to underlying **ReplicaSets**.
+A Kubernetes Deployment does not manage Pods directly; it delegates pod lifecycle management to underlying
+**ReplicaSets**.
 
-The ReplicaSet controller identifies which Pods belong to its control loop exclusively by querying the API server using label selectors:
+The ReplicaSet controller identifies which Pods belong to its control loop exclusively by querying the API server using
+label selectors:
 
 - **`spec.selector.matchLabels`**:
   Specifies the exact key-value pairs required for a Pod to be claimed and managed by this Deployment's ReplicaSet.
@@ -17,9 +20,11 @@ The ReplicaSet controller identifies which Pods belong to its control loop exclu
 
 ### The Validation Rule
 
-> The set of labels specified in `spec.selector.matchLabels` **must be a subset** of the labels defined in `spec.template.metadata.labels`.
+> The set of labels specified in `spec.selector.matchLabels` **must be a subset** of the labels defined in
+> `spec.template.metadata.labels`.
 
-If a label key-value specified in `spec.selector.matchLabels` is missing or has a different value in `spec.template.metadata.labels`, the API server rejects the manifest immediately upon creation.
+If a label key-value specified in `spec.selector.matchLabels` is missing or has a different value in
+`spec.template.metadata.labels`, the API server rejects the manifest immediately upon creation.
 
 ---
 
@@ -102,4 +107,5 @@ Once a Deployment object is successfully created in the cluster, its `spec.selec
   The Deployment "cka-lab-order-processor" is invalid: spec.selector: Invalid value: ...: field is immutable
   ```
 
-- If an exam task requires altering the selector of an existing Deployment, you must delete the existing resource and recreate it (`kubectl delete deployment ... --cascade=orphan` if preserving running pods, or recreate entirely).
+- If an exam task requires altering the selector of an existing Deployment, you must delete the existing resource and
+  recreate it (`kubectl delete deployment ... --cascade=orphan` if preserving running pods, or recreate entirely).

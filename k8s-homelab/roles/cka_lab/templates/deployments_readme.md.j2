@@ -1,6 +1,7 @@
 # Certified Kubernetes Administrator (CKA): Deployments & Workloads Lab
 
-Hands-on training scenarios for mastering Kubernetes Deployment primitives, ReplicaSet controllers, rollout lifecycle management, update strategies, and configuration troubleshooting.
+Hands-on training scenarios for mastering Kubernetes Deployment primitives, ReplicaSet controllers, rollout lifecycle
+management, update strategies, and configuration troubleshooting.
 
 ---
 
@@ -185,12 +186,16 @@ kubectl get deployment cka-lab-catalog-service -o jsonpath='{.spec.template.spec
 
 ### Drill 4: Deployment Strategies Comparison
 
-Kubernetes supports two primary deployment strategies defined under `spec.strategy.type`: **`RollingUpdate`** (the default) and **`Recreate`**. In this drill, we explore how tuning these strategies alters rollout behavior and availability:
+Kubernetes supports two primary deployment strategies defined under `spec.strategy.type`: **`RollingUpdate`** (the
+default) and **`Recreate`**. In this drill, we explore how tuning these strategies alters rollout behavior and
+availability:
 
 #### Step 1: Zero-Downtime Rolling Update (`rolling-update-custom.yaml`)
 
 - **Strategy Type**: `type: RollingUpdate` with `maxSurge: 1` and `maxUnavailable: 0`.
-- **What It Means**: Guarantees that available capacity NEVER drops below the desired replica count. At all times during the rollout, at least 3 pods are actively serving traffic. Kubernetes creates a new pod first (surging to 4 pods); only after the new pod passes readiness probes is an old pod terminated.
+- **What It Means**: Guarantees that available capacity NEVER drops below the desired replica count. At all times during
+  the rollout, at least 3 pods are actively serving traffic. Kubernetes creates a new pod first (surging to 4 pods);
+  only after the new pod passes readiness probes is an old pod terminated.
 
 ```bash
 cd ../04-strategies
@@ -201,9 +206,12 @@ kubectl get deployment cka-lab-mission-critical
 #### Step 2: Percentage-Based Rolling Update Bounds (`rolling-update-percent.yaml`)
 
 - **Strategy Type**: `type: RollingUpdate` with percentage bounds (`maxSurge: 50%`, `maxUnavailable: 25%`).
-- **What It Means**: In large clusters or high-replica deployments, specifying percentages allows proportional surge and unavailability. For a deployment with 4 replicas:
-  - `maxSurge: 50%`: Up to 2 extra pods can be created during the update ($4 \times 0.50 = 2$, allowing up to 6 total pods).
-  - `maxUnavailable: 25%`: At most 1 pod may be down ($4 \times 0.25 = 1$, guaranteeing at least 3 pods remain available).
+- **What It Means**: In large clusters or high-replica deployments, specifying percentages allows proportional surge and
+  unavailability. For a deployment with 4 replicas:
+  - `maxSurge: 50%`: Up to 2 extra pods can be created during the update ($4 \times 0.50 = 2$, allowing up to 6 total
+    pods).
+  - `maxUnavailable: 25%`: At most 1 pod may be down ($4 \times 0.25 = 1$, guaranteeing at least 3 pods remain
+    available).
   This accelerates rollout completion across large replica sets while maintaining bounded capacity.
 
 ```bash
@@ -214,7 +222,10 @@ kubectl get deployment cka-lab-dynamic-scale
 #### Step 3: Recreate Strategy (`recreate-strategy.yaml`)
 
 - **Strategy Type**: `type: Recreate` (no `rollingUpdate` parameters).
-- **What It Means**: All existing Pods are terminated BEFORE any new Pods are created. This causes temporary service downtime during rollouts. It is required for legacy singleton applications, exclusive database writers, or workloads with non-concurrent state (such as single-writer ReadWriteOnce persistent storage) that cannot tolerate two pod versions running simultaneously against the same data.
+- **What It Means**: All existing Pods are terminated BEFORE any new Pods are created. This causes temporary service
+  downtime during rollouts. It is required for legacy singleton applications, exclusive database writers, or workloads
+  with non-concurrent state (such as single-writer ReadWriteOnce persistent storage) that cannot tolerate two pod
+  versions running simultaneously against the same data.
 
 ```bash
 kubectl apply -f recreate-strategy.yaml
@@ -243,7 +254,8 @@ kubectl rollout status deployment/cka-lab-batch-pipeline
 
 #### Step 2: Pause Deployment Rollout
 
-Freezes the controller so subsequent specification changes do not trigger immediate pod recreations or intermediate rollout revisions:
+Freezes the controller so subsequent specification changes do not trigger immediate pod recreations or intermediate
+rollout revisions:
 
 ```bash
 kubectl rollout pause deployment/cka-lab-batch-pipeline

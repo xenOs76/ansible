@@ -95,6 +95,36 @@ else
   exit 1
 fi
 
+# ------------------------------------------------------------------------------
+# Optional Auxiliary Storage Backends (Ceph RBD, iSCSI, FC SAN)
+# ------------------------------------------------------------------------------
+if [[ -f "${SCRIPT_DIR}/06-ceph/test-ceph-storage.sh" ]] && kubectl get storageclass "{{ cka_lab_rbd_storage_class }}" >/dev/null 2>&1; then
+  echo "--------------------------------------------------------------------"
+  echo "  [AUX] Testing Ceph Storage (RBD, CephFS, Ceph NFS)                "
+  echo "--------------------------------------------------------------------"
+  bash "${SCRIPT_DIR}/06-ceph/test-ceph-storage.sh"
+elif [[ -f "${SCRIPT_DIR}/06-rbd/test-rbd-volumes.sh" ]] && kubectl get storageclass "{{ cka_lab_rbd_storage_class }}" >/dev/null 2>&1; then
+  echo "--------------------------------------------------------------------"
+  echo "  [AUX] Testing Ceph RBD Block Storage                              "
+  echo "--------------------------------------------------------------------"
+  bash "${SCRIPT_DIR}/06-rbd/test-rbd-volumes.sh"
+fi
+
+if [[ -f "${SCRIPT_DIR}/07-iscsi/test-iscsi-volumes.sh" ]] && timeout 2 bash -c "</dev/tcp/{{ cka_lab_iscsi_portal | replace(':', '/') }}" 2>/dev/null; then
+  echo "--------------------------------------------------------------------"
+  echo "  [AUX] Testing iSCSI Block Storage                                 "
+  echo "--------------------------------------------------------------------"
+  bash "${SCRIPT_DIR}/07-iscsi/test-iscsi-volumes.sh"
+fi
+
+if [[ -f "${SCRIPT_DIR}/08-fc/test-fc-volumes.sh" ]] && find /dev/disk/by-path/ -name "*fc-0x{{ cka_lab_fc_target_wwns[0] }}*" 2>/dev/null | grep -q .; then
+  echo "--------------------------------------------------------------------"
+  echo "  [AUX] Testing Fibre Channel (FC) SAN Storage                      "
+  echo "--------------------------------------------------------------------"
+  bash "${SCRIPT_DIR}/08-fc/test-fc-volumes.sh"
+fi
+
 echo "===================================================================="
 echo "  [SUCCESS] All CKA Volume drills verified successfully!            "
 echo "===================================================================="
+

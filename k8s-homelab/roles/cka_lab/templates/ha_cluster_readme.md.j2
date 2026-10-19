@@ -1,0 +1,403 @@
+# CKA Scenario 19: High-Availability Control Plane (`ha-cluster`)
+
+Hands-on training guide and operational verification procedures for deploying, maintaining, and verifying a **Highly
+Available Kubernetes Control Plane** using stacked etcd, co-located **HAProxy** load balancing, and **Keepalived VRRP**
+virtual IP migration.
+
+---
+
+## 1. Exam Relevance & Competency Breakdown
+
+High Availability control plane management is a core objective in the **Cluster Architecture, Installation &
+Configuration** domain (25% scoring weight) of the Certified Kubernetes Administrator (CKA) exam:
+
+| CKA Exam Competency | Real-World Application | Scenario Drill |
+| :--- | :--- | :--- |
+| **Stacked Control Plane Topology** | Multi-master apiserver + co-located etcd members | `01-verify-vip.sh` |
+| **Control Plane Endpoint & Certs** | `--control-plane-endpoint` and `--upload-certs` | Step 1–2 in README |
+| **Multi-Master Node Join** | `kubeadm join ... --control-plane --certificate-key ...` | Step 3 in README |
+| **etcd Quorum & Health** | `etcdctl endpoint health` across all members | `02-etcd-quorum.sh` |
+| **Failover Resilience** | VRRP VIP migration and surviving member continuity | `03-simulate-failover.sh` |
+| **HA Rolling Upgrades** | Sequential CP upgrades, etcd quorum, `kubeadm upgrade node` | Step 5 & `04-ha-upgrade-sequence.sh` |
+
+---
+
+## 2. Architecture & Resilience Mechanics
+
+```
+                       Virtual IP (VIP): {{ cka_lab_ha_cluster_vip }}:{{ cka_lab_ha_cluster_port }}
+                                       │
+                ┌──────────────────────┼──────────────────────┐
+                ▼                      ▼                      ▼
+        ┌────────────────┐     ┌────────────────┐     ┌────────────────┐
+        │ kube-cp-1      │     │ kube-cp-2      │     │ kube-cp-3      │
+        │ 192.168.56.10  │     │ 192.168.56.11  │     │ 192.168.56.12  │
+        ├────────────────┤     ├────────────────┤     ├────────────────┤
+        │ Keepalived     │     │ Keepalived     │     │ Keepalived     │
+        │ [VRRP MASTER]  │◄───►│ [VRRP BACKUP]  │◄───►│ [VRRP BACKUP]  │
+        │ Priority: 103  │     │ Priority: 102  │     │ Priority: 101  │
+        ├────────────────┤     ├────────────────┤     ├────────────────┤
+        │ HAProxy :{{ cka_lab_ha_cluster_port }} │     │ HAProxy :{{ cka_lab_ha_cluster_port }} │     │ HAProxy :{{ cka_lab_ha_cluster_port }} │
+        │ Health Check   │     │ Health Check   │     │ Health Check   │
+        └───────┬────────┘     └───────┬────────┘     └───────┬────────┘
+                │                      │                      │
+                └──────────────┬───────┴──────────────┬───────┘
+                               │ Active TCP Health Checks (SSL /livez)
+                               ▼
+        ┌──────────────────────────────────────────────────────────────┐
+        │                   kube-apiserver Pool                        │
+        │  • CP1: 192.168.56.10:6443                                    │
+        │  • CP2: 192.168.56.11:6443                                    │
+        │  • CP3: 192.168.56.12:6443                                    │
+        └──────────────────────────────────────────────────────────────┘
+```
+
+1. **Layer 1 (HAProxy)**: Co-located on all control planes listening on port `{{ cka_lab_ha_cluster_port }}`.
+   Health-checks all three local and remote `kube-apiserver` endpoints on `6443`.
+2. **Layer 2 (Keepalived VRRP)**: Manages floating VIP `{{ cka_lab_ha_cluster_vip }}`. If the active master dies or
+   HAProxy stops responding, the VIP automatically migrates to the next healthy CP node in ~2 seconds.
+
+---
+
+## 3. Step-by-Step High Availability Cluster Setup
+
+### Step 1: Bootstrap Primary Control Plane (`kube-cp-1`)
+
+Initialize the cluster specifying the VIP endpoint and cert upload:
+
+```bash
+sudo kubeadm init \
+  --control-plane-endpoint="{{ cka_lab_ha_cluster_vip }}:{{ cka_lab_ha_cluster_port }}" \
+  --upload-certs \
+  --pod-network-cidr=10.1.0.0/16 \
+  --apiserver-advertise-address=192.168.56.10
+```
+
+The output provides:
+- The worker join command (`kubeadm join {{ cka_lab_ha_cluster_vip }}:{{ cka_lab_ha_cluster_port }} --token ...`)
+- The control plane join command with `--control-plane --certificate-key <key>`
+
+### Step 2: Regenerate Certificate Key on Demand
+
+If the original certificate key expires (default 2 hours), re-upload certificates to obtain a new key:
+
+```bash
+sudo kubeadm init phase upload-certs --upload-certs
+```
+
+### Step 3: Join Secondary Control Planes (`kube-cp-2` & `kube-cp-3`)
+
+> [!IMPORTANT]
+> In multi-homed environments (such as Vagrant libvirt/VirtualBox VMs with a default NAT interface `ens5` and cluster
+> interface `ens6`), you **must** supply `--apiserver-advertise-address <joining_node_ip>`.
+>
+> If omitted, `kubeadm` binds to the interface with the default route (`192.168.121.x`), causing:
+> 1. etcd peer URLs to announce the unreachable NAT IP, stalling node join at `[check-etcd]`.
+> 2. HAProxy to balance traffic to an unjoined control plane serving mismatched certificates, which breaks subsequent
+>    VIP commands with `x509: certificate signed by unknown authority (crypto/rsa: verification error)`.
+
+Execute on **`kube-cp-2`** (`192.168.56.11`):
+
+```bash
+sudo kubeadm join {{ cka_lab_ha_cluster_vip }}:{{ cka_lab_ha_cluster_port }} \
+  --token <token> \
+  --discovery-token-ca-cert-hash sha256:<hash> \
+  --control-plane \
+  --certificate-key <key> \
+  --apiserver-advertise-address 192.168.56.11
+```
+
+Execute on **`kube-cp-3`** (`192.168.56.12`):
+
+```bash
+sudo kubeadm join {{ cka_lab_ha_cluster_vip }}:{{ cka_lab_ha_cluster_port }} \
+  --token <token> \
+  --discovery-token-ca-cert-hash sha256:<hash> \
+  --control-plane \
+  --certificate-key <key> \
+  --apiserver-advertise-address 192.168.56.12
+```
+
+#### Troubleshooting a Stalled Node Join
+
+If a secondary control plane was joined without `--apiserver-advertise-address` and became stuck:
+
+1. **Reset the joining node (`kube-cp-2`)**:
+   ```bash
+   sudo kubeadm reset -f
+   sudo rm -rf /etc/kubernetes/manifests/* /var/lib/etcd /etc/kubernetes/pki
+   ```
+2. **Remove the unstarted etcd member on `kube-cp-1`**:
+   ```bash
+   # List members to find the unstarted member ID
+   sudo ETCDCTL_API=3 etcdctl \
+     --cacert=/etc/kubernetes/pki/etcd/ca.crt \
+     --cert=/etc/kubernetes/pki/etcd/server.crt \
+     --key=/etc/kubernetes/pki/etcd/server.key \
+     member list
+
+   # Remove the unstarted member
+   sudo ETCDCTL_API=3 etcdctl \
+     --cacert=/etc/kubernetes/pki/etcd/ca.crt \
+     --cert=/etc/kubernetes/pki/etcd/server.crt \
+     --key=/etc/kubernetes/pki/etcd/server.key \
+     member remove <unstarted-member-id>
+   ```
+3. **Re-upload certificates and generate a fresh token on `kube-cp-1`**:
+   ```bash
+   sudo kubeadm init phase upload-certs --upload-certs
+   sudo kubeadm token create --print-join-command
+   ```
+4. **Re-run the join command** on the joining node with `--apiserver-advertise-address <joining_node_ip>`.
+
+### Step 4: Verify Multi-Master Node Registration
+
+```bash
+kubectl get nodes -l node-role.kubernetes.io/control-plane -o wide
+```
+
+All 3 control plane nodes should report `Ready` and display the control-plane role.
+
+---
+
+## 4. Hands-On Verification Drills
+
+### Drill 1: Virtual IP & HAProxy Routing (`01-verify-vip.sh`)
+
+Validates that the VIP is reachable and that HAProxy distributes API queries:
+
+```bash
+cd {{ cka_lab_ha_cluster_dir }}
+./01-verify-vip.sh
+```
+
+### Drill 2: etcd 3-Node Quorum & Health (`02-etcd-quorum.sh`)
+
+Inspects etcd cluster health across all endpoints:
+
+```bash
+./02-etcd-quorum.sh
+```
+
+Checks:
+- `etcdctl endpoint health` reports healthy on all three nodes.
+- `etcdctl member list` verifies all members are active and synchronized.
+
+### Drill 3: Active Failover Simulation (`03-simulate-failover.sh`)
+
+Simulates failure of an active control plane and confirms uninterrupted cluster API operations via the floating VIP:
+
+```bash
+./03-simulate-failover.sh
+```
+
+### Drill 4: High-Availability Upgrade Sequence Rehearsal (`04-ha-upgrade-sequence.sh`)
+
+Validates HA topology discovery, etcd quorum readiness, drain syntax, and verifies the sequential upgrade commands:
+
+```bash
+./04-ha-upgrade-sequence.sh
+```
+
+---
+
+## 5. Step-by-Step High-Availability Cluster Upgrade Procedure
+
+Upgrading a high-availability Kubernetes cluster requires strict discipline around etcd quorum and API availability.
+Unlike a single-master cluster where downtime is expected during control plane component restarts, an HA control
+plane allows rolling upgrades with zero API downtime when executed sequentially.
+
+### The 4 High-Availability Upgrade Rules
+
+1. **Strict Sequential Execution**: Never upgrade multiple control planes concurrently. A 3-node stacked etcd cluster
+   has a minimum quorum of $\lfloor 3/2 \rfloor + 1 = 2$. Taking two nodes down simultaneously breaks quorum and halts
+   all cluster API operations.
+2. **Primary Control Plane First**: Upgrade the primary control plane (`kube-cp-1`) first using `kubeadm upgrade apply`.
+   This updates cluster-wide resources (CoreDNS, `kube-proxy`, and the `kubeadm-config` ConfigMap in `kube-system`).
+3. **Secondary Control Planes Use `kubeadm upgrade node`**: Secondary control planes (`kube-cp-2`, `kube-cp-3`) must
+   **never** run `kubeadm upgrade apply`. They execute `kubeadm upgrade node` to update their local static pod manifests
+   using the configuration already uploaded by `kube-cp-1`.
+4. **VIP Traffic Failover**: Keepalived VRRP and HAProxy health checking automatically redirect API requests away from
+   the node undergoing maintenance, keeping cluster services available.
+
+### Phase 1: Upgrade the Primary Control Plane (`kube-cp-1`)
+
+Execute these steps on the primary control plane (`kube-cp-1`):
+
+#### Step 1: Drain `kube-cp-1`
+
+```bash
+kubectl drain kube-cp-1 --ignore-daemonsets --delete-emptydir-data
+```
+
+#### Step 2: Upgrade `kubeadm` on `kube-cp-1`
+
+```bash
+TARGET_VERSION="1.37.0-1.1" # Target version from exam prompt
+
+sudo apt-mark unhold kubeadm
+sudo apt-get update && sudo apt-get install -y kubeadm="${TARGET_VERSION}"
+sudo apt-mark hold kubeadm
+
+# Verify the binary version
+kubeadm version
+```
+
+#### Step 3: Run Upgrade Plan
+
+```bash
+sudo kubeadm upgrade plan
+```
+
+#### Step 4: Apply Upgrade to Primary Control Plane
+
+```bash
+SEMVER="v1.37.0"
+
+sudo kubeadm upgrade apply "${SEMVER}" --yes
+```
+
+#### Step 5: Upgrade `kubelet` and `kubectl` on `kube-cp-1`
+
+```bash
+sudo apt-mark unhold kubelet kubectl
+sudo apt-get install -y kubelet="${TARGET_VERSION}" kubectl="${TARGET_VERSION}"
+sudo apt-mark hold kubelet kubectl
+
+sudo systemctl daemon-reload
+sudo systemctl restart kubelet
+```
+
+#### Step 6: Uncordon `kube-cp-1` and Verify etcd Health
+
+```bash
+kubectl uncordon kube-cp-1
+kubectl get nodes -o wide
+
+# Verify etcd quorum is completely healthy before touching secondary nodes
+sudo ETCDCTL_API=3 etcdctl \
+  --cacert=/etc/kubernetes/pki/etcd/ca.crt \
+  --cert=/etc/kubernetes/pki/etcd/server.crt \
+  --key=/etc/kubernetes/pki/etcd/server.key \
+  endpoint health
+```
+
+### Phase 2: Upgrade Secondary Control Planes (`kube-cp-2` & `kube-cp-3`)
+
+Upgrade each secondary control plane sequentially. Do **not** begin `kube-cp-3` until `kube-cp-2` is fully upgraded,
+uncordoned, and healthy.
+
+#### Step 1: Drain Secondary Control Plane Node
+
+From `kube-cp-1` (or using active cluster admin kubeconfig):
+
+```bash
+kubectl drain kube-cp-2 --ignore-daemonsets --delete-emptydir-data
+```
+
+#### Step 2: SSH into `kube-cp-2` & Upgrade `kubeadm`
+
+```bash
+ssh kube-cp-2
+
+TARGET_VERSION="1.37.0-1.1"
+
+sudo apt-mark unhold kubeadm
+sudo apt-get update && sudo apt-get install -y kubeadm="${TARGET_VERSION}"
+sudo apt-mark hold kubeadm
+```
+
+#### Step 3: Run `kubeadm upgrade node` (Not `apply`!)
+
+```bash
+sudo kubeadm upgrade node
+```
+
+> [!IMPORTANT]
+> Do NOT execute `kubeadm upgrade apply` on secondary control plane nodes. Executing `kubeadm upgrade node` fetches the
+> cluster configuration from the `kubeadm-config` ConfigMap in `kube-system` and upgrades local static pod manifests.
+
+#### Step 4: Upgrade `kubelet` and `kubectl` on `kube-cp-2`
+
+```bash
+sudo apt-mark unhold kubelet kubectl
+sudo apt-get install -y kubelet="${TARGET_VERSION}" kubectl="${TARGET_VERSION}"
+sudo apt-mark hold kubelet kubectl
+
+sudo systemctl daemon-reload
+sudo systemctl restart kubelet
+exit
+```
+
+#### Step 5: Uncordon `kube-cp-2` & Verify Health
+
+```bash
+kubectl uncordon kube-cp-2
+kubectl get nodes -o wide
+```
+
+Confirm that `kube-cp-2` reports the upgraded version and `Ready` status. Verify etcd endpoint health across all members
+before repeating these exact 5 steps for **`kube-cp-3`**.
+
+### Phase 3: Upgrade Worker Nodes (`kube-worker-1`)
+
+Once all control plane nodes are successfully upgraded:
+
+#### Step 1: Drain Worker Node (From Control Plane)
+
+```bash
+kubectl drain kube-worker-1 --ignore-daemonsets --delete-emptydir-data --force
+```
+
+#### Step 2: SSH into Worker Node & Upgrade Packages
+
+```bash
+ssh kube-worker-1
+
+TARGET_VERSION="1.37.0-1.1"
+
+sudo apt-mark unhold kubeadm
+sudo apt-get update && sudo apt-get install -y kubeadm="${TARGET_VERSION}"
+sudo apt-mark hold kubeadm
+
+sudo kubeadm upgrade node
+
+sudo apt-mark unhold kubelet kubectl
+sudo apt-get install -y kubelet="${TARGET_VERSION}" kubectl="${TARGET_VERSION}"
+sudo apt-mark hold kubelet kubectl
+
+sudo systemctl daemon-reload
+sudo systemctl restart kubelet
+exit
+```
+
+#### Step 3: Uncordon Worker Node
+
+```bash
+kubectl uncordon kube-worker-1
+```
+
+### Phase 4: Cluster-Wide Post-Upgrade Verification
+
+Validate cluster health through the floating VIP:
+
+```bash
+# Check all node statuses and versions
+kubectl get nodes -o wide
+
+# Verify static pod status in kube-system
+kubectl get pods -n kube-system -o wide
+
+# Probe API server responsiveness through floating VIP
+curl -kfs https://{{ cka_lab_ha_cluster_vip }}:{{ cka_lab_ha_cluster_port }}/livez?verbose
+```
+
+---
+
+## 6. Automated Test Suite
+
+Run the full end-to-end HA verification harness:
+
+```bash
+./test-ha-drills.sh
+```

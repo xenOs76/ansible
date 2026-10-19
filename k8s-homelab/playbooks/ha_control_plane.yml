@@ -1,0 +1,11 @@
+---
+- name: Configure HAProxy and Keepalived load balancing for HA control plane
+  hosts: control_plane
+  become: true
+  roles:
+    - role: ha_control_plane
+      when: ha_control_plane_enabled | default(false) | bool
+  tags:
+    - ha
+    - ha_control_plane
+    - loadbalancer

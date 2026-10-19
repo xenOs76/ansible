@@ -1,0 +1,229 @@
+# CKA Lab Exercise: Cloud-Native Ceph Storage Drills (RBD, CephFS & CephNFS)
+
+Hands-on training scenarios for the Certified Kubernetes Administrator (CKA) exam covering Ceph cloud-native storage:
+RADOS Block Device (RBD) integration, raw block devices (`volumeMode: Block`), online volume expansion, native CephFS
+shared
+filesystems, and CephFS exported over NFS via NFS-Ganesha.
+
+---
+
+## 1. Overview & Architecture
+
+Rook-Ceph provides cloud-native, distributed storage orchestrating three distinct storage personalities on the cluster:
+
+```text
+                               ┌────────────────────────────────────────────────────────┐
+                               │           Rook-Ceph Storage Cluster                   │
+                               └─────────────────────────┬──────────────────────────────┘
+                                                         │
+                ┌────────────────────────────────────────┼────────────────────────────────────────┐
+                ▼                                        ▼                                        ▼
+   ┌───────────────────────────┐           ┌───────────────────────────┐           ┌───────────────────────────┐
+   │         Ceph RBD          │           │       Native CephFS       │           │         Ceph NFS          │
+   │      (Block Storage)      │           │    (Shared Filesystem)    │           │    (NFS-Ganesha over FS)  │
+   ├───────────────────────────┤           ├───────────────────────────┤           ├───────────────────────────┤
+   │ CSI: rbd.csi.ceph.com     │           │ CSI: cephfs.csi.ceph.com  │           │ CSI: nfs.csi.k8s.io       │
+   │ Access: ReadWriteOnce     │           │ Access: ReadWriteMany     │           │ Access: ReadWriteMany     │
+   │ Mode: Filesystem / Block  │           │ Mode: Filesystem          │           │ Mode: Filesystem          │
+   │ StorageClass:             │           │ StorageClass:             │           │ StorageClass:             │
+   │   {{ cka_lab_rbd_storage_class | default('rook-ceph-block') }}          │           │   {{ cka_lab_cephfs_storage_class | default('rook-cephfs') }}             │           │   {{ cka_lab_ceph_nfs_storage_class | default('ceph-nfs-csi') }}          │
+   └───────────────────────────┘           └───────────────────────────┘           └───────────────────────────┘
+```
+
+### On-Demand Auxiliary Layer
+
+Like iSCSI (`07-iscsi/`) and Fibre Channel SAN (`08-fc/`), Ceph is an **on-demand auxiliary homelab layer** `[HOMELAB
+AUXILIARY]`:
+
+- **Activation**: Deployed and managed on demand using Ansible:
+  ```bash
+  make preprod-ceph
+  ```
+- **Status Inspection**: Check daemon and cluster health:
+  ```bash
+  make preprod-ceph-status
+  ```
+- **CKA Exam Scope**: In the CKA exam, candidates encounter standard Kubernetes storage abstractions (`volumeMode:
+  Block`,
+  `volumeDevices`, `ReadWriteMany` access modes, `allowVolumeExpansion: true`, and PVC expansion). Ceph provides the
+  real
+  distributed backend in this homelab to practice these concepts with live storage.
+
+---
+
+## 2. Directory Layout
+
+```text
+{{ cka_lab_volumes_dir }}/06-ceph/
+├── README.md                          # This comprehensive practice guide
+├── test-ceph-storage.sh               # Automated end-to-end verification suite
+├── 01-rbd-dynamic-filesystem.yaml     # Ceph RBD: Dynamic ext4 filesystem PVC & pod mount
+├── 02-rbd-raw-block.yaml              # Ceph RBD: Raw block volume with volumeMode: Block & volumeDevices
+├── 03-rbd-static-pv-pvc-pod.yaml      # Ceph RBD: Static Ceph CSI PV, PVC, and consumer Pod
+├── 04-rbd-pvc-expansion.yaml          # Ceph RBD: Online volume expansion drill
+├── 05-cephfs-sc.yaml                  # Native CephFS: StorageClass definition
+├── 06-cephfs-dynamic-pvc.yaml         # Native CephFS: Dynamic ReadWriteMany PVC
+├── 07-cephfs-shared-deployment.yaml   # Native CephFS: Multi-replica NGINX shared mount
+├── 08-ceph-nfs-sc.yaml                # Ceph NFS: NFS-Ganesha StorageClass via NFS CSI
+├── 09-ceph-nfs-dynamic-pvc.yaml       # Ceph NFS: Dynamic ReadWriteMany claim
+└── 10-ceph-nfs-shared-deployment.yaml # Ceph NFS: Multi-replica consumer workload
+```
+
+> [!NOTE]
+> For convenience and muscle memory, the path `~/cka/12-volumes/06-rbd` is preserved as a symbolic link pointing to
+> `06-ceph`.
+
+---
+
+## 3. Official Exam References & Quick Lookups
+
+### Permitted Exam Documentation
+
+- **Persistent Volumes**: [Persistent Volumes](https://kubernetes.io/docs/concepts/storage/persistent-volumes/) `[EXAM ALLOWED]`
+- **Raw Block Volumes**: [Persistent Volumes - Raw Block Volume](https://kubernetes.io/docs/concepts/storage/persistent-volumes/#raw-block-volume) `[EXAM ALLOWED]`
+- **Expanding Persistent Volume Claims**: [Expanding Persistent Volumes](https://kubernetes.io/docs/concepts/storage/persistent-volumes/#expanding-persistent-volumes-claims) `[EXAM ALLOWED]`
+
+### In-Exam Search Keywords
+
+- `"raw block volume"`
+- `"volumeMode block"`
+- `"volumeDevices"`
+- `"expanding persistent volume"`
+
+### Terminal Fast Lookups (`kubectl explain`)
+
+```bash
+kubectl explain pvc.spec.volumeMode
+kubectl explain pod.spec.containers.volumeDevices
+kubectl explain pv.spec.csi
+```
+
+---
+
+## 4. Hands-on Drills
+
+### Drill 1: Ceph RBD Dynamic Filesystem Volume
+
+#### Step 1: Deploy Claim & Consumer Pod
+
+```bash
+cd {{ cka_lab_volumes_dir }}/06-ceph
+
+kubectl apply -f 01-rbd-dynamic-filesystem.yaml
+kubectl wait --for=condition=Ready pod/rbd-fs-consumer-pod --timeout=120s
+```
+
+#### Step 2: Verify Storage Attachment
+
+```bash
+kubectl get pvc rbd-claim-fs
+kubectl get pv
+kubectl exec rbd-fs-consumer-pod -- df -h /mnt/storage
+kubectl exec rbd-fs-consumer-pod -- cat /mnt/storage/data.txt
+```
+
+---
+
+### Drill 2: Ceph RBD Raw Block Device Mode (`volumeMode: Block`)
+
+In high-performance database workloads, containers consume unformatted block devices without a host filesystem layer.
+
+#### Step 1: Deploy Raw Block PVC & Consumer Pod
+
+```bash
+kubectl apply -f 02-rbd-raw-block.yaml
+kubectl wait --for=condition=Ready pod/rbd-raw-block-consumer-pod --timeout=120s
+```
+
+#### Step 2: Verify Raw Block Device Inside Container
+
+```bash
+kubectl exec rbd-raw-block-consumer-pod -- ls -l /dev/rbdblock
+# Test raw block I/O write with dd:
+kubectl exec rbd-raw-block-consumer-pod -- dd if=/dev/urandom of=/dev/rbdblock bs=1M count=10 conv=fsync
+```
+
+---
+
+### Drill 3: Ceph RBD Online Live Volume Expansion
+
+Because `{{ cka_lab_rbd_storage_class | default('rook-ceph-block') }}` has `allowVolumeExpansion: true`, the CSI resizer
+expands the volume and
+kubelet resizes the ext4 filesystem live without pod restart:
+
+#### Step 1: Patch the PVC Capacity to 2Gi
+
+```bash
+kubectl patch pvc rbd-claim-fs -p '{"spec":{"resources":{"requests":{"storage":"2Gi"}}}}'
+kubectl get pvc rbd-claim-fs
+```
+
+#### Step 2: Confirm Filesystem Resizing Inside the Running Pod
+
+```bash
+kubectl exec rbd-fs-consumer-pod -- df -h /mnt/storage
+```
+
+---
+
+### Drill 4: Native CephFS Dynamic Shared Storage (`ReadWriteMany`)
+
+Native CephFS provides distributed POSIX shared storage across multiple cluster nodes via `cephfs.csi.ceph.com`:
+
+#### Step 1: Deploy StorageClass and RWX Claim
+
+```bash
+kubectl apply -f 05-cephfs-sc.yaml
+kubectl apply -f 06-cephfs-dynamic-pvc.yaml
+kubectl get pvc cephfs-dynamic-claim
+```
+
+#### Step 2: Mount Across Multi-Replica Workload
+
+```bash
+kubectl apply -f 07-cephfs-shared-deployment.yaml
+kubectl rollout status deployment/cephfs-shared-app --timeout=120s
+kubectl get pods -l app=cephfs-shared-app -o wide
+```
+
+#### Step 3: Verify Distributed Read/Write
+
+```bash
+POD1=$(kubectl get pods -l app=cephfs-shared-app -o jsonpath='{.items[0].metadata.name}')
+POD2=$(kubectl get pods -l app=cephfs-shared-app -o jsonpath='{.items[1].metadata.name}')
+
+kubectl exec "${POD1}" -- cat /usr/share/nginx/html/index.html
+kubectl exec "${POD2}" -- cat /usr/share/nginx/html/index.html
+```
+
+---
+
+### Drill 5: Ceph NFS via NFS-Ganesha & NFS CSI (`ReadWriteMany`)
+
+In enterprise environments, CephFS is often exported over standard NFSv4 via Ceph NFS-Ganesha daemons, allowing standard
+NFS clients and the official Kubernetes NFS CSI driver (`nfs.csi.k8s.io`) to mount Ceph storage:
+
+#### Step 1: Deploy Ceph NFS StorageClass and Claim
+
+```bash
+kubectl apply -f 08-ceph-nfs-sc.yaml
+kubectl apply -f 09-ceph-nfs-dynamic-pvc.yaml
+kubectl get pvc ceph-nfs-dynamic-claim
+```
+
+#### Step 2: Deploy Shared Workload
+
+```bash
+kubectl apply -f 10-ceph-nfs-shared-deployment.yaml
+kubectl rollout status deployment/ceph-nfs-shared-app --timeout=120s
+```
+
+---
+
+## 5. Automated Verification
+
+Run the non-interactive verification script to validate RBD block, raw block, CephFS, and Ceph NFS:
+
+```bash
+./test-ceph-storage.sh
+```

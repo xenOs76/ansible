@@ -2,6 +2,8 @@
 
 Operational tracking document, prerequisites, breaking changes, and validation procedures for upgrading the `k8s-homelab` cluster across minor versions from **v1.34** through **v1.37**.
 
+The cluster base installation is baseline-aligned to **v1.36** (`1.36.0-1.1`), providing an up-to-date environment for CKA preparation while supporting full sequential upgrades to **v1.37** (`1.37.0-1.1`). An automated High-Availability (HA) control plane profile with Keepalived VRRP and HAProxy provides multi-master resilient topologies.
+
 ---
 
 ## 1. Architectural Rules of Thumb & Version Skew Policy
@@ -180,9 +182,14 @@ The homelab provides automated rolling upgrade orchestration via Ansible:
 ```bash
 cd k8s-homelab
 
-# Execute automated rolling upgrade against target environment
-./scripts/run-playbook.sh -e preprod -p upgrade.yml --extra-vars "k8s_version=1.35.1-1.1"
+# Execute automated rolling upgrade against standard preprod (1.36 -> 1.37)
+./scripts/run-playbook.sh -e preprod -p upgrade.yml
+
+# Execute automated rolling upgrade against HA preprod (sequential CP upgrades)
+./scripts/run-playbook.sh -i inventory/preprod-ha/hosts.ini -p playbooks/upgrade.yml
 ```
+
+The upgrade role handles APT repository migration (`v1.36` → `v1.37`), repository signing keys, `kubeadm upgrade apply` on primary control planes, `kubeadm upgrade node` on secondary control planes, and cordon/drain/uncordon cycles across all workers.
 
 ### Post-Execution Validation Suite
 
@@ -196,4 +203,5 @@ kubectl get nodes -o wide
 ~/cka/05-scheduling/test-scheduling-drills.sh
 ~/cka/06-networking/test-networking-drills.sh
 ~/cka/16-upgrade/test-upgrade-drills.sh
+~/cka/19-ha-cluster/test-ha-cluster-drills.sh
 ```

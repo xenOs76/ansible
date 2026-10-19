@@ -1,0 +1,21 @@
+---
+ha_control_plane_enabled: true
+ha_control_plane_vip: "192.168.56.9"
+ha_control_plane_port: 8443
+ha_control_plane_interface: "eth1"
+ha_control_plane_vrrp_id: 56
+ha_control_plane_auth_pass: "K8sHa076"
+ha_control_plane_apiserver_port: 6443
+ha_control_plane_script_user: "nobody"
+ha_control_plane_check_interval: 2
+ha_control_plane_check_timeout: 3
+ha_control_plane_check_weight: -20
+ha_control_plane_check_fall: 2
+ha_control_plane_check_rise: 2
+ha_control_plane_metrics_enabled: true
+ha_control_plane_metrics_port: 8405
+ha_control_plane_health_endpoint: "/readyz"
+ha_control_plane_health_timeout: "2s"
+ha_control_plane_health_interval: "2s"
+ha_control_plane_health_fall: 3
+ha_control_plane_health_rise: 2

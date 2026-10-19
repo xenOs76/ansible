@@ -1,19 +1,23 @@
 # Ansible Role: `iscsi_target`
 
-Automates the provisioning and configuration of a Linux-IO (`LIO`) kernel target subsystem using `targetcli-fb` on the Kubernetes control plane to serve file-backed LUNs (or Logical Volumes / raw block devices) to worker nodes over iSCSI.
+Automates the provisioning and configuration of a Linux-IO (`LIO`) kernel target subsystem using `targetcli-fb` on the
+Kubernetes control plane to serve file-backed LUNs (or Logical Volumes / raw block devices) to worker nodes over iSCSI.
 
 ---
 
 ## 1. Overview
 
-The `iscsi_target` role provisions a kernel-native iSCSI target portal listening on port `3260` of `kube-control-plane` (`192.168.56.10`) via the Linux kernel target framework (LIO / `target_core_mod` / `iscsi_target_mod`).
+The `iscsi_target` role provisions a kernel-native iSCSI target portal listening on port `3260` of `kube-control-plane`
+(`192.168.56.10`) via the Linux kernel target framework (LIO / `target_core_mod` / `iscsi_target_mod`).
 
 By default, the role serves two 512 MiB sparse disk images from `/srv/iscsi/`:
 
 - **LUN 1 (`lun1.img`)**: Intended for standard filesystem volume mounts (`ext4`, `ReadWriteOnce`).
 - **LUN 2 (`lun2.img`)**: Intended for raw block mode volume mounts (`volumeMode: Block`).
 
-Access control is configured in permissive demo mode (`generate_node_acls=1`, `demo_mode_write_protect=0`, `cache_dynamic_acls=1`, `authentication=0`), allowing seamless integration with Kubernetes in-tree iSCSI volume plugins and CKA certification practice exercises without requiring pre-registered initiator IQNs.
+Access control is configured in permissive demo mode (`generate_node_acls=1`, `demo_mode_write_protect=0`,
+`cache_dynamic_acls=1`, `authentication=0`), allowing seamless integration with Kubernetes in-tree iSCSI volume plugins
+and CKA certification practice exercises without requiring pre-registered initiator IQNs.
 
 ---
 

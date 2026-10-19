@@ -40,25 +40,13 @@ echo "--------------------------------------------------------------------"
 # Drill 3: Dynamic NFS CSI Provisioning & Multi-Replica RWX Storage
 # ------------------------------------------------------------------------------
 echo "--------------------------------------------------------------------"
-echo "  [3/4] Testing Dynamic NFS CSI Provisioning & ReadWriteMany Storage "
+echo "  [3/3] Testing Dynamic NFS CSI Provisioning & ReadWriteMany Storage "
 echo "--------------------------------------------------------------------"
 if kubectl get csidriver nfs.csi.k8s.io >/dev/null 2>&1; then
   "${SCRIPT_DIR}/02-storage-classes/test-nfs-csi-drills.sh"
 else
   echo "    Skipping NFS CSI runtime test: nfs.csi.k8s.io driver not yet deployed."
   echo "    (Deploy on-demand via: ${SCRIPT_DIR}/01-provisioners/install-nfs-csi-driver.sh)"
-fi
-
-# ------------------------------------------------------------------------------
-# Drill 4: Ceph NFS Dynamic Shared Storage Alternative
-# ------------------------------------------------------------------------------
-echo "--------------------------------------------------------------------"
-echo "  [4/4] Testing Ceph NFS Dynamic Shared Storage Alternative          "
-echo "--------------------------------------------------------------------"
-if kubectl get csidriver nfs.csi.k8s.io >/dev/null 2>&1; then
-  "${SCRIPT_DIR}/02-storage-classes/test-ceph-nfs-drills.sh"
-else
-  echo "    Skipping Ceph NFS runtime test: nfs.csi.k8s.io driver not yet deployed."
 fi
 
 echo "===================================================================="

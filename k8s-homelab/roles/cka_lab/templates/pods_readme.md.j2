@@ -1,16 +1,20 @@
 # CKA Lab Exercise: Pods and Namespaces
 
-Hands-on training scenario for the Certified Kubernetes Administrator (CKA) certification, covering Pod architecture, lifecycle management, container observability, networking diagnostics, spec immutability, and namespace context preferences.
+Hands-on training scenario for the Certified Kubernetes Administrator (CKA) certification, covering Pod architecture,
+lifecycle management, container observability, networking diagnostics, spec immutability, and namespace context
+preferences.
 
 ---
 
 ## 1. Overview & Curriculum Objectives
 
-In the CKA exam, the **Pod** is the central building block for workloads and container execution. While higher-level controllers (such as Deployments) manage multi-replica lifecycles, exam tasks routinely require:
+In the CKA exam, the **Pod** is the central building block for workloads and container execution. While higher-level
+controllers (such as Deployments) manage multi-replica lifecycles, exam tasks routinely require:
 
 - Rapid imperative Pod creation via `kubectl run` with specific flags.
 - Authoring declarative YAML manifests for Pods with environment variables, ports, and custom commands/args.
-- Diagnosing lifecycle phases (`Pending`, `Running`, `Succeeded`, `Failed`) and container states (`CrashLoopBackOff`, `ImagePullBackOff`).
+- Diagnosing lifecycle phases (`Pending`, `Running`, `Succeeded`, `Failed`) and container states (`CrashLoopBackOff`,
+  `ImagePullBackOff`).
 - Inspecting runtime stdout/stderr with `kubectl logs` and executing interactive shells with `kubectl exec`.
 - Troubleshooting intra-cluster networking using ephemeral test Pods (`--rm -it --restart=Never`).
 - Handling Pod specification immutability via `kubectl replace --force`.
@@ -233,7 +237,9 @@ kubectl get pod cka-lab-immutable-app
 
 #### Step 4: In-Place Pod Resource Resizing (Kubernetes 1.35+ GA)
 
-Historically in Kubernetes, all container resource allocations were strictly immutable on running pods. Starting in **Kubernetes 1.35**, the `InPlacePodVerticalScaling` feature is Generally Available (GA), allowing CPU and memory requests/limits to be modified dynamically on live, running containers **without restarting or recreating the Pod**:
+Historically in Kubernetes, all container resource allocations were strictly immutable on running pods. Starting in
+**Kubernetes 1.35**, the `InPlacePodVerticalScaling` feature is Generally Available (GA), allowing CPU and memory
+requests/limits to be modified dynamically on live, running containers **without restarting or recreating the Pod**:
 
 ```bash
 # Dynamically resize running container CPU and Memory in-place

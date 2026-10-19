@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# Script: test-cluster-install.sh
+# Purpose: Automated verification test suite for cluster installation & bootstrap.
+# ==============================================================================
+set -euo pipefail
+
+TOTAL=0
+PASSED=0
+FAILED=0
+
+pass() {
+  echo -e "\e[32m✔ PASS\e[0m: $1"
+  PASSED=$((PASSED + 1))
+  TOTAL=$((TOTAL + 1))
+}
+
+fail() {
+  echo -e "\e[31m✘ FAIL\e[0m: $1"
+  FAILED=$((FAILED + 1))
+  TOTAL=$((TOTAL + 1))
+}
+
+echo "================================================================================"
+echo " CKA Lab Drill: Cluster Installation Verification Suite"
+echo "================================================================================"
+
+# Test 1: Check admin.conf existence
+if [[ -f /etc/kubernetes/admin.conf ]]; then
+  pass "Kubernetes admin.conf exists on control plane"
+else
+  fail "Kubernetes admin.conf not found. Control plane not initialized yet."
+fi
+
+# Test 2: Check kubectl client configuration
+if [[ -f "${HOME}/.kube/config" ]] && kubectl version --client >/dev/null 2>&1; then
+  pass "Client kubectl configuration is valid"
+else
+  fail "Client kubectl configuration missing or invalid in ~/.kube/config"
+fi
+
+# Test 3: API Server cluster-info reachability
+if kubectl cluster-info >/dev/null 2>&1; then
+  pass "Kubernetes API server is reachable via cluster-info"
+else
+  fail "Cannot reach Kubernetes API server via kubectl cluster-info"
+fi
+
+# Test 4: Node readiness check
+READY_NODES=$(kubectl get nodes --no-headers 2>/dev/null | grep -c "Ready" || true)
+if [[ "${READY_NODES}" -ge 1 ]]; then
+  pass "At least 1 node is reporting Ready state (Ready nodes: ${READY_NODES})"
+else
+  fail "No nodes are in Ready state. Verify CNI plugin installation."
+fi
+
+# Test 5: CoreDNS pods running
+COREDNS_RUNNING=$(kubectl get pods -n kube-system -l k8s-app=kube-dns --no-headers 2>/dev/null | grep -c "Running" || true)
+if [[ "${COREDNS_RUNNING}" -ge 1 ]]; then
+  pass "CoreDNS pods are in Running state (${COREDNS_RUNNING} replica(s) active)"
+else
+  fail "CoreDNS pods are not Running yet. Verify CNI rollout."
+fi
+
+echo "--------------------------------------------------------------------------------"
+echo "Results: Total: ${TOTAL} | Passed: ${PASSED} | Failed: ${FAILED}"
+echo "================================================================================"
+
+if [[ "${FAILED}" -gt 0 ]]; then
+  exit 1
+fi

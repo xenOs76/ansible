@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# Script: 02-install-cni-cilium.sh
+# Purpose: Install Cilium eBPF Container Network Interface (CNI).
+# ==============================================================================
+set -euo pipefail
+
+echo "==> [02-install-cni-cilium.sh] Installing Cilium CNI..."
+
+if ! command -v cilium >/dev/null 2>&1; then
+  echo "    Downloading and installing Cilium CLI..."
+  CILIUM_CLI_VERSION=$(curl -s https://raw.githubusercontent.com/cilium/cilium-cli/main/stable.txt)
+  CLI_ARCH="amd64"
+  if [ "$(uname -m)" = "aarch64" ]; then
+    CLI_ARCH="arm64"
+  fi
+
+  TMP_DIR="$(mktemp -d)"
+  trap 'rm -rf "${TMP_DIR}"' EXIT
+
+  cd "${TMP_DIR}"
+  curl -L --fail --remote-name-all \
+    "https://github.com/cilium/cilium-cli/releases/download/${CILIUM_CLI_VERSION}/cilium-linux-${CLI_ARCH}.tar.gz"{,.sha256sum}
+  sha256sum --check "cilium-linux-${CLI_ARCH}.tar.gz.sha256sum"
+  sudo tar -C /usr/local/bin -xzvf "cilium-linux-${CLI_ARCH}.tar.gz"
+fi
+
+echo "    Deploying Cilium CNI DaemonSet and Operator..."
+cilium install
+
+echo "==> [02-install-cni-cilium.sh] Cilium deployment initiated."
+echo "    Monitor progress with: cilium status --wait"
