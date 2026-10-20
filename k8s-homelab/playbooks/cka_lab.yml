@@ -10,7 +10,7 @@
     - ha_control_plane
 
 - name: Deploy CKA Training Lab Scenarios
-  hosts: control_plane
+  hosts: control_plane[0]
   become: true
   roles:
     - role: cka_lab

@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.2] - 2026-10-20
+
+### Changed
+
+- **CKA Lab Execution Scope Optimization (`playbooks/cka_lab.yml`)**:
+  Restricted CKA lab scenario deployment play to `control_plane[0]` instead of all control plane nodes. In HA
+  topologies, staging `~/cka` and executing practice resource drills is now scoped exclusively to the primary
+  controller (`kube-cp-1`), preventing redundant execution, unnecessary fact gathering, and duplicate drills across
+  secondary control plane nodes.
+
 ## [1.5.1] - 2026-10-20
 
 ### Added

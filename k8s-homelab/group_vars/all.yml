@@ -1,6 +1,6 @@
 ---
 # Playbook suite version
-playbook_version: "1.5.1"
+playbook_version: "1.5.2"
 
 # Kubernetes versions and repositories (Base: v1.36, Target Upgrade: v1.37)
 k8s_version: "1.36.0-1.1"

@@ -4,10 +4,9 @@
 
 * [x] install etcdctl and etcdutl when running 'preprod-up'. From Ubuntu repos, if possible
 * [x] install glow markdown CLI viewer from Charm official deb repo
-* [ ] add option to have multiple control plane hosts + VIP
-* [ ] add examples about limitrange and resource quotas
-* [ ] add examples about CSI pv implemented with Ceph RWO
-* [ ] add examples of statefulsets (Postgres) and how to move them to another node
+* [x] add option to have multiple control plane hosts + VIP
+* [x] add examples about limitrange and resource quotas
+* [x] add examples about CSI pv implemented with Ceph RWO
 
 ## Homelab Kubernetes administration
 
