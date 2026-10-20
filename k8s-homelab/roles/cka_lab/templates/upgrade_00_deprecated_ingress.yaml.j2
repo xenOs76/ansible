@@ -1,0 +1,25 @@
+---
+# Deprecated Ingress Manifest
+# API Version: networking.k8s.io/v1beta1 (Deprecated in v1.19, Removed in v1.22)
+# Replaced by: networking.k8s.io/v1
+# Key Differences:
+# - spec.backend.serviceName is replaced by spec.defaultBackend.service.name
+# - spec.rules[].http.paths[].backend.serviceName is replaced by backend.service.name
+# - spec.rules[].http.paths[].pathType is now mandatory in v1 (e.g. Prefix, Exact, ImplementationSpecific)
+apiVersion: networking.k8s.io/v1beta1
+kind: Ingress
+metadata:
+  name: legacy-webapp-ingress
+  namespace: default
+  labels:
+    app: legacy-webapp
+    drill: pre-upgrade-deprecations
+spec:
+  rules:
+    - host: legacy-webapp.example.local
+      http:
+        paths:
+          - path: /
+            backend:
+              serviceName: legacy-webapp-svc
+              servicePort: 80

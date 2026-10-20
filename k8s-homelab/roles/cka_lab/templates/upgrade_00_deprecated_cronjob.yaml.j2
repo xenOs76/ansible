@@ -1,0 +1,33 @@
+---
+# Deprecated CronJob Manifest
+# API Version: batch/v1beta1 (Deprecated in v1.21, Removed in v1.25)
+# Replaced by: batch/v1
+# Key Differences:
+# - Schema fields are identical, but batch/v1 is GA with stricter admission defaults
+apiVersion: batch/v1beta1
+kind: CronJob
+metadata:
+  name: legacy-nightly-backup
+  namespace: default
+  labels:
+    app: legacy-backup
+    drill: pre-upgrade-deprecations
+spec:
+  schedule: "0 2 * * *"
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: legacy-backup
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: backup-worker
+              image: busybox:1.36
+              command:
+                - /bin/sh
+                - -c
+                - echo "Executing nightly database backup snapshot..."

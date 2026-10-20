@@ -1,0 +1,19 @@
+---
+# Deprecated Kubeadm ClusterConfiguration Manifest
+# API Version: kubeadm.k8s.io/v1beta3 (Deprecated in v1.27, Removed in v1.31)
+# Replaced by: kubeadm.k8s.io/v1beta4
+# Key Differences:
+# - kubeadm.k8s.io/v1beta4 introduces encryptionAlgorithm, clean subresource configs, and structured timeouts
+# - In modern kubeadm (v1.31+), v1beta3 is completely unparseable
+apiVersion: kubeadm.k8s.io/v1beta3
+kind: ClusterConfiguration
+kubernetesVersion: "v1.36.0"
+clusterName: "kubernetes"
+controlPlaneEndpoint: "192.168.56.20:6443"
+networking:
+  podSubnet: "10.244.0.0/16"
+  serviceSubnet: "10.96.0.0/12"
+apiServer:
+  extraArgs:
+    audit-log-path: "/var/log/kubernetes/audit.log"
+    audit-policy-file: "/etc/kubernetes/audit-policy.yaml"

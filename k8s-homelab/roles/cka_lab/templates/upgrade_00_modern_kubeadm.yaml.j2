@@ -1,0 +1,18 @@
+---
+# Modern Kubeadm ClusterConfiguration Manifest
+# API Version: kubeadm.k8s.io/v1beta4 (Stable in Kubernetes v1.31+)
+# Compliant with Kubernetes v1.34+ and v1.37+
+apiVersion: kubeadm.k8s.io/v1beta4
+kind: ClusterConfiguration
+kubernetesVersion: "v1.37.0"
+clusterName: "kubernetes"
+controlPlaneEndpoint: "192.168.56.20:6443"
+networking:
+  podSubnet: "10.244.0.0/16"
+  serviceSubnet: "10.96.0.0/12"
+apiServer:
+  extraArgs:
+    - name: "audit-log-path"
+      value: "/var/log/kubernetes/audit.log"
+    - name: "audit-policy-file"
+      value: "/etc/kubernetes/audit-policy.yaml"

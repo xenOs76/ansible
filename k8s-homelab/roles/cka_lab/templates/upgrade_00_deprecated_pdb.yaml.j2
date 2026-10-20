@@ -1,0 +1,20 @@
+---
+# Deprecated PodDisruptionBudget Manifest
+# API Version: policy/v1beta1 (Deprecated in v1.21, Removed in v1.25)
+# Replaced by: policy/v1
+# Key Differences:
+# - In policy/v1, an empty spec.selector ({}) is rejected; selector is mandatory
+# - minAvailable / maxUnavailable specifications now strictly validate integer or percentage
+apiVersion: policy/v1beta1
+kind: PodDisruptionBudget
+metadata:
+  name: legacy-frontend-pdb
+  namespace: default
+  labels:
+    app: legacy-frontend
+    drill: pre-upgrade-deprecations
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: legacy-frontend

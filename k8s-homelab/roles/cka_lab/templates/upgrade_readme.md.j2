@@ -10,62 +10,59 @@ from **v1.36** to **v1.37**.
 Cluster upgrades represent a core competency in the **Cluster Architecture, Installation & Configuration** domain (25%
 exam scoring weight) and appear in almost every CKA exam session.
 
-### The 4 Immutable Rules of Upgrading
+### The 5 Immutable Rules of Upgrading
 
-1. **Control Plane First**: Always upgrade the control plane node before any worker nodes. In High-Availability (HA)
-   clusters, upgrade the primary control plane first (`kubeadm upgrade apply`), followed by secondary control planes
-   (`kubeadm upgrade node`).
-2. **Sequential Minor Versions**: Never skip minor versions (e.g. `1.35` $\to$ `1.36` $\to$ `1.37`; skipping directly
+1. **Pre-Upgrade Deprecations & Backup First (Phase 0)**: Before touching APT repositories, upgrading packages, or
+   draining nodes, always create an etcd snapshot backup and run an API deprecation audit (e.g. Fairwinds Pluto) to
+   ensure user workloads, manifests, and Helm releases will survive the upgrade without bricking.
+2. **Control Planes First (All Control Planes Before Workers)**: Always upgrade control plane nodes before any worker
+   nodes. In High-Availability (HA) clusters, upgrade the primary control plane first (`kubeadm upgrade apply`),
+   followed sequentially by secondary control planes (`kubeadm upgrade node`). All control planes must report Ready
+   at the target version before draining workers.
+3. **Sequential Minor Versions**: Never skip minor versions (e.g. `1.35` $\to$ `1.36` $\to$ `1.37`; skipping directly
    from `1.35` to `1.37` is unsupported and fails preflight checks). Patch versions (e.g. `1.36.0` $\to$ `1.36.1`) can
    be upgraded directly.
-3. **Version Skew Policy**:
+4. **Version Skew Policy**:
    - `kubelet` must **never** be newer than `kube-apiserver`.
    - `kubelet` can be at most **3 minor versions older** than `kube-apiserver` in production, but in the CKA exam, keep
      them within **1 minor version**.
    - `kubectl` can be 1 minor version older or newer than `kube-apiserver`.
-4. **Drain Before Worker Kubelet Upgrades**: Always drain a worker node prior to upgrading its `kubelet` binary to avoid
+5. **Drain Before Worker Kubelet Upgrades**: Always drain a worker node prior to upgrading its `kubelet` binary to avoid
    workload disruption.
 
 ---
 
-## 2. Official Exam References & Quick Lookups
+## 2. Phase 0: Pre-Upgrade API Deprecation Auditing & Remediation
 
-### Permitted Exam Documentation
+> [!IMPORTANT]
+> `kubeadm upgrade plan` only inspects control plane component images and certificates; it **does not** scan workloads
+> or Helm releases. Performing an API deprecation audit before upgrading prevents workloads and Helm releases from
+> breaking when removed API endpoints are dropped by `kube-apiserver`.
 
-- **Upgrading kubeadm clusters**: [Upgrading kubeadm clusters](https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-upgrade/) `[EXAM ALLOWED]`
-- **kubeadm upgrade Reference**: [kubeadm upgrade](https://kubernetes.io/docs/reference/setup-tools/kubeadm/kubeadm-upgrade/) `[EXAM ALLOWED]`
-- **Safely Drain a Node**: [Safely Drain a Node](https://kubernetes.io/docs/tasks/administer-cluster/safely-drain-node/) `[EXAM ALLOWED]`
-
-### In-Exam Search Keywords
->
-> *Type these exact phrases into the kubernetes.io search bar to jump directly to copy-pasteable command templates:*
-
-- `"upgrading kubeadm clusters"`
-- `"kubeadm upgrade apply"`
-- `"safely drain a node"`
-
-### Terminal Fast Lookups
+Navigate to `{{ cka_lab_upgrade_deprecations_dir }}`:
 
 ```bash
-# Discover exact available package version strings in repository
-apt-cache madison kubeadm | head -n 5
+cd {{ cka_lab_upgrade_deprecations_dir }}/scripts
 
-# CLI command options
-kubeadm upgrade plan --help
-kubeadm upgrade apply --help
-kubeadm upgrade node --help
-kubectl drain --help
+# 1. Audit static manifests for APIs removed in v1.37
+./scan-manifests.sh
+
+# 2. Load live deprecation test resources into v1.36
+./load-live-deprecations.sh
+
+# 3. Audit live in-cluster Helm releases and API server metrics
+./scan-cluster.sh
+
+# 4. Review schema migrations and validation tools (kubectl-convert, helm-mapkubeapis)
+./remediate-manifests.sh
 ```
 
-> [!NOTE]
-> When performing a minor version upgrade (e.g. v1.36 $\to$ v1.37), official Kubernetes Debian repositories hosted on
-> `pkgs.k8s.io` require updating the repository source URL to `/core:/stable:/v1.37/deb/` before `apt-get` can locate
-> the
-> target minor release packages.
+Ensure Pluto reports zero remaining deprecations targeting `v1.37` before proceeding to node upgrades. Detailed
+step-by-step guidance is available in `00-pre-upgrade-deprecations/README.md`.
 
 ---
 
-## 3. Control Plane Node Upgrade Procedure
+## 3. Phase 1: Primary Control Plane Node Upgrade Procedure
 
 Perform all control plane upgrade steps directly on `kube-control-plane` (or `kube-cp-1`).
 
@@ -168,10 +165,10 @@ Verify that the control plane reports `v1.37.0` and status `Ready`.
 
 ---
 
-## 4. Secondary Control Plane Node Upgrade Procedure (HA Clusters: `kube-cp-2`, `kube-cp-3`)
+## 4. Phase 2: Secondary Control Plane Node Upgrade Procedure (HA Clusters: `kube-cp-2`, `kube-cp-3`)
 
 In High-Availability clusters, secondary control plane nodes follow a distinct procedure from the primary control
-plane. They must be upgraded **one node at a time** to maintain etcd quorum.
+plane. They must be upgraded **one node at a time** to maintain etcd quorum, and **before** any worker nodes.
 
 > [!IMPORTANT]
 > Secondary control planes must **never** run `kubeadm upgrade apply`. Only the first control plane executes `apply`.
@@ -252,10 +249,10 @@ Repeat these steps sequentially for any remaining control plane nodes (e.g. `kub
 
 ---
 
-## 5. Worker Node Upgrade Procedure
+## 5. Phase 3: Worker Node Upgrade Procedure
 
 Unlike the primary control plane, worker nodes do not execute `kubeadm upgrade apply`. Instead, they execute `kubeadm
-upgrade node` to update local kubelet configuration.
+upgrade node` to update local kubelet configuration after all control plane nodes are upgraded.
 
 ### Step 1: Drain the Worker Node (From Control Plane)
 
@@ -332,16 +329,48 @@ Confirm that all upgraded nodes display `Ready` status and report `v1.37.0`.
 
 ---
 
-## 6. Practice & Automated Validation
+## 6. Official Exam References & Quick Lookups
+
+### Permitted Exam Documentation
+
+- **Upgrading kubeadm clusters**: [Upgrading kubeadm clusters](https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-upgrade/) `[EXAM ALLOWED]`
+- **kubeadm upgrade Reference**: [kubeadm upgrade](https://kubernetes.io/docs/reference/setup-tools/kubeadm/kubeadm-upgrade/) `[EXAM ALLOWED]`
+- **Safely Drain a Node**: [Safely Drain a Node](https://kubernetes.io/docs/tasks/administer-cluster/safely-drain-node/) `[EXAM ALLOWED]`
+
+### In-Exam Search Keywords
+>
+> *Type these exact phrases into the kubernetes.io search bar to jump directly to copy-pasteable command templates:*
+
+- `"upgrading kubeadm clusters"`
+- `"kubeadm upgrade apply"`
+- `"safely drain a node"`
+
+### Terminal Fast Lookups
+
+```bash
+# Discover exact available package version strings in repository
+apt-cache madison kubeadm | head -n 5
+
+# CLI command options
+kubeadm upgrade plan --help
+kubeadm upgrade apply --help
+kubeadm upgrade node --help
+kubectl drain --help
+```
+
+---
+
+## 7. Practice & Automated Validation
 
 Test your commands and validate prerequisite packages using the provided lab scripts:
 
+- `00-pre-upgrade-deprecations/test-deprecations-drill.sh`: Validates Pluto deprecation scanning and manifest tests.
 - `01-control-plane/mock-control-plane-upgrade.sh`: Simulates control plane upgrade readiness and package hold
   inspection.
-- `02-worker-node/mock-worker-upgrade.sh`: Simulates worker node draining, upgrade commands, and uncordoning.
-- `03-secondary-control-plane/mock-secondary-cp-upgrade.sh`: Simulates secondary control plane draining, `upgrade node`,
+- `02-secondary-control-plane/mock-secondary-cp-upgrade.sh`: Simulates secondary control plane draining, `upgrade node`,
   and uncordoning in HA clusters.
-- `test-upgrade-drills.sh`: Automated test suite verifying `kubeadm upgrade plan` execution and package locks.
+- `03-worker-node/mock-worker-upgrade.sh`: Simulates worker node draining, upgrade commands, and uncordoning.
+- `test-upgrade-drills.sh`: Master automated test suite verifying all drill phases sequentially.
 
 ```bash
 cd {{ cka_lab_upgrade_dir }}

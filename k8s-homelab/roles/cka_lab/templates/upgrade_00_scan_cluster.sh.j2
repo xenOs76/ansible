@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# scan-cluster.sh: Audit live Kubernetes cluster, Helm releases, and API metrics
+# ==============================================================================
+set -euo pipefail
+
+TARGET_VERSION="{{ cka_lab_upgrade_target_version | default('v1.37.0') }}"
+
+# Normalize to semver format required by Pluto (e.g. v1.37.0)
+[[ ! "${TARGET_VERSION}" =~ ^v ]] && TARGET_VERSION="v${TARGET_VERSION}"
+[[ "${TARGET_VERSION}" =~ ^v[0-9]+\.[0-9]+$ ]] && TARGET_VERSION="${TARGET_VERSION}.0"
+
+echo "=== CKA Phase 0: Pre-Upgrade Live Cluster & Helm Deprecation Audit ==="
+echo "Target Kubernetes Version: ${TARGET_VERSION}"
+echo ""
+
+if ! command -v pluto >/dev/null 2>&1; then
+    echo "[-] Pluto CLI not found. Running installer..."
+    SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+    "${SCRIPT_DIR}/install-pluto.sh"
+fi
+
+if ! kubectl cluster-info >/dev/null 2>&1; then
+    echo "[-] Error: Unable to connect to Kubernetes cluster." >&2
+    echo "    Ensure KUBECONFIG is configured and apiserver is reachable." >&2
+    exit 1
+fi
+
+echo "--- [1/3] Auditing Live In-Cluster Helm Releases ---"
+echo "Command: pluto detect-helm --target-versions \"k8s=${TARGET_VERSION}\""
+echo ""
+
+HELM_SCAN_EXIT=0
+pluto detect-helm --target-versions "k8s=${TARGET_VERSION}" || HELM_SCAN_EXIT=$?
+
+echo ""
+if [ "${HELM_SCAN_EXIT}" -ne 0 ]; then
+    echo "[!] Deprecated APIs found in deployed Helm releases."
+    echo "    Remediate using 'helm mapkubeapis' before performing kubeadm upgrade."
+else
+    echo "[OK] No deprecated APIs detected in cluster Helm releases for ${TARGET_VERSION}."
+fi
+
+echo ""
+echo "--- [2/3] Auditing Live Cluster API Resources ---"
+echo "Command: pluto detect-api-resources --target-versions \"k8s=${TARGET_VERSION}\""
+echo ""
+
+API_SCAN_EXIT=0
+pluto detect-api-resources --target-versions "k8s=${TARGET_VERSION}" || API_SCAN_EXIT=$?
+
+echo ""
+if [ "${API_SCAN_EXIT}" -ne 0 ]; then
+    echo "[!] Deprecated live API objects detected in the cluster."
+else
+    echo "[OK] No deprecated live API objects detected for ${TARGET_VERSION}."
+fi
+
+echo ""
+echo "--- [3/3] Auditing API Server Deprecation Request Metrics ---"
+echo "Command: kubectl get --raw /metrics | grep '^apiserver_requested_deprecated_apis'"
+echo ""
+
+METRICS_OUTPUT=$(kubectl get --raw /metrics 2>/dev/null | grep "^apiserver_requested_deprecated_apis" || true)
+if [ -n "${METRICS_OUTPUT}" ]; then
+    echo "[!] Live deprecation requests recorded by kube-apiserver:"
+    echo "${METRICS_OUTPUT}"
+    echo ""
+    echo "    Review the metric labels (group, version, resource) to identify"
+    echo "    workloads calling deprecated endpoints."
+else
+    echo "[OK] No deprecated API requests recorded in active apiserver metrics."
+fi
+
+echo ""
+echo "=== Live Cluster Deprecation Audit Complete ==="

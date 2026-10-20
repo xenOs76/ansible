@@ -698,12 +698,15 @@ A master navigation guide is generated at `/home/vagrant/cka/README.md` and styl
   apt-mark hold kubeadm kubelet kubectl
   ```
 
-- **Objective**: Hands-on walkthrough of manual node draining, APT package unholding, `kubeadm upgrade apply/node`,
-  `kubelet`/`kubectl` package upgrades, and uncordoning:
-  1. `mock-control-plane-upgrade.sh`: Control plane upgrade commands and dry-run validation.
-  1. `mock-worker-upgrade.sh`: Worker node upgrade sequence.
+- **Objective**: Hands-on walkthrough of pre-upgrade API deprecation auditing (Pluto scanner, schema migration),
+  manual node draining, APT package unholding, `kubeadm upgrade apply/node`, `kubelet`/`kubectl` upgrades, and uncordon:
+  1. `00-pre-upgrade-deprecations/`: Phase 0 pre-upgrade API deprecation audit with Pluto, offline static manifests,
+     live v1.36 loadable CRD/workload drills, and practical remediation using `kubectl-convert` and `helm-mapkubeapis`.
+  1. `01-control-plane/`: Phase 1 primary control plane upgrade (`kubeadm upgrade apply`).
+  1. `02-secondary-control-plane/`: Phase 2 HA secondary control plane upgrade (`kubeadm upgrade node`).
+  1. `03-worker-node/`: Phase 3 worker node upgrade sequence.
 - **Artifacts**:
-  - Upgrade drill directory: `/home/vagrant/cka/upgrade/`
+  - Upgrade drill directory: `/home/vagrant/cka/16-upgrade/` (symlinked at `/home/vagrant/cka/upgrade/`)
   - Automated test suite: `test-upgrade-drills.sh`
   - Master practice guide: `README.md`
 

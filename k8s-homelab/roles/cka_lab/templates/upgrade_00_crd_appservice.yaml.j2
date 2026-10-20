@@ -1,0 +1,46 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: appservices.drill.cka.io
+spec:
+  group: drill.cka.io
+  names:
+    kind: AppService
+    listKind: AppServiceList
+    plural: appservices
+    singular: appservice
+    shortNames:
+      - as
+  scope: Namespaced
+  versions:
+    - name: v1beta1
+      served: true
+      storage: false
+      deprecated: true
+      deprecationWarning: "drill.cka.io/v1beta1 AppService is deprecated in v1.36; migrate to v1 before v1.37"
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                image:
+                  type: string
+                replicas:
+                  type: integer
+    - name: v1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                image:
+                  type: string
+                replicas:
+                  type: integer

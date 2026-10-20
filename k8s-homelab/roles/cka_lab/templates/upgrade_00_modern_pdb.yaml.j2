@@ -1,0 +1,17 @@
+---
+# Modern PodDisruptionBudget Manifest
+# API Version: policy/v1 (Stable GA)
+# Compliant with Kubernetes v1.25+ and v1.37+
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: modern-frontend-pdb
+  namespace: default
+  labels:
+    app: modern-frontend
+    drill: pre-upgrade-deprecations
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: modern-frontend

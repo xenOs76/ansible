@@ -1,4 +1,15 @@
 ---
+- name: Remove legacy obsolete upgrade drill directory paths if present
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "{{ cka_lab_upgrade_dir }}/02-worker-node"
+    - "{{ cka_lab_upgrade_dir }}/03-secondary-control-plane"
+  tags:
+    - cka_lab
+    - upgrade_drill
+
 - name: Ensure CKA lab upgrade drill directories exist
   ansible.builtin.file:
     path: "{{ item }}"
@@ -8,9 +19,42 @@
     mode: "0755"
   loop:
     - "{{ cka_lab_upgrade_dir }}"
+    - "{{ cka_lab_upgrade_deprecations_dir }}"
+    - "{{ cka_lab_upgrade_deprecations_dir }}/static-manifests"
+    - "{{ cka_lab_upgrade_deprecations_dir }}/live-manifests"
+    - "{{ cka_lab_upgrade_deprecations_dir }}/modern-manifests"
+    - "{{ cka_lab_upgrade_deprecations_dir }}/scripts"
     - "{{ cka_lab_upgrade_dir }}/01-control-plane"
-    - "{{ cka_lab_upgrade_dir }}/02-worker-node"
-    - "{{ cka_lab_upgrade_dir }}/03-secondary-control-plane"
+    - "{{ cka_lab_upgrade_dir }}/02-secondary-control-plane"
+    - "{{ cka_lab_upgrade_dir }}/03-worker-node"
+  tags:
+    - cka_lab
+    - upgrade_drill
+
+- name: Check legacy deprecated-manifests directory status
+  ansible.builtin.stat:
+    path: "{{ cka_lab_upgrade_deprecations_dir }}/deprecated-manifests"
+  register: cka_lab_deprecated_manifests_stat
+  tags:
+    - cka_lab
+    - upgrade_drill
+
+- name: Remove legacy deprecated-manifests directory if not a symlink
+  ansible.builtin.file:
+    path: "{{ cka_lab_upgrade_deprecations_dir }}/deprecated-manifests"
+    state: absent
+  when: cka_lab_deprecated_manifests_stat.stat.exists and not cka_lab_deprecated_manifests_stat.stat.islnk
+  tags:
+    - cka_lab
+    - upgrade_drill
+
+- name: Ensure legacy deprecated-manifests symlink exists for backward compatibility
+  ansible.builtin.file:
+    src: static-manifests
+    dest: "{{ cka_lab_upgrade_deprecations_dir }}/deprecated-manifests"
+    state: link
+    owner: "{{ ansible_user | default('vagrant') }}"
+    group: "{{ ansible_user | default('vagrant') }}"
   tags:
     - cka_lab
     - upgrade_drill
@@ -23,11 +67,48 @@
     group: "{{ ansible_user | default('vagrant') }}"
     mode: "{{ item.mode | default('0644') }}"
   loop:
+    # Master Guide & Test Suite
     - {src: "upgrade_readme.md.j2", dest: "README.md", mode: "0644"}
     - {src: "upgrade_test_drills.sh.j2", dest: "test-upgrade-drills.sh", mode: "0755"}
+
+    # Phase 0: Pre-Upgrade Deprecations & Auditing
+    - {src: "upgrade_00_deprecations_readme.md.j2", dest: "00-pre-upgrade-deprecations/README.md", mode: "0644"}
+    - {src: "upgrade_00_test_drills.sh.j2", dest: "00-pre-upgrade-deprecations/test-deprecations-drill.sh", mode: "0755"}
+
+    # Phase 0: Tier 1 - Offline Practice Manifests
+    - {src: "upgrade_00_deprecated_ingress.yaml.j2", dest: "00-pre-upgrade-deprecations/static-manifests/01-ingress-v1beta1.yaml", mode: "0644"}
+    - {src: "upgrade_00_deprecated_hpa.yaml.j2", dest: "00-pre-upgrade-deprecations/static-manifests/02-hpa-v2beta2.yaml", mode: "0644"}
+    - {src: "upgrade_00_deprecated_cronjob.yaml.j2", dest: "00-pre-upgrade-deprecations/static-manifests/03-cronjob-v1beta1.yaml", mode: "0644"}
+    - {src: "upgrade_00_deprecated_pdb.yaml.j2", dest: "00-pre-upgrade-deprecations/static-manifests/04-pdb-v1beta1.yaml", mode: "0644"}
+    - {src: "upgrade_00_deprecated_kubeadm.yaml.j2", dest: "00-pre-upgrade-deprecations/static-manifests/05-kubeadm-v1beta3.yaml", mode: "0644"}
+
+    # Phase 0: Tier 2 - Live Practice Manifests
+    - {src: "upgrade_00_crd_appservice.yaml.j2", dest: "00-pre-upgrade-deprecations/live-manifests/01-crd-appservice.yaml", mode: "0644"}
+    - {src: "upgrade_00_cr_deprecated.yaml.j2", dest: "00-pre-upgrade-deprecations/live-manifests/02-cr-deprecated-v1beta1.yaml", mode: "0644"}
+    - {src: "upgrade_00_cr_modern.yaml.j2", dest: "00-pre-upgrade-deprecations/live-manifests/03-cr-modern-v1.yaml", mode: "0644"}
+    - {src: "upgrade_00_service_externalips.yaml.j2", dest: "00-pre-upgrade-deprecations/live-manifests/04-service-externalips.yaml", mode: "0644"}
+    - {src: "upgrade_00_pod_legacy_sa.yaml.j2", dest: "00-pre-upgrade-deprecations/live-manifests/05-pod-legacy-serviceaccount.yaml", mode: "0644"}
+
+    # Phase 0: Modern Migrated Manifests
+    - {src: "upgrade_00_modern_ingress.yaml.j2", dest: "00-pre-upgrade-deprecations/modern-manifests/01-ingress-v1.yaml", mode: "0644"}
+    - {src: "upgrade_00_modern_hpa.yaml.j2", dest: "00-pre-upgrade-deprecations/modern-manifests/02-hpa-v2.yaml", mode: "0644"}
+    - {src: "upgrade_00_modern_cronjob.yaml.j2", dest: "00-pre-upgrade-deprecations/modern-manifests/03-cronjob-v1.yaml", mode: "0644"}
+    - {src: "upgrade_00_modern_pdb.yaml.j2", dest: "00-pre-upgrade-deprecations/modern-manifests/04-pdb-v1.yaml", mode: "0644"}
+    - {src: "upgrade_00_modern_kubeadm.yaml.j2", dest: "00-pre-upgrade-deprecations/modern-manifests/05-kubeadm-v1beta4.yaml", mode: "0644"}
+
+    # Phase 0: Automation & Scanner Scripts
+    - {src: "upgrade_00_install_pluto.sh.j2", dest: "00-pre-upgrade-deprecations/scripts/install-pluto.sh", mode: "0755"}
+    - {src: "upgrade_00_scan_manifests.sh.j2", dest: "00-pre-upgrade-deprecations/scripts/scan-manifests.sh", mode: "0755"}
+    - {src: "upgrade_00_load_live.sh.j2", dest: "00-pre-upgrade-deprecations/scripts/load-live-deprecations.sh", mode: "0755"}
+    - {src: "upgrade_00_cleanup_live.sh.j2", dest: "00-pre-upgrade-deprecations/scripts/cleanup-live-deprecations.sh", mode: "0755"}
+    - {src: "upgrade_00_simulate_helm.sh.j2", dest: "00-pre-upgrade-deprecations/scripts/simulate-helm-deprecation.sh", mode: "0755"}
+    - {src: "upgrade_00_scan_cluster.sh.j2", dest: "00-pre-upgrade-deprecations/scripts/scan-cluster.sh", mode: "0755"}
+    - {src: "upgrade_00_remediate.sh.j2", dest: "00-pre-upgrade-deprecations/scripts/remediate-manifests.sh", mode: "0755"}
+
+    # Phases 1-3: Node Upgrades
     - {src: "upgrade_01_mock_cp_upgrade.sh.j2", dest: "01-control-plane/mock-control-plane-upgrade.sh", mode: "0755"}
-    - {src: "upgrade_02_mock_worker_upgrade.sh.j2", dest: "02-worker-node/mock-worker-upgrade.sh", mode: "0755"}
-    - {src: "upgrade_03_mock_secondary_cp_upgrade.sh.j2", dest: "03-secondary-control-plane/mock-secondary-cp-upgrade.sh", mode: "0755"}
+    - {src: "upgrade_02_mock_secondary_cp_upgrade.sh.j2", dest: "02-secondary-control-plane/mock-secondary-cp-upgrade.sh", mode: "0755"}
+    - {src: "upgrade_03_mock_worker_upgrade.sh.j2", dest: "03-worker-node/mock-worker-upgrade.sh", mode: "0755"}
   loop_control:
     label: "upgrade/{{ item.dest }}"
   tags:

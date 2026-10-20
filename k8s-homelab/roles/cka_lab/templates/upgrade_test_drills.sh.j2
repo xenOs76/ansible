@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
+# ==============================================================================
+# test-upgrade-drills.sh: Master automated test harness for Kubeadm Upgrade
+# ==============================================================================
 set -euo pipefail
 
-# Automated test harness for Scenario 16: Kubeadm Upgrade Drills
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DEPRECATIONS_SCRIPT="${SCRIPT_DIR}/00-pre-upgrade-deprecations/test-deprecations-drill.sh"
 CP_SCRIPT="${SCRIPT_DIR}/01-control-plane/mock-control-plane-upgrade.sh"
-WORKER_SCRIPT="${SCRIPT_DIR}/02-worker-node/mock-worker-upgrade.sh"
-SECONDARY_CP_SCRIPT="${SCRIPT_DIR}/03-secondary-control-plane/mock-secondary-cp-upgrade.sh"
+SECONDARY_CP_SCRIPT="${SCRIPT_DIR}/02-secondary-control-plane/mock-secondary-cp-upgrade.sh"
+WORKER_SCRIPT="${SCRIPT_DIR}/03-worker-node/mock-worker-upgrade.sh"
 
 echo "=========================================================="
 echo " Running Automated Validation: CKA Kubeadm Upgrade Drills"
@@ -25,26 +28,29 @@ run_test() {
     fi
 }
 
-# 1. Verify kubeadm binary exists
+# 1. Execute Phase 0 pre-upgrade deprecations test suite
+run_test "Phase 0: Pre-upgrade API deprecations drill" "bash ${DEPRECATIONS_SCRIPT}"
+
+# 2. Verify kubeadm binary exists
 run_test "kubeadm binary available" "command -v kubeadm"
 
-# 2. Verify kubelet binary exists
+# 3. Verify kubelet binary exists
 run_test "kubelet binary available" "command -v kubelet"
 
-# 3. Verify kubectl binary exists
+# 4. Verify kubectl binary exists
 run_test "kubectl binary available" "command -v kubectl"
 
-# 4. Check package holds on current node
+# 5. Check package holds on current node
 run_test "dpkg package hold verification" "dpkg --get-selections | grep -q 'hold'"
 
-# 5. Run control plane mock upgrade script
-run_test "Control plane mock script execution" "bash ${CP_SCRIPT}"
-
-# 6. Run worker node mock upgrade script
-run_test "Worker mock script execution" "bash ${WORKER_SCRIPT}"
+# 6. Run control plane mock upgrade script
+run_test "Phase 1: Control plane mock script execution" "bash ${CP_SCRIPT}"
 
 # 7. Run secondary control plane mock upgrade script
-run_test "Secondary control plane mock script execution" "bash ${SECONDARY_CP_SCRIPT}"
+run_test "Phase 2: Secondary control plane mock script execution" "bash ${SECONDARY_CP_SCRIPT}"
+
+# 8. Run worker node mock upgrade script
+run_test "Phase 3: Worker mock script execution" "bash ${WORKER_SCRIPT}"
 
 echo "=========================================================="
 if [[ ${FAILED} -eq 0 ]]; then

@@ -1,0 +1,143 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# simulate-helm-deprecation.sh: Inject or cleanup a synthetic deprecated Helm release
+# ==============================================================================
+set -euo pipefail
+
+RELEASE_NAME="legacy-helm-app"
+NAMESPACE="${2:-default}"
+SECRET_NAME="sh.helm.release.v1.${RELEASE_NAME}.v1"
+
+usage() {
+    echo "Usage: $0 [create|cleanup|status] [namespace]"
+    echo ""
+    echo "Actions:"
+    echo "  create   - Injects a synthetic Helm v3 release secret with a deprecated Ingress"
+    echo "  cleanup  - Removes the synthetic Helm release secret"
+    echo "  status   - Checks if the synthetic Helm release secret exists"
+    exit 1
+}
+
+ACTION="${1:-create}"
+
+case "${ACTION}" in
+    create)
+        echo "=== Creating Synthetic Helm v3 Release Secret with Deprecated Ingress ==="
+        echo "Release Name: ${RELEASE_NAME}"
+        echo "Namespace:    ${NAMESPACE}"
+        echo "Secret Name:   ${SECRET_NAME}"
+
+        if ! command -v python3 >/dev/null 2>&1; then
+            echo "[-] Error: python3 is required to encode the Helm release payload." >&2
+            exit 1
+        fi
+
+        ENCODED_RELEASE=$(python3 -c '
+import sys, json, gzip, base64
+
+namespace = sys.argv[1] if len(sys.argv) > 1 else "default"
+
+release_data = {
+    "name": "legacy-helm-app",
+    "namespace": namespace,
+    "info": {
+        "status": "deployed",
+        "first_deployed": "2026-01-01T00:00:00Z",
+        "last_deployed": "2026-01-01T00:00:00Z",
+        "description": "Synthetic deprecated Helm release for CKA training"
+    },
+    "chart": {
+        "metadata": {
+            "name": "legacy-helm-app",
+            "version": "1.0.0",
+            "apiVersion": "v2",
+            "appVersion": "1.0.0"
+        }
+    },
+    "version": 1,
+    "manifest": """apiVersion: networking.k8s.io/v1beta1
+kind: Ingress
+metadata:
+  name: helm-legacy-ingress
+  namespace: """ + namespace + """
+spec:
+  rules:
+  - host: helm-legacy.example.local
+    http:
+      paths:
+      - path: /
+        backend:
+          serviceName: helm-legacy-svc
+          servicePort: 80
+---
+apiVersion: autoscaling/v2beta2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: helm-legacy-hpa
+  namespace: """ + namespace + """
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: helm-legacy-deployment
+  minReplicas: 1
+  maxReplicas: 5
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 80
+"""
+}
+raw_bytes = json.dumps(release_data).encode("utf-8")
+gz_bytes = gzip.compress(raw_bytes)
+print(base64.b64encode(gz_bytes).decode("utf-8"))
+' "${NAMESPACE}")
+
+        cat <<EOF | kubectl apply -f -
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ${SECRET_NAME}
+  namespace: ${NAMESPACE}
+  labels:
+    owner: helm
+    name: ${RELEASE_NAME}
+    status: deployed
+    version: "1"
+type: helm.sh/release.v1
+stringData:
+  release: "${ENCODED_RELEASE}"
+EOF
+
+        echo ""
+        echo "[OK] Synthetic Helm release secret '${SECRET_NAME}' deployed."
+        echo "     Test detection with: pluto detect-helm --target-versions k8s={{ cka_lab_upgrade_target_version | default('v1.37.0') }}"
+        ;;
+
+    cleanup)
+        echo "=== Removing Synthetic Helm Release Secret ==="
+        if kubectl get secret "${SECRET_NAME}" -n "${NAMESPACE}" >/dev/null 2>&1; then
+            kubectl delete secret "${SECRET_NAME}" -n "${NAMESPACE}"
+            echo "[OK] Successfully deleted ${SECRET_NAME} in namespace ${NAMESPACE}."
+        else
+            echo "[OK] Secret ${SECRET_NAME} not found (already clean)."
+        fi
+        ;;
+
+    status)
+        echo "=== Checking Synthetic Helm Release Secret Status ==="
+        if kubectl get secret "${SECRET_NAME}" -n "${NAMESPACE}" >/dev/null 2>&1; then
+            echo "[FOUND] Secret ${SECRET_NAME} is active in namespace ${NAMESPACE}."
+            kubectl get secret "${SECRET_NAME}" -n "${NAMESPACE}" -o wide
+        else
+            echo "[ABSENT] Secret ${SECRET_NAME} does not exist in namespace ${NAMESPACE}."
+        fi
+        ;;
+
+    *)
+        usage
+        ;;
+esac

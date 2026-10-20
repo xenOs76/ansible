@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# install-pluto.sh: Install or verify Fairwinds Pluto CLI
+# ==============================================================================
+set -euo pipefail
+
+PLUTO_VERSION="{{ cka_lab_pluto_version | default('v5.21.3') }}"
+INSTALL_DIR="/usr/local/bin"
+
+echo "=== Fairwinds Pluto Installation & Verification ==="
+
+if command -v pluto >/dev/null 2>&1; then
+    CURRENT_VERSION=$(pluto version 2>&1 || true)
+    echo "[OK] Pluto is already installed: ${CURRENT_VERSION}"
+    exit 0
+fi
+
+echo "Pluto binary not found in PATH. Attempting installation..."
+
+ARCH=$(uname -m)
+case "${ARCH}" in
+    x86_64)
+        PLUTO_ARCH="linux_amd64"
+        ;;
+    aarch64|arm64)
+        PLUTO_ARCH="linux_arm64"
+        ;;
+    *)
+        echo "[-] Unsupported architecture: ${ARCH}" >&2
+        exit 1
+        ;;
+esac
+
+# Normalize version string (strip leading 'v' if present for tarball name)
+VERSION_NUM="${PLUTO_VERSION#v}"
+TARBALL_URL="https://github.com/FairwindsOps/pluto/releases/download/${PLUTO_VERSION}/pluto_${VERSION_NUM}_${PLUTO_ARCH}.tar.gz"
+
+TMP_DIR=$(mktemp -d)
+trap 'rm -rf "${TMP_DIR}"' EXIT
+
+echo "Downloading Pluto ${PLUTO_VERSION} for ${PLUTO_ARCH}..."
+if curl -fsSL "${TARBALL_URL}" -o "${TMP_DIR}/pluto.tar.gz"; then
+    tar -xzf "${TMP_DIR}/pluto.tar.gz" -C "${TMP_DIR}"
+    if [ -w "${INSTALL_DIR}" ]; then
+        install -m 0755 "${TMP_DIR}/pluto" "${INSTALL_DIR}/pluto"
+    else
+        sudo install -m 0755 "${TMP_DIR}/pluto" "${INSTALL_DIR}/pluto"
+    fi
+    echo "[OK] Successfully installed Pluto to ${INSTALL_DIR}/pluto"
+    pluto version
+else
+    echo "[-] Warning: Failed to download Pluto from ${TARBALL_URL}." >&2
+    echo "    In air-gapped or offline environments, please download Pluto binary manually." >&2
+    exit 1
+fi

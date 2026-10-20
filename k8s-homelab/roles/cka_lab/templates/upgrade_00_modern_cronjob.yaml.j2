@@ -1,0 +1,31 @@
+---
+# Modern CronJob Manifest
+# API Version: batch/v1 (Stable GA)
+# Compliant with Kubernetes v1.25+ and v1.37+
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: modern-nightly-backup
+  namespace: default
+  labels:
+    app: modern-backup
+    drill: pre-upgrade-deprecations
+spec:
+  schedule: "0 2 * * *"
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: modern-backup
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: backup-worker
+              image: busybox:1.36
+              command:
+                - /bin/sh
+                - -c
+                - echo "Executing nightly database backup snapshot..."

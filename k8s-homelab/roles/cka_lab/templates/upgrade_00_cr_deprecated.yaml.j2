@@ -1,0 +1,9 @@
+---
+apiVersion: drill.cka.io/v1beta1
+kind: AppService
+metadata:
+  name: legacy-frontend-service
+  namespace: default
+spec:
+  image: "registry.k8s.io/e2e-test-images/agnhost:2.45"
+  replicas: 2

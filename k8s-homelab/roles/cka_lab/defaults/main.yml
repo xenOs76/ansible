@@ -289,6 +289,9 @@ cka_lab_etcd_backup_calendar: "daily"
 
 # Scenario: upgrade_drill (Manual Kubeadm Node & Cluster Upgrade)
 cka_lab_upgrade_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/16-upgrade"
+cka_lab_upgrade_deprecations_dir: "{{ cka_lab_upgrade_dir }}/00-pre-upgrade-deprecations"
+cka_lab_upgrade_target_version: "v1.37.0"
+cka_lab_pluto_version: "v5.21.3"
 
 # Scenario: jsonpath (Speed JSONPath & Output Formatting)
 cka_lab_jsonpath_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/01-jsonpath"

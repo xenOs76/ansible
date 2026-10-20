@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# scan-manifests.sh: Pre-upgrade manifest deprecation audit using Fairwinds Pluto
+# ==============================================================================
+set -euo pipefail
+
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+STATIC_DIR="${SCRIPT_DIR}/../static-manifests"
+if [ ! -d "${STATIC_DIR}" ] && [ -d "${SCRIPT_DIR}/../deprecated-manifests" ]; then
+    STATIC_DIR="${SCRIPT_DIR}/../deprecated-manifests"
+fi
+MODERN_DIR="${SCRIPT_DIR}/../modern-manifests"
+TARGET_VERSION="{{ cka_lab_upgrade_target_version | default('v1.37.0') }}"
+
+# Normalize to semver format required by Pluto (e.g. v1.37.0)
+[[ ! "${TARGET_VERSION}" =~ ^v ]] && TARGET_VERSION="v${TARGET_VERSION}"
+[[ "${TARGET_VERSION}" =~ ^v[0-9]+\.[0-9]+$ ]] && TARGET_VERSION="${TARGET_VERSION}.0"
+
+echo "=== CKA Phase 0: Pre-Upgrade Static Manifest Deprecation Audit ==="
+echo "Target Kubernetes Version: ${TARGET_VERSION}"
+echo ""
+
+if ! command -v pluto >/dev/null 2>&1; then
+    echo "[-] Pluto CLI not found. Running installer..."
+    "${SCRIPT_DIR}/install-pluto.sh"
+fi
+
+echo "--- [1/2] Auditing Offline Practice Manifests (${STATIC_DIR}) ---"
+echo "Command: pluto detect-files -d \"${STATIC_DIR}\" --target-versions \"k8s=${TARGET_VERSION}\""
+echo ""
+
+# Note: Pluto exits with code 2 or 3 when deprecations are found. We capture exit code for demonstration.
+STATIC_SCAN_EXIT=0
+pluto detect-files -d "${STATIC_DIR}" --target-versions "k8s=${TARGET_VERSION}" || STATIC_SCAN_EXIT=$?
+
+echo ""
+if [ "${STATIC_SCAN_EXIT}" -ne 0 ]; then
+    echo "[!] Deprecated or removed APIs detected (Pluto exit code: ${STATIC_SCAN_EXIT})."
+    echo "    These resources MUST be migrated before upgrading the cluster to ${TARGET_VERSION}."
+else
+    echo "[OK] No deprecations found."
+fi
+
+echo ""
+echo "--- [2/2] Auditing Modern Compliant Manifests (${MODERN_DIR}) ---"
+echo "Command: pluto detect-files -d \"${MODERN_DIR}\" --target-versions \"k8s=${TARGET_VERSION}\""
+echo ""
+
+MODERN_SCAN_EXIT=0
+pluto detect-files -d "${MODERN_DIR}" --target-versions "k8s=${TARGET_VERSION}" || MODERN_SCAN_EXIT=$?
+
+echo ""
+if [ "${MODERN_SCAN_EXIT}" -eq 0 ]; then
+    echo "[OK] Modern manifests pass pre-upgrade clearance for ${TARGET_VERSION} (0 deprecations)."
+else
+    echo "[-] Warning: Modern manifests triggered deprecation warnings (exit code: ${MODERN_SCAN_EXIT})."
+fi
+
+echo ""
+echo "=== Pre-Upgrade Manifest Audit Complete ==="

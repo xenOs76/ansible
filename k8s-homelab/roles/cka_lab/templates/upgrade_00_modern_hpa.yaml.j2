@@ -1,0 +1,26 @@
+---
+# Modern HorizontalPodAutoscaler Manifest
+# API Version: autoscaling/v2 (Stable GA)
+# Compliant with Kubernetes v1.26+ and v1.37+
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: modern-api-hpa
+  namespace: default
+  labels:
+    app: modern-api
+    drill: pre-upgrade-deprecations
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: modern-api-deployment
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 75

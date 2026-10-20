@@ -1,0 +1,29 @@
+---
+# Deprecated HorizontalPodAutoscaler Manifest
+# API Version: autoscaling/v2beta2 (Deprecated in v1.23, Removed in v1.26)
+# Replaced by: autoscaling/v2
+# Key Differences:
+# - spec.metrics[].resource.target.averageUtilization is structured under target
+# - spec.behavior configuration graduated to autoscaling/v2
+apiVersion: autoscaling/v2beta2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: legacy-api-hpa
+  namespace: default
+  labels:
+    app: legacy-api
+    drill: pre-upgrade-deprecations
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: legacy-api-deployment
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 75

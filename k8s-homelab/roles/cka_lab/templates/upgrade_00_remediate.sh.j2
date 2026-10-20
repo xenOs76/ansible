@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# remediate-manifests.sh: Demonstrate manifest diffs, validation & migration tools
+# ==============================================================================
+set -euo pipefail
+
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+DEPRECATED_DIR="${SCRIPT_DIR}/../deprecated-manifests"
+MODERN_DIR="${SCRIPT_DIR}/../modern-manifests"
+
+echo "=== CKA Phase 0: Deprecation Remediation & Migration Walkthrough ==="
+echo ""
+
+echo "--- [1/3] Side-by-Side Schema Differences (diff -u) ---"
+
+for RESOURCE in ingress hpa cronjob pdb kubeadm; do
+    DEP_FILE=$(find "${DEPRECATED_DIR}" -name "*${RESOURCE}*" | head -n 1)
+    MOD_FILE=$(find "${MODERN_DIR}" -name "*${RESOURCE}*" | head -n 1)
+
+    if [ -f "${DEP_FILE}" ] && [ -f "${MOD_FILE}" ]; then
+        echo "======================================================================"
+        echo "Resource: ${RESOURCE^^}"
+        echo "Deprecated: $(basename "${DEP_FILE}")"
+        echo "Modern:     $(basename "${MOD_FILE}")"
+        echo "======================================================================"
+        diff -u "${DEP_FILE}" "${MOD_FILE}" || true
+        echo ""
+    fi
+done
+
+echo "--- [2/3] Validating Modern Manifests via kubectl Dry-Run ---"
+if kubectl cluster-info >/dev/null 2>&1; then
+    for YAML in "${MODERN_DIR}"/*.yaml; do
+        # Exclude kubeadm config which is not a cluster API resource
+        if [[ "$(basename "${YAML}")" != *"kubeadm"* ]]; then
+            echo "Dry-run applying $(basename "${YAML}")..."
+            kubectl apply --dry-run=client -f "${YAML}"
+        fi
+    done
+    echo "[OK] All modern workload manifests pass client-side schema validation."
+else
+    echo "[SKIP] Cluster not connected; skipping kubectl dry-run."
+fi
+
+echo ""
+echo "--- [3/3] Migration Tooling Quick Reference ---"
+cat << 'EOF'
+1. Convert static YAML manifests with kubectl-convert (official K8s plugin):
+   kubectl-convert -f deprecated-manifests/01-ingress-v1beta1.yaml \
+     --output-version networking.k8s.io/v1 > modern-ingress.yaml
+
+2. Fix in-cluster Helm release secrets prior to upgrading Kubernetes:
+   # Install helm-mapkubeapis plugin
+   helm plugin install https://github.com/helm/helm-mapkubeapis
+
+   # Dry-run inspect release mapping
+   helm mapkubeapis --dry-run <release-name> --namespace <namespace>
+
+   # Apply in-place metadata upgrade
+   helm mapkubeapis <release-name> --namespace <namespace>
+
+3. Re-run Pluto to verify clean status:
+   pluto detect-files -d ./modern-manifests --target-versions k8s=v1.37.0
+EOF
+
+echo ""
+echo "=== Remediation Walkthrough Complete ==="

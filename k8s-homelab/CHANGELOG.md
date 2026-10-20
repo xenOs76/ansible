@@ -8,6 +8,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.1] - 2026-10-20
+
+### Added
+
+- **Pre-Upgrade API Deprecation Auditing & Two-Tier Simulation (`roles/cka_lab`, `~/cka/16-upgrade/`)**:
+  Integrated Fairwinds Pluto pre-upgrade deprecation scanning as Phase 0 (`00-pre-upgrade-deprecations/`) before node
+  upgrades. Implemented a two-tier architecture: Tier 1 offline static manifests and synthetic Helm release secrets for
+  Pluto audits targeting Kubernetes v1.37 (`--target-versions k8s=v1.37.0`), and Tier 2 live loadable v1.36 resources
+  (practice `AppService` CRD with deprecated `v1beta1` and GA `v1`, native `Service.spec.externalIPs`, and
+  `Pod.spec.serviceAccount`) with automated loader, cleanup, and Prometheus metric auditing.
+- **Chronological Node Upgrade Order Enforcement (`roles/cka_lab`, `~/cka/16-upgrade/`)**:
+  Restructured upgrade drill workflow to strictly enforce all control planes (primary and secondary) reaching target
+  version parity before worker node maintenance: Phase 0 Pre-Upgrade Deprecations, Phase 1 Primary Control Plane, Phase 2
+  Secondary Control Planes, and Phase 3 Worker Nodes.
+
 ## [1.5.0] - 2026-10-19
 
 ### Added

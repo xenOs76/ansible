@@ -1,0 +1,24 @@
+---
+# Modern Ingress Manifest
+# API Version: networking.k8s.io/v1 (Stable GA)
+# Compliant with Kubernetes v1.22+ and v1.37+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: modern-webapp-ingress
+  namespace: default
+  labels:
+    app: modern-webapp
+    drill: pre-upgrade-deprecations
+spec:
+  rules:
+    - host: modern-webapp.example.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: modern-webapp-svc
+                port:
+                  number: 80

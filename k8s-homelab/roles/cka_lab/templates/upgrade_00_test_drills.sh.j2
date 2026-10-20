@@ -1,0 +1,115 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# test-deprecations-drill.sh: Validation test suite for pre-upgrade deprecations
+# ==============================================================================
+set -euo pipefail
+
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+BASE_DIR="${SCRIPT_DIR}"
+STATIC_DIR="${BASE_DIR}/static-manifests"
+if [ ! -d "${STATIC_DIR}" ] && [ -d "${BASE_DIR}/deprecated-manifests" ]; then
+    STATIC_DIR="${BASE_DIR}/deprecated-manifests"
+fi
+MODERN_DIR="${BASE_DIR}/modern-manifests"
+LIVE_DIR="${BASE_DIR}/live-manifests"
+SCRIPTS_DIR="${BASE_DIR}/scripts"
+TARGET_VERSION="{{ cka_lab_upgrade_target_version | default('v1.37.0') }}"
+
+# Normalize to semver format required by Pluto (e.g. v1.37.0)
+[[ ! "${TARGET_VERSION}" =~ ^v ]] && TARGET_VERSION="v${TARGET_VERSION}"
+[[ "${TARGET_VERSION}" =~ ^v[0-9]+\.[0-9]+$ ]] && TARGET_VERSION="${TARGET_VERSION}.0"
+
+PASS_COUNT=0
+FAIL_COUNT=0
+
+assert_true() {
+    local desc="$1"
+    shift
+    if "$@"; then
+        echo -e "\e[32m[PASS]\e[0m ${desc}"
+        PASS_COUNT=$((PASS_COUNT + 1))
+    else
+        echo -e "\e[31m[FAIL]\e[0m ${desc}" >&2
+        FAIL_COUNT=$((FAIL_COUNT + 1))
+    fi
+}
+
+echo "=== Test Suite: Pre-Upgrade API Deprecations Audit (Phase 0) ==="
+echo "Target Version: ${TARGET_VERSION}"
+echo ""
+
+# 1. Assert offline static practice manifests exist
+echo "--- Checking Offline Static Practice Manifests ---"
+for NAME in 01-ingress-v1beta1 02-hpa-v2beta2 03-cronjob-v1beta1 04-pdb-v1beta1 05-kubeadm-v1beta3; do
+    assert_true "Static manifest exists: ${NAME}.yaml" test -f "${STATIC_DIR}/${NAME}.yaml"
+done
+
+# 2. Assert modern manifests exist
+echo ""
+echo "--- Checking Modern Compliant Manifests ---"
+for NAME in 01-ingress-v1 02-hpa-v2 03-cronjob-v1 04-pdb-v1 05-kubeadm-v1beta4; do
+    assert_true "Modern manifest exists: ${NAME}.yaml" test -f "${MODERN_DIR}/${NAME}.yaml"
+done
+
+# 3. Assert live practice manifests exist
+echo ""
+echo "--- Checking Live v1.36 Deprecation Manifests ---"
+for NAME in 01-crd-appservice 02-cr-deprecated-v1beta1 03-cr-modern-v1 04-service-externalips 05-pod-legacy-serviceaccount; do
+    assert_true "Live manifest exists: ${NAME}.yaml" test -f "${LIVE_DIR}/${NAME}.yaml"
+done
+
+# 4. Assert scripts exist and are executable
+echo ""
+echo "--- Checking Automation Scripts ---"
+for SCRIPT in install-pluto.sh scan-manifests.sh simulate-helm-deprecation.sh scan-cluster.sh remediate-manifests.sh load-live-deprecations.sh cleanup-live-deprecations.sh; do
+    assert_true "Script exists and is executable: ${SCRIPT}" test -x "${SCRIPTS_DIR}/${SCRIPT}"
+done
+
+# 5. Pluto scan assertions if Pluto binary is available
+echo ""
+echo "--- Validating Pluto Scanning Mechanics ---"
+if ! command -v pluto >/dev/null 2>&1; then
+    echo "Pluto not in PATH; attempting local installation..."
+    "${SCRIPTS_DIR}/install-pluto.sh" || true
+fi
+
+if command -v pluto >/dev/null 2>&1; then
+    assert_true "Pluto binary returns valid version" pluto version
+
+    # Static manifests must trigger deprecations (Pluto exits non-zero)
+    set +e
+    pluto detect-files -d "${STATIC_DIR}" --target-versions "k8s=${TARGET_VERSION}" >/dev/null 2>&1
+    STATIC_EXIT=$?
+    set -e
+    assert_true "Pluto correctly detects deprecated APIs in static manifests" test "${STATIC_EXIT}" -ne 0
+
+    # Modern manifests must pass cleanly (Pluto exits 0)
+    set +e
+    pluto detect-files -d "${MODERN_DIR}" --target-versions "k8s=${TARGET_VERSION}" >/dev/null 2>&1
+    MODERN_EXIT=$?
+    set -e
+    assert_true "Pluto reports 0 deprecations on modern manifests" test "${MODERN_EXIT}" -eq 0
+else
+    echo "[SKIP] Pluto binary unavailable; skipping scanner execution tests."
+fi
+
+# 6. Live cluster tests if cluster is available
+echo ""
+echo "--- Testing Live Cluster Simulation Mechanics ---"
+if kubectl cluster-info >/dev/null 2>&1; then
+    assert_true "load-live-deprecations.sh executes successfully" "${SCRIPTS_DIR}/load-live-deprecations.sh"
+    assert_true "simulate-helm-deprecation.sh status confirms secret exists" "${SCRIPTS_DIR}/simulate-helm-deprecation.sh" status
+    assert_true "scan-cluster.sh completes audit" "${SCRIPTS_DIR}/scan-cluster.sh"
+    assert_true "cleanup-live-deprecations.sh cleans up all drill resources" "${SCRIPTS_DIR}/cleanup-live-deprecations.sh"
+else
+    echo "[SKIP] Kubernetes cluster not reachable; skipping live cluster simulation tests."
+fi
+
+echo ""
+echo "======================================================================"
+echo "Pre-Upgrade Deprecations Drill Test Summary: ${PASS_COUNT} PASSED, ${FAIL_COUNT} FAILED"
+echo "======================================================================"
+
+if [ "${FAIL_COUNT}" -gt 0 ]; then
+    exit 1
+fi

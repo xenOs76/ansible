@@ -1,0 +1,248 @@
+# Phase 0: Pre-Upgrade API Deprecation Auditing & Migration
+
+A practical guide to detecting deprecated Kubernetes APIs, auditing manifests and Helm releases with Fairwinds Pluto,
+and migrating resources prior to upgrading the cluster from **v1.36** to
+**{{ cka_lab_upgrade_target_version | default('v1.37') }}**.
+
+---
+
+## 1. Why Pre-Upgrade Deprecation Auditing is Essential
+
+In enterprise Kubernetes operations and advanced CKA scenarios, running an API deprecation audit prior to upgrading any
+node is a critical **prerequisite (Phase 0)**:
+
+### 1. `kubeadm upgrade plan` Does Not Inspect Workloads
+
+`kubeadm upgrade plan` only validates core control plane component images (`kube-apiserver`, `etcd`,
+`kube-controller-manager`, `kube-scheduler`), CoreDNS, and certificate expiration. It **does not** scan user workloads,
+Helm releases, or GitOps manifests for deprecated or removed APIs.
+
+### 2. API Server Removal vs. Deprecation: Why `kubectl apply` Fails
+
+Kubernetes follows an API deprecation policy: APIs graduate from `alpha` $\to$ `beta` $\to$ `v1` (GA). When a deprecated
+API reaches its removal release (typically 3 minor releases or 12 months after deprecation), the updated API server
+binary completely deletes the serving endpoint.
+
+Once an API version is removed from `kube-apiserver`, attempting to load it via `kubectl apply` returns HTTP 404:
+
+```text
+error: resource mapping not found for name: "legacy-api-hpa" namespace: "default"
+from "02-hpa-v2beta2.yaml": no matches for kind "HorizontalPodAutoscaler" in version "autoscaling/v2beta2"
+```
+
+| Practice Manifest | API Version | Deprecated In | Removed In | Status on v1.36 API Server |
+| --- | --- | --- | --- | --- |
+| `01-ingress-v1beta1.yaml` | `networking.k8s.io/v1beta1` | v1.19 | **v1.22** | **Removed** (Cannot `kubectl apply`) |
+| `02-hpa-v2beta2.yaml` | `autoscaling/v2beta2` | v1.23 | **v1.26** | **Removed** (Cannot `kubectl apply`) |
+| `03-cronjob-v1beta1.yaml` | `batch/v1beta1` | v1.21 | **v1.25** | **Removed** (Cannot `kubectl apply`) |
+| `04-pdb-v1beta1.yaml` | `policy/v1beta1` | v1.21 | **v1.25** | **Removed** (Cannot `kubectl apply`) |
+| `05-kubeadm-v1beta3.yaml` | `kubeadm.k8s.io/v1beta3` | v1.27 | **v1.31** | **Removed** (Cannot `kubeadm` parse) |
+
+These manifests are preserved in `static-manifests/` for offline CI/CD directory audits (`pluto detect-files`).
+
+### 3. The Helm Release Bricking Trap
+
+Why do historical removed APIs matter if they can no longer be applied directly?
+Because **Helm v3 stores release manifests inside compressed Secrets** (`sh.helm.release.v1.<name>.v<rev>`)!
+When executing `helm upgrade` or `helm rollback` post-upgrade, Helm decodes the *prior* release manifest and sends a
+dry-run diff request to the API server. If the old stored manifest contains an API version that has been removed, Helm
+fails with:
+
+```text
+Error: UPGRADE FAILED: unable to build kubernetes objects from release manifest:
+resource mapping not found for name "..." in version "..."
+```
+
+This permanently blocks Helm operations until the stored release secret is repaired.
+
+---
+
+## 2. What Applies to v1.36 $\to$ v1.37?
+
+In an active v1.36 cluster, three distinct mechanisms are available for simulating pre-upgrade deprecation checks:
+
+### 1. Custom Resource Definitions (CRDs) with Schema Deprecation
+
+Over 90% of real-world deprecations originate from CRDs (Cert-Manager, Prometheus Operator, Cilium, Istio).
+Kubernetes OpenAPI v3 allows CRDs to declare `deprecated: true` and a custom `deprecationWarning`. When custom resources
+are applied, the API server accepts them, emits warnings, and logs metrics in `apiserver_requested_deprecated_apis`.
+
+### 2. Native Built-In Deprecated Fields
+
+- **`Service.spec.externalIPs` (Deprecated in v1.36 via KEP-3836)**: Emits warning regarding traffic spoofing risks.
+- **Pod / Workload `spec.serviceAccount`**: Emits warning in favor of `spec.serviceAccountName`.
+- **Ingress `kubernetes.io/ingress.class` Annotation**: Emits warning in favor of `spec.ingressClassName`.
+
+### 3. In-Cluster Helm Release Storage
+
+Synthetic Helm secrets (`simulate-helm-deprecation.sh`) allow students to practice detecting and remediating stored
+releases using `pluto detect-helm` and `helm-mapkubeapis`.
+
+---
+
+## 3. Tool Evaluation: Fairwinds Pluto vs. Alternatives
+
+| Tool | Primary Scope | Strengths | Limitations | Role in Upgrade |
+| --- | --- | --- | --- | --- |
+| **Fairwinds Pluto** | Files, Helm releases, live APIs | Native `detect-helm` parsing Helm Secrets; `--target-versions` simulation; single Go binary | Relies on internal deprecation mapping catalog | **Primary Audit Engine** |
+| **Kube-no-trouble (`kubent`)** | Live cluster & Helm releases | Strong live cluster inspection | Less suited for local directory / CI offline scanning | Alternative Live Scanner |
+| **`kubectl-convert`** | Manifest conversion | Official Kubernetes CLI plugin; converts deprecated YAML to modern schema | Does not scan; converts single files | **Remediation Tool** |
+| **`helm-mapkubeapis`** | In-cluster Helm release metadata | Updates Helm release Secrets in-place to prevent release bricking | Helm-specific | **Helm Healing Tool** |
+| **API Server Metrics** | `kube-apiserver` Prometheus metrics | Built-in metric `apiserver_requested_deprecated_apis` | Reactive; only records active API calls | Alerting & Observability |
+
+**Verdict**: Fairwinds Pluto is the primary audit tool for this drill because it handles offline local directories
+(`pluto detect-files`), live Helm releases (`pluto detect-helm`), and future target release testing
+(`--target-versions k8s={{ cka_lab_upgrade_target_version | default('v1.37.0') }}`).
+
+---
+
+## 4. Directory Layout & Practice Assets
+
+```text
+{{ cka_lab_upgrade_deprecations_dir }}
+├── README.md                                       # Master guide (this file)
+├── test-deprecations-drill.sh                      # Automated test verification suite
+├── static-manifests/                               # TIER 1: Offline practice manifests for Pluto scanner
+│   ├── 01-ingress-v1beta1.yaml                     # networking.k8s.io/v1beta1 -> networking.k8s.io/v1
+│   ├── 02-hpa-v2beta2.yaml                         # autoscaling/v2beta2 -> autoscaling/v2
+│   ├── 03-cronjob-v1beta1.yaml                     # batch/v1beta1 -> batch/v1
+│   ├── 04-pdb-v1beta1.yaml                         # policy/v1beta1 -> policy/v1
+│   └── 05-kubeadm-v1beta3.yaml                     # kubeadm.k8s.io/v1beta3 -> kubeadm.k8s.io/v1beta4
+├── live-manifests/                                 # TIER 2: Loadable directly in v1.36 via kubectl apply
+│   ├── 01-crd-appservice.yaml                      # CRD defining v1beta1 (deprecated) and v1 (storage)
+│   ├── 02-cr-deprecated-v1beta1.yaml               # Custom resource triggering live v1.36 deprecation warning
+│   ├── 03-cr-modern-v1.yaml                        # Migrated modern custom resource
+│   ├── 04-service-externalips.yaml                 # Native Service triggering spec.externalIPs deprecation
+│   └── 05-pod-legacy-serviceaccount.yaml           # Native Pod triggering spec.serviceAccount deprecation
+├── modern-manifests/                               # Fully migrated modern equivalents
+│   ├── 01-ingress-v1.yaml
+│   ├── 02-hpa-v2.yaml
+│   ├── 03-cronjob-v1.yaml
+│   ├── 04-pdb-v1.yaml
+│   └── 05-kubeadm-v1beta4.yaml
+└── scripts/                                        # Automation & drill scripts
+    ├── install-pluto.sh                            # Downloads and verifies Pluto binary
+    ├── scan-manifests.sh                           # Audits static manifests against target version
+    ├── load-live-deprecations.sh                   # Loads live practice CRD and deprecated workloads
+    ├── cleanup-live-deprecations.sh                # Removes live practice workloads and CRD
+    ├── simulate-helm-deprecation.sh                # Injects / cleans synthetic deprecated Helm secret
+    ├── scan-cluster.sh                             # Audits live cluster objects, Helm, and API metrics
+    └── remediate-manifests.sh                      # Demonstrates schema diffs, validation & tooling
+```
+
+---
+
+## 5. The 6-Step Operational Remediation Workflow
+
+### Step 1: Pre-Upgrade Target Version Audit
+
+Scan offline manifests and live cluster resources against the upgrade target
+`{{ cka_lab_upgrade_target_version | default('v1.37') }}`:
+
+```bash
+cd {{ cka_lab_upgrade_deprecations_dir }}/scripts
+
+# 1. Audit offline static manifests
+./scan-manifests.sh
+
+# 2. Load live deprecation test resources into v1.36
+./load-live-deprecations.sh
+
+# 3. Audit live cluster objects, Helm releases, and API server metrics
+./scan-cluster.sh
+```
+
+### Step 2: Inspecting API Server Deprecation Metrics
+
+Query the control plane metrics endpoint to detect live workloads requesting deprecated schemas:
+
+```bash
+kubectl get --raw /metrics | grep '^apiserver_requested_deprecated_apis'
+```
+
+Output:
+
+```text
+apiserver_requested_deprecated_apis{group="drill.cka.io",resource="appservices",subresource="",version="v1beta1"} 1
+```
+
+### Step 3: Categorization & Ownership Triage
+
+Classify detected deprecations into operational buckets:
+
+1. **In-Tree Static Manifests**: YAML definitions stored in Git / CI repositories.
+1. **Third-Party Helm Releases**: External charts deployed across namespaces.
+1. **Custom Resource Definitions (CRDs)**: Operators with deprecated stored API versions.
+1. **Kubeadm Cluster Configuration**: Cluster configuration stored in `kube-system/kubeadm-config`.
+
+### Step 4: Manifest & Workload Migration
+
+Use `kubectl-convert` or edit manifests directly to update `apiVersion` and adjust structural schema fields:
+
+```bash
+# Convert legacy manifest with kubectl-convert
+kubectl-convert -f ../static-manifests/01-ingress-v1beta1.yaml \
+  --output-version networking.k8s.io/v1 > modern-ingress.yaml
+
+# Apply migrated live custom resource
+kubectl apply -f ../live-manifests/03-cr-modern-v1.yaml
+```
+
+Key schema migrations:
+
+1. **Ingress (`networking.k8s.io/v1`)**:
+   - `serviceName` $\to$ `service.name`
+   - `servicePort` $\to$ `service.port.number`
+   - `pathType` is mandatory (`Prefix`, `Exact`, `ImplementationSpecific`).
+2. **HorizontalPodAutoscaler (`autoscaling/v2`)**:
+   - `targetAverageUtilization` $\to$ `target.averageUtilization`
+   - Unified metric specifications under `spec.metrics[].resource.target`.
+3. **CronJob (`batch/v1`)**:
+   - Schema structure identical; moved to GA group `batch/v1`.
+4. **PodDisruptionBudget (`policy/v1`)**:
+   - Empty selector `{}` is rejected; explicit label matching is mandatory.
+5. **Kubeadm (`kubeadm.k8s.io/v1beta4`)**:
+   - Replaces `v1beta3`; structured parameters for certificates, timeouts, and encryption.
+
+### Step 5: In-Cluster Helm Release Remediation (`helm-mapkubeapis`)
+
+For Helm releases containing removed APIs, update release metadata before performing `kubeadm upgrade`:
+
+```bash
+# Install helm-mapkubeapis plugin
+helm plugin install https://github.com/helm/helm-mapkubeapis
+
+# Dry-run scan of target release
+helm mapkubeapis --dry-run <release-name> --namespace <namespace>
+
+# Apply in-place metadata upgrade
+helm mapkubeapis <release-name> --namespace <namespace>
+```
+
+### Step 6: Clearance Verification & Teardown
+
+Re-run Pluto scans to assert zero remaining deprecated APIs targeted for removal:
+
+```bash
+pluto detect-files -d ../modern-manifests \
+  --target-versions k8s={{ cka_lab_upgrade_target_version | default('v1.37.0') }}
+
+# Clean up live drill resources when done
+./cleanup-live-deprecations.sh
+```
+
+Once zero deprecations remain, proceed to:
+
+1. Pre-upgrade etcd snapshot backup (`~/cka/15-etcd/`).
+2. Primary control plane node upgrade (`../01-control-plane/`).
+
+---
+
+## 6. Automated Validation
+
+Execute the automated test suite to verify all manifests, scripts, live loading, and Pluto detection mechanics:
+
+```bash
+cd {{ cka_lab_upgrade_deprecations_dir }}
+./test-deprecations-drill.sh
+```

@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# load-live-deprecations.sh: Load live resources triggering v1.36 deprecations
+# ==============================================================================
+set -euo pipefail
+
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+LIVE_DIR="${SCRIPT_DIR}/../live-manifests"
+
+echo "=== CKA Phase 0: Loading Live Deprecated Practice Resources ==="
+echo "Target Cluster Context: $(kubectl config current-context 2>/dev/null || echo 'unknown')"
+echo ""
+
+if ! kubectl cluster-info >/dev/null 2>&1; then
+    echo "[-] Error: Unable to connect to Kubernetes cluster." >&2
+    echo "    Ensure KUBECONFIG is configured and apiserver is reachable." >&2
+    exit 1
+fi
+
+echo "--- [1/4] Installing Practice CRD (appservices.drill.cka.io) ---"
+kubectl apply -f "${LIVE_DIR}/01-crd-appservice.yaml"
+kubectl wait --for=condition=Established --timeout=15s crd/appservices.drill.cka.io >/dev/null
+
+echo ""
+echo "--- [2/4] Applying Deprecated Custom Resource (v1beta1) ---"
+echo "Expected Warning: drill.cka.io/v1beta1 AppService is deprecated in v1.36; migrate to v1 before v1.37"
+kubectl apply -f "${LIVE_DIR}/02-cr-deprecated-v1beta1.yaml"
+
+echo ""
+echo "--- [3/4] Applying Native In-Tree Resources with Deprecated Fields ---"
+echo "Applying Service with spec.externalIPs (deprecated in v1.36):"
+kubectl apply -f "${LIVE_DIR}/04-service-externalips.yaml"
+
+echo "Applying Pod with spec.serviceAccount (deprecated in favor of serviceAccountName):"
+kubectl apply -f "${LIVE_DIR}/05-pod-legacy-serviceaccount.yaml"
+
+echo ""
+echo "--- [4/4] Injecting In-Cluster Deprecated Helm Release Secret ---"
+"${SCRIPT_DIR}/simulate-helm-deprecation.sh" create
+
+echo ""
+echo "=== Live Deprecated Practice Resources Loaded Successfully ==="
+echo ""
+echo "You can now run:"
+echo "  1. ./scan-cluster.sh"
+echo "  2. kubectl get --raw /metrics | grep apiserver_requested_deprecated_apis"
+echo "  3. ./cleanup-live-deprecations.sh (when finished)"
