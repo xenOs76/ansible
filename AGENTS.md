@@ -169,6 +169,17 @@ nix shell nixpkgs#ansible-lint --command bash -c \
 
 - Code must pass the `production` profile with 0 failures and 0 warnings.
 
+### 5. Markdown & README Paragraph Line Length (120 chars)
+
+```bash
+python3 scripts/check-readme-line-length.py <files>
+```
+
+- All paragraph lines, bullet point descriptions, and blockquotes in READMEs (`README.md`, `*readme.md.j2`, `*.md`) must adhere to a strict 120-character maximum line length.
+- Code blocks, tables, headings, and long URLs are exempt.
+- Can be automatically validated across the repo via `python3 scripts/check-readme-line-length.py --all` or auto-formatted via `python3 scripts/format-readme-line-length.py <files>`.
+- Enforced on every commit via Git pre-commit hook (`.githooks/checks/readme-line-length.sh`).
+
 ---
 
 ## 6. Git & Mirroring Conventions
