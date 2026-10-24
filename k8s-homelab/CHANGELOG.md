@@ -24,6 +24,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `default` namespace, staged whitelisting for CoreDNS (`kube-system` port 53), external DNS (`ipBlock`), and L7 HTTP
   traffic routed through NGINX Gateway Fabric and backend `httpbingo`. Added dedicated Hubble CLI troubleshooting guide
   (`hubble-troubleshooting.md`) and a 6-phase automated test runner (`test-advanced-netpol.sh`).
+- **Multi-Tenant Pod Isolation Drill & Manifests (`roles/cka_lab`, `~/cka/11-networking/05-advanced-network-policies/`)**:
+  Added packaged drill manifests (`06-cross-tenant-workloads.yaml`, `07-allow-cross-tenant.yaml`) and an automated
+  verification runner (`test-cross-tenant.sh`) exercising cross-namespace multi-tenant pod isolation using logical AND
+  (`namespaceSelector` + `podSelector`) between tenant namespaces under strict default-deny.
 
 ### Changed
 

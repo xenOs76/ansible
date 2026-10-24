@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# test-cross-tenant.sh: Automated Verification for Multi-Tenant Pod Isolation
+# Tests logical AND with namespaceSelector + podSelector under default-deny
+# ==============================================================================
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TENANT_A="{{ cka_lab_networking_tenant_a | default('tenant-a') }}"
+TENANT_B="{{ cka_lab_networking_tenant_b | default('tenant-b') }}"
+
+echo "=== [Multi-Tenant Drill] Testing Cross-Namespace Pod Isolation ==="
+
+cleanup() {
+  echo ""
+  echo "==> Cleaning up multi-tenant namespaces..."
+  kubectl delete namespace "${TENANT_A}" "${TENANT_B}" --ignore-not-found=true --now >/dev/null 2>&1 || true
+}
+trap cleanup EXIT
+
+# 1. Clean up any leftover namespaces from previous runs
+cleanup
+
+# 2. Deploy workloads and default-deny policies
+echo "==> [Phase 1] Deploying multi-tenant workloads and default-deny policies..."
+kubectl apply -f "${SCRIPT_DIR}/06-cross-tenant-workloads.yaml"
+
+echo "Waiting for deployments to roll out..."
+kubectl rollout status deployment/secure-db -n "${TENANT_B}" --timeout=60s
+kubectl rollout status deployment/frontend-app -n "${TENANT_A}" --timeout=60s
+kubectl rollout status deployment/analytics-worker -n "${TENANT_A}" --timeout=60s
+
+# 3. Baseline verification under default-deny (Expect timeouts)
+echo "==> [Phase 2] Verifying baseline isolation under default-deny..."
+
+echo "    Testing frontend-app -> db-service:5432 (expect TIMEOUT)..."
+if kubectl exec deploy/frontend-app -n "${TENANT_A}" -- curl -s -m 3 "http://db-service.${TENANT_B}:5432" >/dev/null 2>&1; then
+  echo "    FAIL: frontend-app reached db-service unexpectedly under default-deny!" >&2
+  exit 1
+else
+  echo "    OK: frontend-app blocked by default-deny policy."
+fi
+
+echo "    Testing analytics-worker -> db-service:5432 (expect TIMEOUT)..."
+if kubectl exec deploy/analytics-worker -n "${TENANT_A}" -- curl -s -m 3 "http://db-service.${TENANT_B}:5432" >/dev/null 2>&1; then
+  echo "    FAIL: analytics-worker reached db-service unexpectedly under default-deny!" >&2
+  exit 1
+else
+  echo "    OK: analytics-worker blocked by default-deny policy."
+fi
+
+# 4. Apply cross-tenant allow policies
+echo "==> [Phase 3] Applying cross-tenant allow policies (logical AND)..."
+kubectl apply -f "${SCRIPT_DIR}/07-allow-cross-tenant.yaml"
+sleep 2
+
+# 5. Verify selective reachability
+echo "==> [Phase 4] Verifying selective cross-namespace authorization..."
+
+echo "    Testing frontend-app -> db-service:5432 (expect SUCCESS)..."
+RESP=$(kubectl exec deploy/frontend-app -n "${TENANT_A}" -- curl -s -m 5 "http://db-service.${TENANT_B}:5432" || echo "")
+if echo "${RESP}" | grep -q "5432"; then
+  echo "    OK: Authorized frontend-app successfully connected to db-service (response: ${RESP})."
+else
+  echo "    FAIL: Expected response containing '5432', got: ${RESP}" >&2
+  exit 1
+fi
+
+echo "    Testing analytics-worker -> db-service:5432 (expect BLOCKED)..."
+if kubectl exec deploy/analytics-worker -n "${TENANT_A}" -- curl -s -m 3 "http://db-service.${TENANT_B}:5432" >/dev/null 2>&1; then
+  echo "    FAIL: Unauthorized analytics-worker reached db-service!" >&2
+  exit 1
+else
+  echo "    OK: Unauthorized analytics-worker dropped by podSelector enforcement."
+fi
+
+echo "=== [SUCCESS] Multi-Tenant Pod Isolation drill verified successfully! ==="

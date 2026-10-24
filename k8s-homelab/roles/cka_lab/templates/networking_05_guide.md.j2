@@ -154,11 +154,45 @@ curl -s "http://{{ cka_lab_networking_gateway_domain | default('httpbin.example.
 
 ---
 
+### Step 5: Multi-Tenant Cross-Namespace Pod Isolation Drill
+
+Practice combining `namespaceSelector` and `podSelector` (logical AND) to restrict traffic between tenant namespaces
+under strict default-deny isolation:
+
+```bash
+# 1. Deploy tenant-a, tenant-b, isolated workloads, and default-deny policies
+kubectl apply -f 06-cross-tenant-workloads.yaml
+
+# 2. Verify baseline isolation (both frontend and analytics pods time out)
+kubectl exec deploy/frontend-app -n {{ cka_lab_networking_tenant_a | default('tenant-a') }} -- \
+  curl -s -m 3 "http://db-service.{{ cka_lab_networking_tenant_b | default('tenant-b') }}:5432" || echo "Frontend blocked!"
+kubectl exec deploy/analytics-worker -n {{ cka_lab_networking_tenant_a | default('tenant-a') }} -- \
+  curl -s -m 3 "http://db-service.{{ cka_lab_networking_tenant_b | default('tenant-b') }}:5432" || echo "Analytics blocked!"
+
+# 3. Apply selective cross-namespace policies (logical AND)
+kubectl apply -f 07-allow-cross-tenant.yaml
+
+# 4. Verify selective reachability:
+# Authorized frontend succeeds (returns "PostgreSQL Mock 5432 OK")
+kubectl exec deploy/frontend-app -n {{ cka_lab_networking_tenant_a | default('tenant-a') }} -- \
+  curl -s -m 5 "http://db-service.{{ cka_lab_networking_tenant_b | default('tenant-b') }}:5432"
+
+# Unauthorized analytics pod remains blocked (podSelector enforcement)
+kubectl exec deploy/analytics-worker -n {{ cka_lab_networking_tenant_a | default('tenant-a') }} -- \
+  curl -s -m 3 "http://db-service.{{ cka_lab_networking_tenant_b | default('tenant-b') }}:5432" || echo "Analytics blocked!"
+
+# 5. Run automated test runner
+./test-cross-tenant.sh
+```
+
+---
+
 ## Observability & Automated Testing
 
 - Inspect live flows: Consult [hubble-troubleshooting.md](file://hubble-troubleshooting.md) for Hubble CLI commands.
-- Run complete automated validation suite:
+- Run complete automated validation suites:
 
 ```bash
 ./test-advanced-netpol.sh
+./test-cross-tenant.sh
 ```

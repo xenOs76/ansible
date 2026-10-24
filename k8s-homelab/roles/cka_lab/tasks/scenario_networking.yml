@@ -59,7 +59,10 @@
     - {src: "networking_05_03_allow_coredns.yaml.j2", dest: "05-advanced-network-policies/03-allow-kube-dns.yaml"}
     - {src: "networking_05_04_allow_external_dns.yaml.j2", dest: "05-advanced-network-policies/04-allow-external-dns.yaml"}
     - {src: "networking_05_05_allow_gateway_httpbin.yaml.j2", dest: "05-advanced-network-policies/05-allow-gateway-httpbin.yaml"}
+    - {src: "networking_05_06_cross_tenant_workloads.yaml.j2", dest: "05-advanced-network-policies/06-cross-tenant-workloads.yaml"}
+    - {src: "networking_05_07_allow_cross_tenant.yaml.j2", dest: "05-advanced-network-policies/07-allow-cross-tenant.yaml"}
     - {src: "networking_05_test_advanced_netpol.sh.j2", dest: "05-advanced-network-policies/test-advanced-netpol.sh", mode: "0755"}
+    - {src: "networking_05_test_cross_tenant.sh.j2", dest: "05-advanced-network-policies/test-cross-tenant.sh", mode: "0755"}
   loop_control:
     label: "networking/{{ item.dest }}"
   tags:

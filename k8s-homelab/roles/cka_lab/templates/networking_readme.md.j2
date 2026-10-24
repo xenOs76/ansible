@@ -60,7 +60,10 @@ primitives and modern architectural patterns:
     ├── 03-allow-kube-dns.yaml                 # CoreDNS in-cluster whitelisting
     ├── 04-allow-external-dns.yaml             # External DNS public resolver whitelisting
     ├── 05-allow-gateway-httpbin.yaml          # Gateway API and httpbingo traffic rules
-    └── test-advanced-netpol.sh                # Non-interactive automated validation script
+    ├── 06-cross-tenant-workloads.yaml         # Multi-tenant isolated workloads & default-deny
+    ├── 07-allow-cross-tenant.yaml             # Cross-namespace logical AND network policies
+    ├── test-advanced-netpol.sh                # Gateway NetPol progressive validation script
+    └── test-cross-tenant.sh                   # Multi-tenant pod isolation test script
 ```
 
 ---
@@ -624,16 +627,46 @@ spec:
 
 ##### Pattern 2: Multi-Tenant Pod-to-Pod Isolation (Logical AND with `podSelector`)
 
-To restrict traffic to a specific pod inside another namespace (e.g., only `frontend` pods in `tenant-a` connecting to
-`database` pods in `tenant-b` on PostgreSQL port `5432`):
+To restrict traffic to a specific pod inside another namespace (e.g., only `frontend` pods in
+`{{ cka_lab_networking_tenant_a | default('tenant-a') }}` connecting to `database` pods in
+`{{ cka_lab_networking_tenant_b | default('tenant-b') }}` on port `5432`), deploy the pre-packaged manifests:
+
+1. **Deploy Isolated Workloads & Strict Default-Deny (`06-cross-tenant-workloads.yaml`)**:
+
+```bash
+kubectl apply -f 06-cross-tenant-workloads.yaml
+```
+
+This provisions namespaces `{{ cka_lab_networking_tenant_a | default('tenant-a') }}` and
+`{{ cka_lab_networking_tenant_b | default('tenant-b') }}`, a `secure-db` workload listening on port 5432 fronted by
+ClusterIP service `db-service`, an authorized `frontend-app` (`role: frontend`), an unauthorized `analytics-worker`
+(`role: analytics`), and strict `default-deny-all` in both namespaces.
+
+Verify baseline isolation (both pods are dropped by policy):
+
+```bash
+# Both attempts time out / drop under default-deny:
+kubectl exec deploy/frontend-app -n {{ cka_lab_networking_tenant_a | default('tenant-a') }} -- \
+  curl -s -m 3 "http://db-service.{{ cka_lab_networking_tenant_b | default('tenant-b') }}:5432" || echo "Frontend blocked!"
+kubectl exec deploy/analytics-worker -n {{ cka_lab_networking_tenant_a | default('tenant-a') }} -- \
+  curl -s -m 3 "http://db-service.{{ cka_lab_networking_tenant_b | default('tenant-b') }}:5432" || echo "Analytics blocked!"
+```
+
+2. **Apply Selective Cross-Namespace Policies (`07-allow-cross-tenant.yaml`)**:
+
+```bash
+kubectl apply -f 07-allow-cross-tenant.yaml
+```
+
+Inspect the policy definitions combining `namespaceSelector` and `podSelector`:
 
 ```yaml
-# Destination namespace (tenant-b): Ingress rule
+# Destination namespace ({{ cka_lab_networking_tenant_b | default('tenant-b') }}): Ingress rule
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: allow-frontend-to-db
-  namespace: tenant-b
+  namespace: {{ cka_lab_networking_tenant_b | default('tenant-b') }}
 spec:
   podSelector:
     matchLabels:
@@ -644,7 +677,7 @@ spec:
     - from:
         - namespaceSelector:
             matchLabels:
-              kubernetes.io/metadata.name: tenant-a
+              kubernetes.io/metadata.name: {{ cka_lab_networking_tenant_a | default('tenant-a') }}
           podSelector:
             matchLabels:
               role: frontend
@@ -652,12 +685,12 @@ spec:
         - protocol: TCP
           port: 5432
 ---
-# Source namespace (tenant-a): Egress rule (required if default-deny egress is active)
+# Source namespace ({{ cka_lab_networking_tenant_a | default('tenant-a') }}): Egress rule (required under default-deny)
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: allow-db-egress
-  namespace: tenant-a
+  namespace: {{ cka_lab_networking_tenant_a | default('tenant-a') }}
 spec:
   podSelector:
     matchLabels:
@@ -668,13 +701,31 @@ spec:
     - to:
         - namespaceSelector:
             matchLabels:
-              kubernetes.io/metadata.name: tenant-b
+              kubernetes.io/metadata.name: {{ cka_lab_networking_tenant_b | default('tenant-b') }}
           podSelector:
             matchLabels:
               role: database
       ports:
         - protocol: TCP
           port: 5432
+```
+
+3. **Verify Selective Authorization**:
+
+```bash
+# 1. Authorized frontend succeeds:
+kubectl exec deploy/frontend-app -n {{ cka_lab_networking_tenant_a | default('tenant-a') }} -- \
+  curl -s -m 5 "http://db-service.{{ cka_lab_networking_tenant_b | default('tenant-b') }}:5432"
+
+# 2. Unauthorized analytics pod remains blocked (podSelector enforcement):
+kubectl exec deploy/analytics-worker -n {{ cka_lab_networking_tenant_a | default('tenant-a') }} -- \
+  curl -s -m 3 "http://db-service.{{ cka_lab_networking_tenant_b | default('tenant-b') }}:5432" || echo "Analytics blocked!"
+```
+
+4. **Run Automated Drill Verification**:
+
+```bash
+./test-cross-tenant.sh
 ```
 
 > [!IMPORTANT]

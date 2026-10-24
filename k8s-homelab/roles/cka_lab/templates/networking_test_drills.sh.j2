@@ -27,8 +27,11 @@ cleanup() {
   kubectl delete ingress cka-lab-ingress -n "${NAMESPACE}" --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
   kubectl delete httproute cka-lab-httproute -n "${NAMESPACE}" --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
   kubectl delete gateway cka-lab-gateway -n "${GW_NAMESPACE}" --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
+  # Clean up NetworkPolicies and probe pods in default namespace
+  kubectl delete netpol --all -n "${NAMESPACE}" --ignore-not-found=true --now >/dev/null 2>&1 || true
+  kubectl delete pod cka-lab-http-probe cka-lab-dns-probe -n "${NAMESPACE}" --ignore-not-found=true --now >/dev/null 2>&1 || true
   # Clean up isolated namespaces
-  kubectl delete namespace "${CLIENT_NS}" "${BACKEND_NS}" cka-portal cka-secure-db --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
+  kubectl delete namespace "${CLIENT_NS}" "${BACKEND_NS}" "{{ cka_lab_networking_tenant_a | default('tenant-a') }}" "{{ cka_lab_networking_tenant_b | default('tenant-b') }}" cka-portal cka-secure-db --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
 }
 
 trap cleanup EXIT
@@ -37,7 +40,7 @@ trap cleanup EXIT
 # Drill 1: Services & CoreDNS
 # ------------------------------------------------------------------------------
 echo "--------------------------------------------------------------------"
-echo "  [1/6] Testing Services & CoreDNS                                  "
+echo "  [1/7] Testing Services & CoreDNS                                  "
 echo "--------------------------------------------------------------------"
 "${SCRIPT_DIR}/01-services/test-services.sh"
 
@@ -45,7 +48,7 @@ echo "--------------------------------------------------------------------"
 # Drill 2: Headless Service
 # ------------------------------------------------------------------------------
 echo "--------------------------------------------------------------------"
-echo "  [2/6] Testing Headless Service & SRV/A-Record DNS                 "
+echo "  [2/7] Testing Headless Service & SRV/A-Record DNS                 "
 echo "--------------------------------------------------------------------"
 "${SCRIPT_DIR}/01-services/test-headless.sh"
 
@@ -53,7 +56,7 @@ echo "--------------------------------------------------------------------"
 # Drill 3: Ingress Path Routing
 # ------------------------------------------------------------------------------
 echo "--------------------------------------------------------------------"
-echo "  [3/6] Testing Ingress Path Routing                                "
+echo "  [3/7] Testing Ingress Path Routing                                "
 echo "--------------------------------------------------------------------"
 "${SCRIPT_DIR}/02-ingresses/test-ingress.sh"
 
@@ -61,7 +64,7 @@ echo "--------------------------------------------------------------------"
 # Drill 4: Gateway API & NGINX Gateway Fabric
 # ------------------------------------------------------------------------------
 echo "--------------------------------------------------------------------"
-echo "  [4/6] Testing Gateway API & HTTPRoute                             "
+echo "  [4/7] Testing Gateway API & HTTPRoute                             "
 echo "--------------------------------------------------------------------"
 "${SCRIPT_DIR}/03-gateway-api/test-gateway.sh"
 
@@ -69,17 +72,25 @@ echo "--------------------------------------------------------------------"
 # Drill 5: Network Policies with httpbin-go
 # ------------------------------------------------------------------------------
 echo "--------------------------------------------------------------------"
-echo "  [5/6] Testing Network Policies & Packet Filtering                 "
+echo "  [5/7] Testing Network Policies & Packet Filtering                 "
 echo "--------------------------------------------------------------------"
 "${SCRIPT_DIR}/04-network-policies/test-network-policies.sh"
 
 # ------------------------------------------------------------------------------
-# Drill 6: Multi-Namespace NetworkPolicy
+# Drill 6: Progressive Microsegmentation & Gateway NetPol
 # ------------------------------------------------------------------------------
 echo "--------------------------------------------------------------------"
-echo "  [6/6] Testing Multi-Namespace NetworkPolicy                       "
+echo "  [6/7] Testing Progressive Microsegmentation & Gateway NetPol      "
 echo "--------------------------------------------------------------------"
 "${SCRIPT_DIR}/05-advanced-network-policies/test-advanced-netpol.sh"
+
+# ------------------------------------------------------------------------------
+# Drill 7: Multi-Tenant Pod Isolation (Logical AND)
+# ------------------------------------------------------------------------------
+echo "--------------------------------------------------------------------"
+echo "  [7/7] Testing Multi-Tenant Pod Isolation (Logical AND)            "
+echo "--------------------------------------------------------------------"
+"${SCRIPT_DIR}/05-advanced-network-policies/test-cross-tenant.sh"
 
 echo "===================================================================="
 echo "  [SUCCESS] All CKA Networking drills verified successfully!        "
