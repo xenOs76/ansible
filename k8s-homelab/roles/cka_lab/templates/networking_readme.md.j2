@@ -562,7 +562,130 @@ curl -s -m 5 "http://{{ cka_lab_networking_gateway_domain | default('httpbin.exa
   --resolve "{{ cka_lab_networking_gateway_domain | default('httpbin.example.local') }}:{{ cka_lab_helm_ngf_http_port | default(30080) }}:${NODE_IP}"
 ```
 
-#### Step 4: Troubleshoot with Hubble CLI
+#### Step 4: Cross-Namespace Policy Declarations Under Default-Deny
+
+When strict `default-deny-all` (`policyTypes: [Ingress, Egress]`) isolates a namespace, cross-namespace communication
+requires explicit rules on **both sides** of the network path if both namespaces enforce isolation:
+
+1. **Ingress Rule (Destination Pod)**: Must explicitly allow inbound traffic from the source namespace via
+   `spec.ingress[].from[].namespaceSelector`.
+2. **Egress Rule (Source Pod)**: Must explicitly allow outbound traffic to the destination namespace via
+   `spec.egress[].to[].namespaceSelector`.
+
+##### Pattern 1: Infrastructure to Tenant Ingress & Egress (`05-allow-gateway-httpbin.yaml`)
+
+In our Gateway API drill, the proxy runs in `{{ cka_lab_helm_ngf_namespace | default('nginx-gateway') }}` while
+workloads reside in `{{ cka_lab_networking_namespace | default('default') }}`. The two policies below restore access
+selectively through the proxy without exposing backend pods directly:
+
+```yaml
+# 1. Allow Ingress on backend 'httpbingo' only from the gateway proxy namespace on port 8080:
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-gateway-to-httpbingo
+  namespace: {{ cka_lab_networking_namespace | default('default') }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: httpbingo
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ cka_lab_helm_ngf_namespace | default('nginx-gateway') }}
+      ports:
+        - protocol: TCP
+          port: 8080
+---
+# 2. Allow Egress on client 'netpol-test-client' only to the gateway proxy namespace on port 80:
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-client-to-gateway
+  namespace: {{ cka_lab_networking_namespace | default('default') }}
+spec:
+  podSelector:
+    matchLabels:
+      app: netpol-client
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ cka_lab_helm_ngf_namespace | default('nginx-gateway') }}
+      ports:
+        - protocol: TCP
+          port: 80
+```
+
+##### Pattern 2: Multi-Tenant Pod-to-Pod Isolation (Logical AND with `podSelector`)
+
+To restrict traffic to a specific pod inside another namespace (e.g., only `frontend` pods in `tenant-a` connecting to
+`database` pods in `tenant-b` on PostgreSQL port `5432`):
+
+```yaml
+# Destination namespace (tenant-b): Ingress rule
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-frontend-to-db
+  namespace: tenant-b
+spec:
+  podSelector:
+    matchLabels:
+      role: database
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: tenant-a
+          podSelector:
+            matchLabels:
+              role: frontend
+      ports:
+        - protocol: TCP
+          port: 5432
+---
+# Source namespace (tenant-a): Egress rule (required if default-deny egress is active)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-db-egress
+  namespace: tenant-a
+spec:
+  podSelector:
+    matchLabels:
+      role: frontend
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: tenant-b
+          podSelector:
+            matchLabels:
+              role: database
+      ports:
+        - protocol: TCP
+          port: 5432
+```
+
+> [!IMPORTANT]
+> **CKA Exam Pitfall: Logical AND vs. Logical OR**:
+>
+> - **Logical AND**: Placing `namespaceSelector` and `podSelector` in the **same list item** (as shown above) means:
+>   *traffic must come from pods matching the label INSIDE the selected namespace*.
+> - **Logical OR**: Placing them as **separate list items** (with separate leading dashes `-`) creates an OR
+>   condition: *traffic from ANY pod in the namespace OR from matching pods in the SAME local namespace*.
+
+#### Step 5: Troubleshoot with Hubble CLI
 
 ```bash
 # Port-forward Hubble relay if not active
@@ -574,7 +697,7 @@ hubble observe --namespace {{ cka_lab_networking_namespace | default('default') 
 
 Consult [hubble-troubleshooting.md](file://hubble-troubleshooting.md) for advanced filtering examples.
 
-#### Step 5: Run Automated Matrix Testing for Module 5
+#### Step 6: Run Automated Matrix Testing for Module 5
 
 ```bash
 ./test-advanced-netpol.sh
