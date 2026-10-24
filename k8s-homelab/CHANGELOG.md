@@ -8,6 +8,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **CKA Shell Shortcuts & etcdctl TLS Alias (`roles/control_plane`, `roles/cka_lab`)**:
+  Added standard CKA productivity shortcuts and aliases across control plane shell profiles (`/etc/profile.d/k8s-completion.sh`,
+  `~/.bashrc`) and the initial steps reminder MOTD (`~/cka` / `~/.motd`). Includes dry-run manifest generator (`export
+  kdo="--dry-run=client -o yaml"`), fast deletion (`export know="--force --grace-period=0"`), and pre-configured static pod
+  TLS alias for `etcdctl`.
+- **Cilium Hubble CLI Installation & Vagrant Provisioning (`scripts/cni-install-hubble.sh`, `Vagrantfile`, `roles/cilium`)**:
+  Added automated Hubble CLI installation script (`cni-install-hubble.sh`) with official upstream release checksum
+  verification and optional cluster enablement. Co-located with `cni-install-cilium.sh` in repository `scripts/`,
+  Vagrant VM provisioning (`/home/vagrant/cni-install-hubble.sh`), and the Ansible `cilium` role.
+- **Progressive NetworkPolicies & Hubble Troubleshooting Drill (`roles/cka_lab`, `~/cka/11-networking/05-advanced-network-policies/`)**:
+  Modernized Module 5 into a progressive namespace microsegmentation drill: strict `default-deny-all` isolation on the
+  `default` namespace, staged whitelisting for CoreDNS (`kube-system` port 53), external DNS (`ipBlock`), and L7 HTTP
+  traffic routed through NGINX Gateway Fabric and backend `httpbingo`. Added dedicated Hubble CLI troubleshooting guide
+  (`hubble-troubleshooting.md`) and a 6-phase automated test runner (`test-advanced-netpol.sh`).
+
+### Changed
+
+- **Cross-Namespace Gateway Architecture & Simplified Network Policies (`roles/cka_lab`, `~/cka/11-networking`)**:
+  Moved the Gateway resource to the dedicated infrastructure namespace (`nginx-gateway`) with cross-namespace routing
+  allowed. Eliminated internal proxy lockdown boilerplate in tenant namespace `default`, reducing tenant policies to
+  two clean cross-namespace rules: ingress to `httpbingo:8080` from `nginx-gateway` and egress to `nginx-gateway:80`
+  from client pods. Updated `test-gateway.sh` and `test-advanced-netpol.sh` test suites, and documented in-cluster and
+  external verification procedures in `README.md`.
+
+### Fixed
+
+- **Headless Service & Advanced Netpol Test Harnesses (`roles/cka_lab`, `~/cka/11-networking`)**:
+  Corrected the headless service manifest path in `test-headless.sh` to match `cka-lab-headless-service.yaml`, and
+  added pre-test cleanup to `test-advanced-netpol.sh` to prevent stale policies from invalidating baseline checks.
+
 ## [1.5.2] - 2026-10-20
 
 ### Changed

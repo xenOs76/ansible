@@ -1,6 +1,7 @@
-# Advanced Multi-Namespace NetworkPolicies
+# Advanced Progressive NetworkPolicies & Namespace Microsegmentation
 
-Master complex pod-to-pod microsegmentation combining `namespaceSelector`, `podSelector`, and egress port restrictions.
+Master advanced Kubernetes NetworkPolicy patterns by enforcing strict namespace isolation and progressively whitelisting
+traffic: in-cluster CoreDNS, external DNS resolvers, and L7 HTTP traffic routed through NGINX Gateway Fabric.
 
 ## Official Exam References & Quick Lookups
 
@@ -13,32 +14,151 @@ Master complex pod-to-pod microsegmentation combining `namespaceSelector`, `podS
 
 - `"network policies"`
 - `"declare network policy"`
+- `"ipblock cidr"`
 - `"namespaceselector podselector"`
 
 ### Terminal Fast Lookups (`kubectl explain`)
 
 ```bash
+kubectl explain networkpolicy.spec.podSelector
 kubectl explain networkpolicy.spec.ingress.from.namespaceSelector
 kubectl explain networkpolicy.spec.ingress.from.podSelector
+kubectl explain networkpolicy.spec.egress.to.ipBlock
 kubectl explain networkpolicy.spec.egress.ports
 ```
 
 ---
 
-## Exam Rules & Principles
+## Architectural Principles & Progressive Sequence
 
-- **Default Deny vs Allow Rules**: As soon as a NetworkPolicy selects a pod (`spec.podSelector`), that pod enters an **isolated** state for the defined policyTypes (Ingress, Egress). Any traffic not explicitly allowed is dropped.
-- **Namespace Matching**: To allow traffic from another namespace, the target namespace **must** have a matching label (e.g., `kubernetes.io/metadata.name: portal` or custom label `project: portal`).
-- **Combining namespaceSelector and podSelector**:
-  - Placed in the **same list item** (`- namespaceSelector: ... \n podSelector: ...`): Logical **AND** (must be from selected namespace AND matching pod label).
-  - Placed in **separate list items**: Logical **OR** (all pods in selected namespace OR matching pods anywhere).
-- **DNS Egress Requirement**: When implementing default-deny Egress, you **must** allow UDP and TCP egress to port 53 (CoreDNS), otherwise DNS resolution fails completely.
+When designing secure container networking for CKA and production clusters:
+
+1. **Default-Deny Isolation**: As soon as a NetworkPolicy selects a pod or entire namespace
+   (`spec.podSelector: {}`), all unmatched inbound and outbound packets are dropped by the eBPF/iptables datapath.
+2. **CoreDNS Whitelisting**: Pods requiring cluster domain resolution need explicit egress to `kube-system` on port 53.
+3. **External DNS Whitelisting**: Public resolution (e.g. `1.1.1.1`, `8.8.8.8`) requires `ipBlock` egress on port 53.
+4. **Gateway Ingress & Egress**: L7 ingress controllers (like NGINX Gateway Fabric) forward proxied traffic into backend
+   pods. Backend pods must allow ingress from the gateway namespace, and client pods must allow egress to the gateway.
 
 ---
 
-## Practice Scripts
+## Step-by-Step Progressive Walkthrough
 
-- `01-namespaces.yaml`: Provisions namespaces `cka-portal` and `cka-secure-db`.
-- `02-workloads.yaml`: Deploys frontend, unauthorized client, and database pods.
-- `03-cross-namespace-policy.yaml`: Applies cross-namespace ingress and egress rules.
-- `test-advanced-netpol.sh`: Automated matrix testing verifying authorized connections pass and unauthorized connections drop.
+### Step 0: Deploy Workloads & Baseline Reachability
+
+```bash
+cd {{ cka_lab_networking_dir }}/05-advanced-network-policies
+
+# Deploy test client in default namespace
+kubectl apply -f 01-workloads.yaml
+kubectl rollout status deployment/netpol-test-client -n {{ cka_lab_networking_namespace | default('default') }} --timeout=60s
+
+# Verify initial open connectivity before applying policies
+kubectl exec -it deploy/netpol-test-client -n {{ cka_lab_networking_namespace | default('default') }} -- curl -s http://httpbingo/get
+```
+
+External baseline verification from host or VM shell:
+
+```bash
+NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
+curl -s "http://{{ cka_lab_networking_gateway_domain | default('httpbin.example.local') }}:{{ cka_lab_helm_ngf_http_port | default(30080) }}/headers" \
+  --resolve "{{ cka_lab_networking_gateway_domain | default('httpbin.example.local') }}:{{ cka_lab_helm_ngf_http_port | default(30080) }}:${NODE_IP}"
+```
+
+---
+
+### Step 1: Enforce Strict Default-Deny on Default Namespace
+
+Apply strict ingress and egress isolation:
+
+```bash
+kubectl apply -f 02-default-deny-all.yaml
+```
+
+**Observed Result**:
+
+- Internal client curl times out.
+- External curl via NodePort `30080` drops or returns `504 Gateway Timeout`.
+- Hubble captures packet drops via:
+  `hubble observe --namespace {{ cka_lab_networking_namespace | default('default') }} --verdict DROPPED -f`.
+
+---
+
+### Step 2: Whitelist In-Cluster CoreDNS Egress
+
+Allow egress to `kube-system` on UDP/TCP port 53:
+
+```bash
+kubectl apply -f 03-allow-kube-dns.yaml
+```
+
+**Observed Result**:
+
+- In-cluster name resolution (`nslookup kubernetes.default.svc.cluster.local`) succeeds.
+- General HTTP and external traffic remains blocked.
+
+---
+
+### Step 3: Whitelist External Public DNS via ipBlock
+
+Allow client pods to query public DNS resolvers (`1.1.1.1`, `8.8.8.8`):
+
+```bash
+kubectl apply -f 04-allow-external-dns.yaml
+```
+
+**Observed Result**:
+
+- External DNS lookups succeed (`nslookup google.com 1.1.1.1`).
+
+---
+
+### Step 4: Allow Gateway API & httpbingo Traffic
+
+Following Gateway API best practices, the `Gateway` resource lives in the infrastructure namespace
+(`{{ cka_lab_helm_ngf_namespace | default('nginx-gateway') }}`), while workloads and `HTTPRoute` reside in `default`.
+Because the Gateway proxy runs in `nginx-gateway` outside tenant lockdown, only two clean policies are needed:
+
+1. **Backend Ingress (`allow-gateway-to-httpbingo`)**: Ingress to `httpbingo` from `nginx-gateway` on port 8080.
+2. **Client Egress (`allow-client-to-gateway`)**: Egress from `netpol-client` to `nginx-gateway` on port 80.
+
+Apply the gateway policies:
+
+```bash
+kubectl apply -f 05-allow-gateway-httpbin.yaml
+```
+
+**Observed Result**:
+
+- Direct client-to-backend access remains blocked, proving microsegmentation enforcement:
+
+```bash
+kubectl exec deploy/netpol-test-client -n {{ cka_lab_networking_namespace | default('default') }} -- curl -s -m 3 http://httpbingo/get
+# Times out / dropped by policy (EGRESS DENIED)
+```
+
+- In-cluster client access routed through the Gateway in `nginx-gateway` succeeds:
+
+```bash
+kubectl exec deploy/netpol-test-client -n {{ cka_lab_networking_namespace | default('default') }} -- \
+  curl -s -m 5 -H "Host: {{ cka_lab_networking_gateway_domain | default('httpbin.example.local') }}" \
+  "http://cka-lab-gateway-nginx.{{ cka_lab_helm_ngf_namespace | default('nginx-gateway') }}/get"
+```
+
+- External host curl to NodePort `30080` succeeds:
+
+```bash
+curl -s "http://{{ cka_lab_networking_gateway_domain | default('httpbin.example.local') }}:{{ cka_lab_helm_ngf_http_port | default(30080) }}/headers" \
+  --resolve "{{ cka_lab_networking_gateway_domain | default('httpbin.example.local') }}:{{ cka_lab_helm_ngf_http_port | default(30080) }}:${NODE_IP}"
+```
+
+---
+
+## Observability & Automated Testing
+
+- Inspect live flows: Consult [hubble-troubleshooting.md](file://hubble-troubleshooting.md) for Hubble CLI commands.
+- Run complete automated validation suite:
+
+```bash
+./test-advanced-netpol.sh
+```

@@ -239,7 +239,14 @@
         alias k=kubectl
         complete -o default -F __start_kubectl k
       fi
+      export kdo="--dry-run=client -o yaml"
       export koyaml="--dry-run=client -o yaml"
+      export know="--force --grace-period=0"
+      alias etcdctl="ETCDCTL_API=3 sudo etcdctl \
+      --endpoints 127.0.0.1:2379 \
+      --cert=/etc/kubernetes/pki/etcd/server.crt \
+      --key=/etc/kubernetes/pki/etcd/server.key \
+      --cacert=/etc/kubernetes/pki/etcd/ca.crt"
       export EDITOR={{ default_editor | default('vim') }}
       export VISUAL={{ default_editor | default('vim') }}
     owner: root

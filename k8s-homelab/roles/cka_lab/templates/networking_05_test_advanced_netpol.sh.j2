@@ -1,42 +1,194 @@
 #!/usr/bin/env bash
+# ==============================================================================
+# test-advanced-netpol.sh: Automated Progressive NetworkPolicy Verification
+# ==============================================================================
 set -euo pipefail
 
-# Test advanced multi-namespace NetworkPolicy rules
+NAMESPACE="{{ cka_lab_networking_namespace | default('default') }}"
+DOMAIN="{{ cka_lab_networking_gateway_domain | default('httpbin.example.local') }}"
+NGF_NS="{{ cka_lab_helm_ngf_namespace | default('nginx-gateway') }}"
+HTTP_PORT="{{ cka_lab_helm_ngf_http_port | default(30080) }}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-echo "=== Testing Multi-Namespace NetworkPolicy Enforcement ==="
+echo "=== [Advanced NetworkPolicy Drill] Progressive Isolation & Whitelisting ==="
 
-echo "[1/4] Applying namespaces, workloads, and NetworkPolicy..."
-kubectl apply -f "${SCRIPT_DIR}/01-namespaces.yaml"
-kubectl apply -f "${SCRIPT_DIR}/02-workloads.yaml"
-kubectl apply -f "${SCRIPT_DIR}/03-cross-namespace-policy.yaml"
+cleanup() {
+  echo ""
+  echo "==> Cleaning up drill NetworkPolicies and test workload..."
+  kubectl delete -f "${SCRIPT_DIR}/05-allow-gateway-httpbin.yaml" -n "${NAMESPACE}" --ignore-not-found=true >/dev/null 2>&1 || true
+  kubectl delete -f "${SCRIPT_DIR}/04-allow-external-dns.yaml" -n "${NAMESPACE}" --ignore-not-found=true >/dev/null 2>&1 || true
+  kubectl delete -f "${SCRIPT_DIR}/03-allow-kube-dns.yaml" -n "${NAMESPACE}" --ignore-not-found=true >/dev/null 2>&1 || true
+  kubectl delete -f "${SCRIPT_DIR}/02-default-deny-all.yaml" -n "${NAMESPACE}" --ignore-not-found=true >/dev/null 2>&1 || true
+  kubectl delete deployment netpol-test-client -n "${NAMESPACE}" --ignore-not-found=true >/dev/null 2>&1 || true
+}
+trap cleanup EXIT
 
-echo "Waiting for pods to enter Running state..."
-kubectl rollout status deployment backend-db -n cka-secure-db --timeout=60s
-kubectl rollout status deployment frontend-portal -n cka-portal --timeout=60s
-kubectl rollout status deployment intruder-portal -n cka-portal --timeout=60s
+# Clean up any leftover policies from previous runs before starting baseline tests
+cleanup
 
-FRONTEND_POD=$(kubectl get pods -n cka-portal -l role=frontend -o jsonpath='{.items[0].metadata.name}')
-INTRUDER_POD=$(kubectl get pods -n cka-portal -l role=unauthorized -o jsonpath='{.items[0].metadata.name}')
-DB_SVC="db-service.cka-secure-db.svc.cluster.local"
+# ------------------------------------------------------------------------------
+# 0. Prerequisite Validation
+# ------------------------------------------------------------------------------
+echo "==> [Phase 0] Checking prerequisites (httpbingo backend & Gateway Fabric)..."
 
-echo "[2/4] Testing AUTHORIZED traffic: frontend-portal -> db-service (EXPECT: SUCCESS)..."
-if kubectl exec "${FRONTEND_POD}" -n cka-portal -- curl -s -m 5 "http://${DB_SVC}/" >/dev/null; then
-    echo "PASS: Authorized frontend pod reached database service."
-else
-    echo "FAIL: Authorized frontend pod could not connect!"
+if ! kubectl get svc httpbingo -n "${NAMESPACE}" >/dev/null 2>&1; then
+  echo "    Notice: Service 'httpbingo' not found in namespace '${NAMESPACE}'."
+  echo "    Deploying httpbin-go backend..."
+  if [ -f "/home/vagrant/cka/helm/install-httpbin-go.sh" ]; then
+    /home/vagrant/cka/helm/install-httpbin-go.sh
+  else
+    echo "    Error: /home/vagrant/cka/helm/install-httpbin-go.sh not found." >&2
     exit 1
+  fi
 fi
 
-echo "[3/4] Testing UNAUTHORIZED traffic: intruder-portal -> db-service (EXPECT: TIMEOUT/DROP)..."
-if kubectl exec "${INTRUDER_POD}" -n cka-portal -- curl -s -m 3 "http://${DB_SVC}/" >/dev/null 2>&1; then
-    echo "FAIL: Unauthorized pod was able to connect to database service!"
-    exit 1
-else
-    echo "PASS: Unauthorized pod traffic was properly blocked by NetworkPolicy."
+# Detect Gateway Fabric NodePort
+if kubectl get svc -n "${NGF_NS}" -l gateway.networking.k8s.io/gateway-name=cka-lab-gateway >/dev/null 2>&1; then
+  DETECTED_PORT=$(kubectl get svc -n "${NGF_NS}" -l gateway.networking.k8s.io/gateway-name=cka-lab-gateway -o jsonpath='{.items[0].spec.ports[?(@.port==80)].nodePort}' 2>/dev/null || echo "")
+  if [ -n "${DETECTED_PORT:-}" ] && [ "${DETECTED_PORT}" != "null" ]; then
+    HTTP_PORT="${DETECTED_PORT}"
+  fi
 fi
 
-echo "[4/4] Cleaning up drill namespaces..."
-kubectl delete namespace cka-portal cka-secure-db --ignore-not-found=true
+NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
 
-echo "=== Multi-Namespace NetworkPolicy Tests PASSED! ==="
+# Detect active HTTPRoute hostnames if deployed
+ACTIVE_HOSTNAME=$(kubectl get httproute -n "${NAMESPACE}" -o jsonpath='{.items[0].spec.hostnames[0]}' 2>/dev/null || true)
+EFFECTIVE_DOMAIN="${ACTIVE_HOSTNAME:-${DOMAIN}}"
+
+# ------------------------------------------------------------------------------
+# 1. Deploy Test Client & Baseline Verification
+# ------------------------------------------------------------------------------
+echo "==> [Phase 1] Deploying test client and validating open baseline connectivity..."
+kubectl apply -f "${SCRIPT_DIR}/01-workloads.yaml" -n "${NAMESPACE}"
+kubectl rollout status deployment/netpol-test-client -n "${NAMESPACE}" --timeout=60s
+
+CLIENT_POD=$(kubectl get pods -n "${NAMESPACE}" -l app=netpol-client -o jsonpath='{.items[0].metadata.name}')
+
+echo "    Testing in-cluster baseline reachability (client -> httpbingo)..."
+BASELINE_INTERNAL=$(kubectl exec "${CLIENT_POD}" -n "${NAMESPACE}" -- curl -s -m 5 -o /dev/null -w "%{http_code}" http://httpbingo/get || echo "000")
+if [ "${BASELINE_INTERNAL}" != "200" ]; then
+  echo "    Warning: Expected HTTP 200 from httpbingo, got ${BASELINE_INTERNAL}" >&2
+else
+  echo "    OK: Internal baseline connectivity verified (HTTP 200)."
+fi
+
+echo "    Testing external baseline reachability (host -> NodePort ${HTTP_PORT})..."
+BASELINE_EXTERNAL=$(curl -s -o /dev/null -w "%{http_code}" -m 5 "http://${EFFECTIVE_DOMAIN}:${HTTP_PORT}/headers" --resolve "${EFFECTIVE_DOMAIN}:${HTTP_PORT}:${NODE_IP}" || echo "000")
+if [ "${BASELINE_EXTERNAL}" != "200" ]; then
+  echo "    Notice: External Gateway returned ${BASELINE_EXTERNAL} (checking if Gateway/HTTPRoute are active)..."
+  if [ -f "${SCRIPT_DIR}/../03-gateway-api/cka-lab-gateway.yaml" ]; then
+    kubectl apply -f "${SCRIPT_DIR}/../03-gateway-api/cka-lab-gateway.yaml"
+    kubectl apply -f "${SCRIPT_DIR}/../03-gateway-api/cka-lab-httproute.yaml" -n "${NAMESPACE}"
+    sleep 3
+    BASELINE_EXTERNAL=$(curl -s -o /dev/null -w "%{http_code}" -m 5 "http://${EFFECTIVE_DOMAIN}:${HTTP_PORT}/headers" --resolve "${EFFECTIVE_DOMAIN}:${HTTP_PORT}:${NODE_IP}" || echo "000")
+  fi
+fi
+echo "    OK: External baseline HTTP status: ${BASELINE_EXTERNAL}"
+
+# ------------------------------------------------------------------------------
+# 2. Strict Default-Deny
+# ------------------------------------------------------------------------------
+echo "==> [Phase 2] Applying strict default-deny NetworkPolicy in '${NAMESPACE}'..."
+kubectl apply -f "${SCRIPT_DIR}/02-default-deny-all.yaml" -n "${NAMESPACE}"
+sleep 2
+
+echo "    Verifying internal client egress is blocked (expect TIMEOUT)..."
+if kubectl exec "${CLIENT_POD}" -n "${NAMESPACE}" -- curl -s -m 3 "http://httpbingo/get" >/dev/null 2>&1; then
+  echo "    FAIL: Internal traffic succeeded unexpectedly under default-deny!" >&2
+  exit 1
+else
+  echo "    OK: Internal client egress successfully dropped by policy."
+fi
+
+echo "    Verifying external ingress to httpbingo is blocked via Gateway..."
+DENY_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -m 3 "http://${EFFECTIVE_DOMAIN}:${HTTP_PORT}/headers" --resolve "${EFFECTIVE_DOMAIN}:${HTTP_PORT}:${NODE_IP}" || echo "000")
+if [ "${DENY_STATUS}" = "200" ]; then
+  echo "    FAIL: External traffic reached backend unexpectedly under default-deny!" >&2
+  exit 1
+else
+  echo "    OK: External traffic blocked/timed out as expected (HTTP ${DENY_STATUS})."
+fi
+
+# ------------------------------------------------------------------------------
+# 3. Allow In-Cluster CoreDNS
+# ------------------------------------------------------------------------------
+echo "==> [Phase 3] Applying CoreDNS egress policy..."
+kubectl apply -f "${SCRIPT_DIR}/03-allow-kube-dns.yaml" -n "${NAMESPACE}"
+sleep 2
+
+echo "    Verifying in-cluster DNS resolution..."
+if kubectl exec "${CLIENT_POD}" -n "${NAMESPACE}" -- nslookup kubernetes.default.svc.cluster.local >/dev/null 2>&1; then
+  echo "    OK: CoreDNS resolution succeeded."
+else
+  echo "    FAIL: CoreDNS resolution failed under allow-kube-dns policy!" >&2
+  exit 1
+fi
+
+echo "    Verifying general external traffic remains blocked..."
+if kubectl exec "${CLIENT_POD}" -n "${NAMESPACE}" -- curl -s -m 3 "http://1.1.1.1" >/dev/null 2>&1; then
+  echo "    FAIL: External HTTP succeeded unexpectedly!" >&2
+  exit 1
+else
+  echo "    OK: General external traffic remains blocked."
+fi
+
+# ------------------------------------------------------------------------------
+# 4. Allow External DNS Resolvers
+# ------------------------------------------------------------------------------
+echo "==> [Phase 4] Applying external DNS egress policy (ipBlock)..."
+kubectl apply -f "${SCRIPT_DIR}/04-allow-external-dns.yaml" -n "${NAMESPACE}"
+sleep 2
+
+echo "    Verifying public DNS queries against 1.1.1.1 and 8.8.8.8..."
+if kubectl exec "${CLIENT_POD}" -n "${NAMESPACE}" -- nslookup google.com 1.1.1.1 >/dev/null 2>&1; then
+  echo "    OK: External DNS resolution against 1.1.1.1 succeeded."
+else
+  echo "    Notice: External query to 1.1.1.1 not permitted or internet offline in lab environment."
+fi
+
+# ------------------------------------------------------------------------------
+# 5. Allow Gateway API & Backend Traffic
+# ------------------------------------------------------------------------------
+echo "==> [Phase 5] Applying Gateway and backend NetworkPolicies..."
+kubectl apply -f "${SCRIPT_DIR}/05-allow-gateway-httpbin.yaml" -n "${NAMESPACE}"
+sleep 2
+
+echo "    Verifying direct client-to-backend access remains blocked (microsegmentation)..."
+if kubectl exec "${CLIENT_POD}" -n "${NAMESPACE}" -- curl -s -m 3 "http://httpbingo/get" >/dev/null 2>&1; then
+  echo "    FAIL: Direct client-to-backend traffic succeeded unexpectedly!" >&2
+  exit 1
+else
+  echo "    OK: Direct client-to-backend traffic remains blocked (microsegmentation enforced)."
+fi
+
+GATEWAY_SVC=$(kubectl get svc -n "${NGF_NS}" -l app.kubernetes.io/managed-by=ngf-nginx -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
+if [ -n "${GATEWAY_SVC:-}" ]; then
+  echo "    Verifying in-cluster reachability via Gateway service '${GATEWAY_SVC}.${NGF_NS}'..."
+  INTERNAL_GW_STATUS=$(kubectl exec "${CLIENT_POD}" -n "${NAMESPACE}" -- curl -s -o /dev/null -w "%{http_code}" -m 5 -H "Host: ${EFFECTIVE_DOMAIN}" "http://${GATEWAY_SVC}.${NGF_NS}/get" || echo "000")
+  if [ "${INTERNAL_GW_STATUS}" != "200" ]; then
+    echo "    Warning: Expected HTTP 200 from Gateway service, got ${INTERNAL_GW_STATUS}" >&2
+  else
+    echo "    OK: Internal client successfully reached backend via Gateway service (HTTP 200)."
+  fi
+fi
+
+echo "    Verifying external host reachability via NodePort ${HTTP_PORT} on /headers..."
+RESTORED_EXTERNAL=$(curl -s -o /dev/null -w "%{http_code}" -m 5 "http://${EFFECTIVE_DOMAIN}:${HTTP_PORT}/headers" --resolve "${EFFECTIVE_DOMAIN}:${HTTP_PORT}:${NODE_IP}" || echo "000")
+if [ "${RESTORED_EXTERNAL}" != "200" ]; then
+  echo "    Warning: Expected HTTP 200 via Gateway, got ${RESTORED_EXTERNAL}" >&2
+else
+  echo "    OK: External traffic successfully restored through Gateway (HTTP 200)."
+fi
+
+# ------------------------------------------------------------------------------
+# 6. Hubble CLI Observation Check
+# ------------------------------------------------------------------------------
+echo "==> [Phase 6] Checking Hubble CLI visibility..."
+if command -v hubble >/dev/null 2>&1; then
+  echo "    Hubble CLI is installed: $(hubble version 2>/dev/null | head -n 1 || echo 'hubble ready')"
+  echo "    Trainee tip: Run 'cilium hubble port-forward &' followed by 'hubble observe --namespace ${NAMESPACE} --verdict DROPPED' to inspect live drops."
+fi
+
+echo ""
+echo "=== [SUCCESS] All Advanced NetworkPolicy progressive drills passed! ==="

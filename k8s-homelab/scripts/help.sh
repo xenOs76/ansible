@@ -70,6 +70,8 @@ ${BOLD}${YELLOW}[5] Kubernetes Setup Steps (Inside VMs)${RESET}
        ${GREEN}sudo /vagrant/scripts/control-plane.sh 172.18.0.0/16 192.168.56.10${RESET}
      Install Cilium CNI (Option A):
        ${GREEN}./cni-install-cilium.sh${RESET}
+     Install Cilium Hubble CLI (Observability):
+       ${GREEN}./cni-install-hubble.sh${RESET}
      Install Calico CNI (Option B):
        ${GREEN}./cni-install-calico.sh${RESET}
      Install Metrics Server (via Helm):

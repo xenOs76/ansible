@@ -2,7 +2,7 @@ apiVersion: gateway.networking.k8s.io/v1
 kind: Gateway
 metadata:
   name: cka-lab-gateway
-  namespace: {{ cka_lab_networking_namespace | default('default') }}
+  namespace: {{ cka_lab_helm_ngf_namespace | default('nginx-gateway') }}
   labels:
     app.kubernetes.io/name: cka-lab-gateway
     app.kubernetes.io/part-of: cka-lab

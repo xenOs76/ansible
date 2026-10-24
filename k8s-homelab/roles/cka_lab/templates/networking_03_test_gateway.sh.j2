@@ -29,27 +29,30 @@ if ! kubectl get svc httpbingo -n "${NAMESPACE}" >/dev/null 2>&1; then
   echo "      /home/vagrant/cka/helm/install-httpbin-go.sh"
 fi
 
+GW_NAMESPACE="{{ cka_lab_helm_ngf_namespace | default('nginx-gateway') }}"
+
 echo "==> Applying Gateway and HTTPRoute manifests..."
-kubectl apply -f "${SCRIPT_DIR}/cka-lab-gateway.yaml" -n "${NAMESPACE}"
+kubectl apply -f "${SCRIPT_DIR}/cka-lab-gateway.yaml"
 kubectl apply -f "${SCRIPT_DIR}/cka-lab-httproute.yaml" -n "${NAMESPACE}"
 
 echo "Waiting up to 30s for Gateway to be accepted..."
 for _ in {1..30}; do
-  if kubectl get gateway cka-lab-gateway -n "${NAMESPACE}" >/dev/null 2>&1; then
-    echo "Gateway cka-lab-gateway exists."
+  if kubectl get gateway cka-lab-gateway -n "${GW_NAMESPACE}" >/dev/null 2>&1; then
+    echo "Gateway cka-lab-gateway exists in ${GW_NAMESPACE}."
     break
   fi
   sleep 1
 done
 
 echo "==> Gateway and HTTPRoute resources:"
-kubectl get gateways,httproutes -n "${NAMESPACE}"
+kubectl get gateway -n "${GW_NAMESPACE}"
+kubectl get httproute -n "${NAMESPACE}"
 
 NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
 
 # Detect dynamically allocated NodePort if service was patched or overridden
-if kubectl get svc -n "{{ cka_lab_helm_ngf_namespace | default('nginx-gateway') }}" -l app.kubernetes.io/name=nginx-gateway-fabric >/dev/null 2>&1; then
-  DETECTED_PORT=$(kubectl get svc -n "{{ cka_lab_helm_ngf_namespace | default('nginx-gateway') }}" -l app.kubernetes.io/name=nginx-gateway-fabric -o jsonpath='{.items[0].spec.ports[?(@.port==80)].nodePort}')
+if kubectl get svc -n "${GW_NAMESPACE}" -l gateway.networking.k8s.io/gateway-name=cka-lab-gateway >/dev/null 2>&1; then
+  DETECTED_PORT=$(kubectl get svc -n "${GW_NAMESPACE}" -l gateway.networking.k8s.io/gateway-name=cka-lab-gateway -o jsonpath='{.items[0].spec.ports[?(@.port==80)].nodePort}' 2>/dev/null || echo "")
   if [ -n "${DETECTED_PORT:-}" ] && [ "${DETECTED_PORT}" != "null" ]; then
     HTTP_PORT="${DETECTED_PORT}"
   fi

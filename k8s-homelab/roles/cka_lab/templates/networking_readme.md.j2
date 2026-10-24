@@ -52,12 +52,15 @@ primitives and modern architectural patterns:
 │   ├── cka-lab-allow-client-to-backend.yaml   # Selective ingress policy from authorized clients
 │   ├── cka-lab-egress-dns-policy.yaml         # Egress policy allowing CoreDNS & backend calls
 │   └── test-network-policies.sh               # Non-interactive policy enforcement test
-└── 05-advanced-network-policies/              # Module 5: Cross-Namespace Microsegmentation
-    ├── 01-namespaces.yaml                     # Dedicated portal & secure-db namespaces
-    ├── 02-workloads.yaml                      # Frontend, intruder, and database pods
-    ├── 03-cross-namespace-policy.yaml         # namespaceSelector + podSelector rules
-    ├── test-advanced-netpol.sh                # Non-interactive matrix testing script
-    └── README.md                              # Advanced NetworkPolicy guide
+└── 05-advanced-network-policies/              # Module 5: Progressive Microsegmentation & Hubble
+    ├── README.md                              # Advanced NetworkPolicy progressive guide
+    ├── hubble-troubleshooting.md              # Live Hubble CLI flow & drop inspection
+    ├── 01-workloads.yaml                      # Test client workload in default namespace
+    ├── 02-default-deny-all.yaml               # Strict namespace isolation policy
+    ├── 03-allow-kube-dns.yaml                 # CoreDNS in-cluster whitelisting
+    ├── 04-allow-external-dns.yaml             # External DNS public resolver whitelisting
+    ├── 05-allow-gateway-httpbin.yaml          # Gateway API and httpbingo traffic rules
+    └── test-advanced-netpol.sh                # Non-interactive automated validation script
 ```
 
 ---
@@ -329,67 +332,40 @@ declaration (`Gateway`) from application routing (`HTTPRoute`).
 
 #### Prerequisite: Deploy NGINX Gateway Fabric & httpbin-go
 
-The Gateway API requires a Gateway Controller implementation (such as NGINX Gateway Fabric) and test target backends.
-
-Run the automated helper script:
+The Gateway API requires a Gateway Controller implementation (such as NGINX Gateway Fabric) and test target backends:
 
 ```bash
 cd /home/vagrant/cka/helm
 
-# 1. Deploy NGINX Gateway Fabric (handles CRD cleanup, forced SSA apply & chart install)
+# 1. Deploy NGINX Gateway Fabric (installs Gateway API CRDs & controller)
 ./install-nginx-gateway-fabric.sh
 
 # 2. Deploy lightweight httpbin-go backend (serves /httpbin and /get routes)
 ./install-httpbin-go.sh
 ```
 
-##### Manual / CKA Exam Step-by-Step Equivalent
-
-To perform the exact installation sequence manually:
-
-```bash
-# 1. Clean up any remaining or conflicting NGINX CRDs
-kubectl delete crd $(kubectl get crds | grep nginx | awk '{ print $1 }')
-
-# 2. Install standard Gateway API CRDs (GatewayClass, Gateway, HTTPRoute)
-kubectl kustomize "https://github.com/nginx/nginx-gateway-fabric/config/crd/gateway-api/standard?ref=v2.8.0" | kubectl apply -f -
-
-# 3. Apply NGINX Gateway Fabric CRDs with forced conflicts to establish clean ownership
-kubectl apply --server-side --force-conflicts -f https://raw.githubusercontent.com/nginx/nginx-gateway-fabric/v2.8.0/deploy/crds.yaml
-
-# 4. Install NGINX Gateway Fabric via Helm with --skip-crds and homelab NodePort bindings
-helm upgrade --install ngf oci://ghcr.io/nginx/charts/nginx-gateway-fabric \
-  --namespace nginx-gateway \
-  --create-namespace \
-  --skip-crds \
-  --set nginx.service.type=NodePort \
-  --set "nginx.service.nodePorts[0].port=30080" \
-  --set "nginx.service.nodePorts[0].listenerPort=80" \
-  --set "nginx.service.nodePorts[1].port=30443" \
-  --set "nginx.service.nodePorts[1].listenerPort=443" \
-  --set "nginx.container.hostPorts[0].port=30080" \
-  --set "nginx.container.hostPorts[0].containerPort=80" \
-  --set "nginx.container.hostPorts[1].port=30443" \
-  --set "nginx.container.hostPorts[1].containerPort=443"
-```
-
 > [!WARNING]
-> **NodePort Collision Notice**:
+> **NodePort & CRD Collision Notice**:
 >
 > - NGINX Gateway Fabric binds host/NodePort `30080` (HTTP) and `30443` (HTTPS). If Ingress-NGINX was previously
-> deployed for Drill 2, uninstall it first (`helm uninstall ingress-nginx -n ingress-nginx`) before starting NGINX
-> Gateway Fabric.
+>   deployed for Drill 2, uninstall it first (`helm uninstall ingress-nginx -n ingress-nginx`) before starting NGINX
+>   Gateway Fabric.
+> - If you previously encountered Server-Side Apply manager conflicts (`conflicts with "kubectl"`), delete the
+>   conflicting CRDs: `kubectl delete $(kubectl get crd -o name | grep 'gateway\.nginx\.org')`. This allows Helm to
+>   install and own its bundled CRDs cleanly.
 
 #### Step 1: Deploy and Inspect the Gateway Resource
 
 ```bash
 cd {{ cka_lab_networking_dir }}/03-gateway-api
 cat cka-lab-gateway.yaml
-kubectl apply -f cka-lab-gateway.yaml -n {{ cka_lab_networking_namespace | default('default') }}
-kubectl get gateway cka-lab-gateway -n {{ cka_lab_networking_namespace | default('default') }}
+kubectl apply -f cka-lab-gateway.yaml
+kubectl get gateway cka-lab-gateway -n {{ cka_lab_helm_ngf_namespace | default('nginx-gateway') }}
 ```
 
-Note that the `Gateway` references `gatewayClassName: nginx` and declares an HTTP listener on port `80`.
+Note that the `Gateway` is deployed in infrastructure namespace
+`{{ cka_lab_helm_ngf_namespace | default('nginx-gateway') }}`, references `gatewayClassName: nginx`, and declares an
+HTTP listener on port `80` with `allowedRoutes.namespaces.from: All`.
 
 #### Step 2: Configure HTTPRoute with URL Rewriting
 
@@ -401,7 +377,8 @@ kubectl get httproute cka-lab-httproute -n {{ cka_lab_networking_namespace | def
 
 Key route features demonstrated:
 
-- `spec.parentRefs`: Binds the route to `cka-lab-gateway`.
+- `spec.parentRefs`: Binds the route cross-namespace to `cka-lab-gateway` in namespace
+  `{{ cka_lab_helm_ngf_namespace | default('nginx-gateway') }}`.
 - `spec.rules[].matches`: Matches incoming paths like `/httpbin` or `/api`.
 - `spec.rules[].filters`: Performs URL path rewriting (`URLRewrite`) before proxying to the backend service.
 
@@ -521,42 +498,83 @@ kubectl exec -n {{ cka_lab_networking_client_namespace | default('cka-lab-net-cl
 
 ---
 
-### Drill 5: Advanced Cross-Namespace Microsegmentation (`05-advanced-network-policies/`)
+### Drill 5: Progressive Microsegmentation & Hubble Inspection (`05-advanced-network-policies/`)
 
-Master complex pod-to-pod microsegmentation combining `namespaceSelector`, `podSelector`, and strict port-level filters
-(e.g. PostgreSQL `TCP 5432`).
+Master complex pod-to-pod microsegmentation by isolating the `default` namespace with strict default-deny and
+progressively whitelisting CoreDNS, public DNS resolvers, and L7 HTTP traffic routed through NGINX Gateway Fabric.
+Troubleshoot live traffic and packet drops using the Cilium `hubble` CLI.
 
-#### Step 1: Provision Namespaces and Tiered Workloads
+#### Step 1: Deploy Workloads & Baseline Reachability
 
 ```bash
 cd {{ cka_lab_networking_dir }}/05-advanced-network-policies
-cat 01-namespaces.yaml
-kubectl apply -f 01-namespaces.yaml
+kubectl apply -f 01-workloads.yaml
+kubectl rollout status deployment/netpol-test-client -n {{ cka_lab_networking_namespace | default('default') }} --timeout=60s
 
-cat 02-workloads.yaml
-kubectl apply -f 02-workloads.yaml
-
-kubectl wait --for=condition=Ready pod/frontend-portal -n cka-portal --timeout=60s
-kubectl wait --for=condition=Ready pod/intruder-pod -n cka-portal --timeout=60s
-kubectl wait --for=condition=Ready pod/secure-database -n cka-secure-db --timeout=60s
+# Verify initial open connectivity before applying policies
+kubectl exec -it deploy/netpol-test-client -n {{ cka_lab_networking_namespace | default('default') }} -- curl -s http://httpbingo/get
 ```
 
-#### Step 2: Apply Cross-Namespace Policy
+#### Step 2: Progressive Policy Enforcement
 
 ```bash
-cat 03-cross-namespace-policy.yaml
-kubectl apply -f 03-cross-namespace-policy.yaml
-kubectl describe networkpolicy cross-namespace-db-allow -n cka-secure-db
+# 1. Enforce strict ingress & egress isolation (drops all traffic)
+kubectl apply -f 02-default-deny-all.yaml
+
+# 2. Whitelist cluster CoreDNS on port 53 (restores in-cluster resolution)
+kubectl apply -f 03-allow-kube-dns.yaml
+
+# 3. Whitelist external public DNS resolvers (1.1.1.1, 8.8.8.8) via ipBlock
+kubectl apply -f 04-allow-external-dns.yaml
+
+# 4. Whitelist Gateway API ingress to httpbingo and client egress to gateway proxy
+kubectl apply -f 05-allow-gateway-httpbin.yaml
 ```
 
-Key architectural concepts:
+> [!NOTE]
+> **Cross-Namespace Gateway Architecture**:
+> By deploying the `Gateway` in infrastructure namespace `{{ cka_lab_helm_ngf_namespace | default('nginx-gateway') }}`,
+> the data plane proxy operates outside the locked-down tenant namespace `default`. The policies in `default`
+> whitelist only ingress from `nginx-gateway` to backend `httpbingo:8080` and egress from client to `nginx-gateway:80`.
+> Direct client-to-backend traffic (`http://httpbingo/get`) remains blocked by `default-deny-all`, enforcing that all
+> consumer requests route through the Gateway proxy.
 
-- **Isolated Target**: Pods with `role: db` in `cka-secure-db`.
-- **Allowed Source**: Namespace `cka-portal` (`kubernetes.io/metadata.name: cka-portal`) **AND** pod label `tier:
-  frontend`.
-- **Port Filter**: Only `TCP 5432` is permitted.
+#### Step 3: Validate Enforcement In-Cluster & Externally
 
-#### Step 3: Run Automated Matrix Testing for Module 5
+**1. Validate from within the namespace (`netpol-test-client`):**
+
+```bash
+# A. Direct East-West access to backend is BLOCKED by microsegmentation (expect timeout):
+kubectl exec deploy/netpol-test-client -n {{ cka_lab_networking_namespace | default('default') }} -- \
+  curl -s -m 3 http://httpbingo/get || echo "Direct curl blocked by policy as expected!"
+
+# B. Egress through Gateway proxy in nginx-gateway SUCCEEDS:
+kubectl exec deploy/netpol-test-client -n {{ cka_lab_networking_namespace | default('default') }} -- \
+  curl -s -m 5 -H "Host: {{ cka_lab_networking_gateway_domain | default('httpbin.example.local') }}" \
+  "http://cka-lab-gateway-nginx.{{ cka_lab_helm_ngf_namespace | default('nginx-gateway') }}/get"
+```
+
+**2. Validate from outside Kubernetes (host edge probe via NodePort 30080):**
+
+```bash
+NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
+curl -s -m 5 "http://{{ cka_lab_networking_gateway_domain | default('httpbin.example.local') }}:{{ cka_lab_helm_ngf_http_port | default(30080) }}/headers" \
+  --resolve "{{ cka_lab_networking_gateway_domain | default('httpbin.example.local') }}:{{ cka_lab_helm_ngf_http_port | default(30080) }}:${NODE_IP}"
+```
+
+#### Step 4: Troubleshoot with Hubble CLI
+
+```bash
+# Port-forward Hubble relay if not active
+cilium hubble port-forward &
+
+# Watch dropped packets live in default namespace
+hubble observe --namespace {{ cka_lab_networking_namespace | default('default') }} --verdict DROPPED -f
+```
+
+Consult [hubble-troubleshooting.md](file://hubble-troubleshooting.md) for advanced filtering examples.
+
+#### Step 5: Run Automated Matrix Testing for Module 5
 
 ```bash
 ./test-advanced-netpol.sh

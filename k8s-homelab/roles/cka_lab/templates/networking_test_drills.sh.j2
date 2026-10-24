@@ -9,6 +9,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NAMESPACE="{{ cka_lab_networking_namespace | default('default') }}"
 CLIENT_NS="{{ cka_lab_networking_client_namespace | default('cka-lab-net-client') }}"
 BACKEND_NS="{{ cka_lab_networking_backend_namespace | default('cka-lab-net-backend') }}"
+GW_NAMESPACE="{{ cka_lab_helm_ngf_namespace | default('nginx-gateway') }}"
 
 echo "===================================================================="
 echo "  [CKA LAB] Running End-to-End Networking Verification              "
@@ -25,7 +26,7 @@ cleanup() {
     cka-lab-ingress-api-svc -n "${NAMESPACE}" --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
   kubectl delete ingress cka-lab-ingress -n "${NAMESPACE}" --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
   kubectl delete httproute cka-lab-httproute -n "${NAMESPACE}" --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
-  kubectl delete gateway cka-lab-gateway -n "${NAMESPACE}" --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
+  kubectl delete gateway cka-lab-gateway -n "${GW_NAMESPACE}" --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
   # Clean up isolated namespaces
   kubectl delete namespace "${CLIENT_NS}" "${BACKEND_NS}" cka-portal cka-secure-db --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
 }

@@ -29,6 +29,31 @@
         mode: '0755'
         creates: /usr/local/bin/cilium
 
+- name: Check if Hubble CLI binary is already installed
+  ansible.builtin.stat:
+    path: /usr/local/bin/hubble
+  register: cilium_hubble_bin_stat
+  tags:
+    - cni
+    - cilium
+    - hubble
+
+- name: Install Hubble CLI
+  when: not cilium_hubble_bin_stat.stat.exists
+  tags:
+    - cni
+    - cilium
+    - hubble
+  block:
+    - name: Download Hubble CLI archive
+      ansible.builtin.unarchive:
+        src: >-
+          https://github.com/cilium/hubble/releases/download/{{ cilium_hubble_cli_version }}/hubble-linux-{{ cilium_arch }}.tar.gz
+        dest: /usr/local/bin
+        remote_src: true
+        mode: '0755'
+        creates: /usr/local/bin/hubble
+
 - name: Check Cilium installation status in cluster
   ansible.builtin.command: cilium status --wait=false
   environment:

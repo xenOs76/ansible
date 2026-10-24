@@ -1,18 +1,29 @@
 ======================================================================
-                  CKA Training Lab - Next Steps
+CKA Training Lab - Next Steps
 ======================================================================
 Welcome to the CKA training environment!
 Before starting your practice drills, complete the following initial steps:
 
-  * backup ~/.kube directory
-  * check or configure autocompletion for the kubectl command
-  * check or configure the bash alias k
-  * check or configure the autocompletion for the bash alias k
-  * check or configure safe deletion via ~/.kube/kuberc file
+* backup ~/.kube directory
+* create the file ~/.bashrc-local
+* add to it the following content:
 
-Exam Tip: Permitted web docs: https://kubernetes.io/docs/, https://helm.sh/docs/,
-https://gateway-api.sigs.k8s.io/. Fast terminal lookups: 'kubectl explain <resource>.<field>'.
+source <(kubectl completion bash)
+alias k=kubectl
+complete -o default -F __start_kubectl k
 
-(Note: Running 'make preprod-deploy' will automatically perform
- these setup steps and remove this reminder.)
+export kdo="--dry-run=client -o yaml"
+export know="--force --grace-period=0"
+
+alias etcdctl="ETCDCTL_API=3 sudo etcdctl \
+  --endpoints 127.0.0.1:2379 \
+  --cert=/etc/kubernetes/pki/etcd/server.crt \
+  --key=/etc/kubernetes/pki/etcd/server.key \
+  --cacert=/etc/kubernetes/pki/etcd/ca.crt"
+
+* to the end of ~/.bashrc, add the following: source ~/.bashrc-local
+
+Exam Tip: Permitted web docs: https://kubernetes.io/docs/, https://helm.sh/docs/, https://gateway-api.sigs.k8s.io/. 
+Fast terminal lookups: 'kubectl explain <resource>.<field>' .
+(Note: Running 'make preprod-deploy' will automatically perform these setup steps and remove this reminder.)
 ======================================================================

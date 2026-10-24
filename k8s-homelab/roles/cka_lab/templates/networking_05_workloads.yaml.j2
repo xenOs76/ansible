@@ -1,93 +1,38 @@
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: backend-db
-  namespace: cka-secure-db
-  labels:
-    app.kubernetes.io/part-of: cka-lab
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      role: database
-  template:
-    metadata:
-      labels:
-        role: database
-    spec:
-      containers:
-      - name: db-mock
-        image: nginx:alpine
-        ports:
-        - containerPort: 80
-        resources:
-          requests:
-            cpu: 10m
-            memory: 16Mi
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: db-service
-  namespace: cka-secure-db
-  labels:
-    app.kubernetes.io/part-of: cka-lab
-spec:
-  type: ClusterIP
-  selector:
-    role: database
-  ports:
-  - port: 80
-    targetPort: 80
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: frontend-portal
-  namespace: cka-portal
+  name: netpol-test-client
+  namespace: {{ cka_lab_networking_namespace | default('default') }}
   labels:
+    app.kubernetes.io/name: netpol-test-client
     app.kubernetes.io/part-of: cka-lab
+    cka.practice/scenario: networking
+    app: netpol-client
 spec:
   replicas: 1
   selector:
     matchLabels:
-      role: frontend
+      app: netpol-client
   template:
     metadata:
       labels:
-        role: frontend
+        app: netpol-client
+        app.kubernetes.io/name: netpol-test-client
+        app.kubernetes.io/part-of: cka-lab
+        cka.practice/scenario: networking
     spec:
       containers:
-      - name: client
-        image: curlimages/curl:latest
-        command: ["sleep", "3600"]
-        resources:
-          requests:
-            cpu: 10m
-            memory: 16Mi
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: intruder-portal
-  namespace: cka-portal
-  labels:
-    app.kubernetes.io/part-of: cka-lab
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      role: unauthorized
-  template:
-    metadata:
-      labels:
-        role: unauthorized
-    spec:
-      containers:
-      - name: client
-        image: curlimages/curl:latest
-        command: ["sleep", "3600"]
-        resources:
-          requests:
-            cpu: 10m
-            memory: 16Mi
+        - name: client
+          image: curlimages/curl:latest
+          command:
+            - /bin/sh
+            - -c
+            - while true; do sleep 3600; done
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 50m
+              memory: 64Mi

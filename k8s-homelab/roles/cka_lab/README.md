@@ -81,6 +81,12 @@ A master navigation guide is generated at `/home/vagrant/cka/README.md` and styl
   ```bash
   source <(kubectl completion bash)
   complete -o default -F __start_kubectl k
+  export kdo="--dry-run=client -o yaml"
+  export know="--force --grace-period=0"
+  alias etcdctl="ETCDCTL_API=3 sudo etcdctl --endpoints 127.0.0.1:2379 \
+    --cert=/etc/kubernetes/pki/etcd/server.crt \
+    --key=/etc/kubernetes/pki/etcd/server.key \
+    --cacert=/etc/kubernetes/pki/etcd/ca.crt"
   ```
 
 - **Objective**: Activate dynamic system MOTD reminder on `kube-control-plane` guiding trainees through manual
@@ -89,9 +95,10 @@ A master navigation guide is generated at `/home/vagrant/cka/README.md` and styl
     login display.
   - Reminds trainees to manually practice:
     1. Backup `~/.kube` directory.
-    1. Check/configure autocompletion for `kubectl`.
-    1. Check/configure bash alias `k`.
-    1. Check/configure autocompletion for bash alias `k`.
+    1. Check/configure autocompletion for `kubectl` (`source <(kubectl completion bash)`).
+    1. Check/configure bash alias `k` and its autocompletion (`complete -o default -F __start_kubectl k`).
+    1. Check/configure dry-run shorthand `kdo` and fast-delete shorthand `know`.
+    1. Check/configure `etcdctl` static pod TLS alias.
     1. Check/configure safe deletion via `~/.kube/kuberc`.
   - Automatically deleted upon running full cluster deployment via `make preprod-deploy`.
 

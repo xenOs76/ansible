@@ -38,7 +38,7 @@ Multi-node Kubernetes 1.34+ cluster automated using `kubeadm`, `containerd`, and
 1. **`common`**: Pinned base packages (`socat`, `kubectl-netdrill`, `bash-completion`, `vim`), sysctl network tuning, default system editor configuration (`vim`), global YAML indentation defaults (`/etc/vim/vimrc.local`), and kernel modules (`overlay`, `br_netfilter`, `rbd`, `iscsi_tcp`).
 1. **`containerd`**: Container runtime installation, configuration (`SystemdCgroup = true`), and service health validation.
 1. **`kubernetes_packages`**: APT repository setup (`pkgs.k8s.io`), pinned binaries (`kubeadm`, `kubelet`, `kubectl`), and apt-mark hold.
-1. **`control_plane`**: `kubeadm init` automation, dynamic IP discovery for kube-apiserver TLS SANs, automated daily etcd backup with systemd timer (`etcd-backup.timer`), `~/.kube/config` distribution, user shell preferences (`alias k=kubectl`, `export koyaml="..."`, bash completion, and `~/.kube/kuberc`), and training MOTD cleanup.
+1. **`control_plane`**: `kubeadm init` automation, dynamic IP discovery for kube-apiserver TLS SANs, automated daily etcd backup with systemd timer (`etcd-backup.timer`), `~/.kube/config` distribution, user shell preferences (`alias k=kubectl`, `export kdo/koyaml="..."`, `export know="..."`, `alias etcdctl="..."`, bash completion, and `~/.kube/kuberc`), and training MOTD cleanup.
 1. **`worker`**: Node registration via secure join tokens and discovery hashes.
 1. **`cilium`**: Helm-based Cilium CNI deployment with eBPF host routing and status health checks.
 1. **`caddy`**: Ingress reverse proxy with PowerDNS DNS-01 ACME Let's Encrypt certificates.
@@ -100,7 +100,7 @@ make preprod-destroy
 
 - **`make preprod-up`**: Boots base VMs with containerd and Kubernetes binaries preinstalled.
 - **`make preprod-deploy`**: Full automated cluster deployment via Ansible (`site.yml`). Initializes control plane, configures user preferences, joins workers, installs Cilium, and automatically cleans up `~/.motd`.
-- **`make preprod-cka-lab`**: Deploys dedicated hands-on CKA practice scenarios (`playbooks/cka_lab.yml`) and activates the initial steps reminder MOTD on the control plane (~/.kube backup, kubectl completion, alias k, completion for k, and safe deletion kuberc).
+- **`make preprod-cka-lab`**: Deploys dedicated hands-on CKA practice scenarios (`playbooks/cka_lab.yml`) and activates the initial steps reminder MOTD on the control plane (~/.kube backup, kubectl completion, alias k, completion for k, kdo, know, etcdctl alias, and safe deletion kuberc).
 
 ### Playbook Execution Wrapper (`run-playbook.sh`)
 
