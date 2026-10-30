@@ -1,0 +1,76 @@
+# CNI Plugin & Pod Network Sandbox Diagnostics Guide
+
+Network plugins (such as Cilium, Calico, or Flannel) configure pod network namespaces via files located in
+`/etc/cni/net.d/` and binary executables in `/opt/cni/bin/`.
+
+---
+
+## Official Documentation References & In-Exam Lookups
+
+### Permitted Exam Documentation
+
+- **Network Plugins**: [Network Plugins](https://kubernetes.io/docs/concepts/extend-kubernetes/compute-storage-net/network-plugins/) `[EXAM ALLOWED]`
+- **Troubleshooting Pod Networking**: [Troubleshoot Applications](https://kubernetes.io/docs/tasks/debug/debug-application/) `[EXAM ALLOWED]`
+
+### In-Exam Search Keywords
+
+- `"network plugins cni"`
+- `"troubleshoot pod network"`
+
+### Terminal Fast Lookups
+
+```bash
+kubectl describe pod <pod-name>
+ssh <node> "ls -la /etc/cni/net.d/"
+ssh <node> "sudo journalctl -u kubelet -e | grep -i cni"
+```
+
+---
+
+## 1. Failure Symptoms & Diagnostic Triage
+
+When the CNI configuration file (e.g. `05-cilium.conflist`) is deleted or corrupted:
+
+1. **Pod Phase**: Newly scheduled pods remain stuck in `ContainerCreating` or `Pending`.
+2. **Kubelet Events**: `kubectl describe pod` outputs:
+
+   ```text
+   Warning FailedCreatePodSandBox Failed to create pod sandbox: networkPlugin cni failed to set up pod network
+   ```
+
+3. **Node Status**: The node itself may eventually report `NetworkPluginNotReady` in `kubectl describe node <name>`.
+
+---
+
+## 2. Interactive Break-Fix Drill
+
+### Step 1: Inject CNI Failure on Worker Node
+
+```bash
+./break-cni.sh --node=kube-worker-1
+```
+
+### Step 2: Observe Symptoms & Investigate
+
+```bash
+# Check pod status:
+kubectl get pod cni-probe-pod -n default
+
+# Inspect failure events:
+kubectl describe pod cni-probe-pod -n default
+
+# Check node CNI directory:
+ssh kube-worker-1 "ls -la /etc/cni/net.d/"
+```
+
+### Step 3: Restore CNI Configuration
+
+```bash
+./fix-cni.sh --node=kube-worker-1
+```
+
+### Step 4: Automated Verification
+
+```bash
+./test-cni-recovery.sh kube-worker-1
+```

@@ -1,0 +1,24 @@
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: cks-lab-protect-cloud-metadata
+  namespace: {{ cks_lab_netpol_client_namespace | default('cks-net-client') }}
+  labels:
+    app.kubernetes.io/name: cks-lab-protect-cloud-metadata
+    app.kubernetes.io/part-of: cks-lab
+    cks.practice/scenario: network-policies
+spec:
+  podSelector:
+    matchLabels:
+      app: cks-lab-client
+  policyTypes:
+    - Egress
+  egress:
+    # Allow outbound internet/external access while strictly isolating the cloud
+    # instance metadata service (IMDS at 169.254.169.254/32)
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 169.254.169.254/32

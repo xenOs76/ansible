@@ -1,12 +1,16 @@
 #!/usr/bin/env bash
-# ====================================================================
-# [CKA LAB] Static Pod Diagnostics Drill: Break Kube-Apiserver
-# Simulates a broken API server by corrupting its static pod manifest.
-# ====================================================================
+# ==============================================================================
+# break-apiserver.sh: Simulates Kube-Apiserver Static Pod Failure
+# Managed by Ansible (roles/cka_lab)
+# Scenarios: flag (typo --authorisation-mode), etcd (broken CA path), syntax
+# ==============================================================================
 set -euo pipefail
 
 MANIFEST="/etc/kubernetes/manifests/kube-apiserver.yaml"
-BACKUP="/etc/kubernetes/manifests/kube-apiserver.yaml.bak"
+# CRITICAL: Backups must NEVER be stored in /etc/kubernetes/manifests/
+# Kubelet scans that directory and parses any file (including .bak) as a static pod manifest!
+BACKUP="/etc/kubernetes/kube-apiserver.yaml.bak"
+LEGACY_BACKUP="/etc/kubernetes/manifests/kube-apiserver.yaml.bak"
 
 if [ "$(id -u)" -ne 0 ]; then
   echo "Error: This script modifies static pod manifests and must be run as root (use sudo)." >&2
@@ -14,20 +18,83 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 
 if [ ! -f "${MANIFEST}" ]; then
-  echo "Error: Manifest ${MANIFEST} not found on this node." >&2
+  echo "Error: Manifest ${MANIFEST} not found on this node. Must be executed on control plane." >&2
   exit 1
 fi
 
-echo "==> Backing up ${MANIFEST} to ${BACKUP}..."
-cp -f "${MANIFEST}" "${BACKUP}"
+# Clean up any legacy backup files inside manifests directory that prevent kubelet failures
+rm -f "${LEGACY_BACKUP}" /etc/kubernetes/manifests/*.bak 2>/dev/null || true
 
-echo "==> Corrupting kube-apiserver static pod configuration (invalid etcd certificate path)..."
-sed -i 's|--etcd-cafile=.*|--etcd-cafile=/etc/kubernetes/pki/etcd/ca-broken.crt|g' "${MANIFEST}"
+SCENARIO="${1:-flag}"
+case "${SCENARIO}" in
+  --scenario=*)
+    SCENARIO="${SCENARIO#*=}"
+    ;;
+esac
 
-echo "==> Modification complete. Kubelet will detect the change and restart kube-apiserver."
-echo "==> Verify failure with:"
-echo "    kubectl get nodes   # (Will fail to connect)"
-echo "    sudo crictl ps -a | grep -i apiserver"
-echo "    sudo crictl logs <container_id>"
+echo "===================================================================="
+echo "  [CKA LAB] Simulating Kube-Apiserver Failure                       "
+echo "  Target: kube-apiserver | Scenario: ${SCENARIO}                    "
+echo "===================================================================="
+
+# 1. Back up original manifest if not already backed up
+if [ ! -f "${BACKUP}" ]; then
+  echo "==> [1/3] Creating backup at ${BACKUP}..."
+  cp -f "${MANIFEST}" "${BACKUP}"
+else
+  echo "==> [1/3] Existing backup found at ${BACKUP}."
+fi
+
+# 2. Inject failure scenario
+echo "==> [2/3] Injecting failure scenario into ${MANIFEST}..."
+case "${SCENARIO}" in
+  1|flag)
+    echo "    Injecting flag typo (--authorisation-mode=Node,RBAC)..."
+    sed -i 's|--authorization-mode=|--authorisation-mode=|g' "${MANIFEST}"
+    if ! grep -q "authorisation-mode" "${MANIFEST}"; then
+      echo "Error: Failed to patch --authorization-mode in ${MANIFEST}." >&2
+      exit 1
+    fi
+    ;;
+  2|etcd)
+    echo "    Corrupting etcd CA certificate path..."
+    sed -i 's|--etcd-cafile=.*|--etcd-cafile=/etc/kubernetes/pki/etcd/ca-broken.crt|g' "${MANIFEST}"
+    if ! grep -q "ca-broken.crt" "${MANIFEST}"; then
+      echo "Error: Failed to patch --etcd-cafile in ${MANIFEST}." >&2
+      exit 1
+    fi
+    ;;
+  3|syntax)
+    echo "    Injecting YAML syntax error..."
+    sed -i '1i\corrupted_unmarshal_scalar: [' "${MANIFEST}"
+    ;;
+  *)
+    echo "Error: Unknown scenario '${SCENARIO}'." >&2
+    echo "Supported scenarios: flag (default), etcd, syntax" >&2
+    exit 1
+    ;;
+esac
+
+echo "    Manifest modification applied successfully."
+
+# Force immediate container reload so existing healthy apiserver stops immediately
+echo "    Stopping active kube-apiserver container to trigger kubelet sync..."
+crictl ps --name kube-apiserver -q 2>/dev/null | xargs -r crictl stop >/dev/null 2>&1 || true
+
+# 3. Instructions for Triage
+echo "==> [3/3] Failure simulation active. Kubelet will reload and fail the static pod."
 echo ""
-echo "==> To recover, run: sudo ./fix-apiserver.sh"
+echo "--- Troubleshooting Checklist ---"
+echo "1. Verify API server refuses connections:"
+echo "   kubectl get nodes   # (Should return: connection refused on port 6443)"
+echo ""
+echo "2. Inspect container runtime status and exit codes:"
+echo "   sudo crictl ps -a | grep -i apiserver"
+echo "   sudo crictl logs <container_id>"
+echo ""
+echo "3. Inspect host log files directly:"
+echo "   sudo tail -n 50 /var/log/pods/kube-system_kube-apiserver-*/kube-apiserver/*.log"
+echo ""
+echo "4. Restore healthy cluster state when finished:"
+echo "   sudo ./fix-apiserver.sh"
+echo "===================================================================="

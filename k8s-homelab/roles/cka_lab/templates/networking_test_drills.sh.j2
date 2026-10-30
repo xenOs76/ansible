@@ -1,14 +1,12 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # test-networking-drills.sh: Automated Verification Suite for CKA Networking Drills
-# Modules: Services, Ingress, Gateway API, and Network Policies
+# Modules: Services, Headless, Ingress, and Gateway API
 # ==============================================================================
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NAMESPACE="{{ cka_lab_networking_namespace | default('default') }}"
-CLIENT_NS="{{ cka_lab_networking_client_namespace | default('cka-lab-net-client') }}"
-BACKEND_NS="{{ cka_lab_networking_backend_namespace | default('cka-lab-net-backend') }}"
 GW_NAMESPACE="{{ cka_lab_helm_ngf_namespace | default('nginx-gateway') }}"
 
 echo "===================================================================="
@@ -27,11 +25,9 @@ cleanup() {
   kubectl delete ingress cka-lab-ingress -n "${NAMESPACE}" --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
   kubectl delete httproute cka-lab-httproute -n "${NAMESPACE}" --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
   kubectl delete gateway cka-lab-gateway -n "${GW_NAMESPACE}" --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
-  # Clean up NetworkPolicies and probe pods in default namespace
-  kubectl delete netpol --all -n "${NAMESPACE}" --ignore-not-found=true --now >/dev/null 2>&1 || true
-  kubectl delete pod cka-lab-http-probe cka-lab-dns-probe -n "${NAMESPACE}" --ignore-not-found=true --now >/dev/null 2>&1 || true
-  # Clean up isolated namespaces
-  kubectl delete namespace "${CLIENT_NS}" "${BACKEND_NS}" "{{ cka_lab_networking_tenant_a | default('tenant-a') }}" "{{ cka_lab_networking_tenant_b | default('tenant-b') }}" cka-portal cka-secure-db --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
+  CLIENT_NS="{{ cka_lab_networking_client_namespace | default('cka-lab-net-client') }}"
+  BACKEND_NS="{{ cka_lab_networking_backend_namespace | default('cka-lab-net-backend') }}"
+  kubectl delete namespace "${CLIENT_NS}" "${BACKEND_NS}" --ignore-not-found=true --now >/dev/null 2>&1 || true
 }
 
 trap cleanup EXIT
@@ -40,7 +36,7 @@ trap cleanup EXIT
 # Drill 1: Services & CoreDNS
 # ------------------------------------------------------------------------------
 echo "--------------------------------------------------------------------"
-echo "  [1/7] Testing Services & CoreDNS                                  "
+echo "  [1/5] Testing Services & CoreDNS                                  "
 echo "--------------------------------------------------------------------"
 "${SCRIPT_DIR}/01-services/test-services.sh"
 
@@ -48,7 +44,7 @@ echo "--------------------------------------------------------------------"
 # Drill 2: Headless Service
 # ------------------------------------------------------------------------------
 echo "--------------------------------------------------------------------"
-echo "  [2/7] Testing Headless Service & SRV/A-Record DNS                 "
+echo "  [2/5] Testing Headless Service & SRV/A-Record DNS                 "
 echo "--------------------------------------------------------------------"
 "${SCRIPT_DIR}/01-services/test-headless.sh"
 
@@ -56,7 +52,7 @@ echo "--------------------------------------------------------------------"
 # Drill 3: Ingress Path Routing
 # ------------------------------------------------------------------------------
 echo "--------------------------------------------------------------------"
-echo "  [3/7] Testing Ingress Path Routing                                "
+echo "  [3/5] Testing Ingress Path Routing                                "
 echo "--------------------------------------------------------------------"
 "${SCRIPT_DIR}/02-ingresses/test-ingress.sh"
 
@@ -64,34 +60,19 @@ echo "--------------------------------------------------------------------"
 # Drill 4: Gateway API & NGINX Gateway Fabric
 # ------------------------------------------------------------------------------
 echo "--------------------------------------------------------------------"
-echo "  [4/7] Testing Gateway API & HTTPRoute                             "
+echo "  [4/5] Testing Gateway API & HTTPRoute                             "
 echo "--------------------------------------------------------------------"
 "${SCRIPT_DIR}/03-gateway-api/test-gateway.sh"
 
 # ------------------------------------------------------------------------------
-# Drill 5: Network Policies with httpbin-go
+# Drill 5: Kubernetes Network Policies
 # ------------------------------------------------------------------------------
 echo "--------------------------------------------------------------------"
-echo "  [5/7] Testing Network Policies & Packet Filtering                 "
+echo "  [5/5] Testing Kubernetes NetworkPolicies                          "
 echo "--------------------------------------------------------------------"
 "${SCRIPT_DIR}/04-network-policies/test-network-policies.sh"
-
-# ------------------------------------------------------------------------------
-# Drill 6: Progressive Microsegmentation & Gateway NetPol
-# ------------------------------------------------------------------------------
-echo "--------------------------------------------------------------------"
-echo "  [6/7] Testing Progressive Microsegmentation & Gateway NetPol      "
-echo "--------------------------------------------------------------------"
-"${SCRIPT_DIR}/05-advanced-network-policies/test-advanced-netpol.sh"
-
-# ------------------------------------------------------------------------------
-# Drill 7: Multi-Tenant Pod Isolation (Logical AND)
-# ------------------------------------------------------------------------------
-echo "--------------------------------------------------------------------"
-echo "  [7/7] Testing Multi-Tenant Pod Isolation (Logical AND)            "
-echo "--------------------------------------------------------------------"
-"${SCRIPT_DIR}/05-advanced-network-policies/test-cross-tenant.sh"
 
 echo "===================================================================="
 echo "  [SUCCESS] All CKA Networking drills verified successfully!        "
 echo "===================================================================="
+

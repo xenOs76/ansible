@@ -1,0 +1,32 @@
+---
+# ==============================================================================
+# CKA Lab: Controller Manager Failure Diagnostic Canary Workload
+# Managed by Ansible (roles/cka_lab)
+# When the controller-manager is broken, the ReplicaSet controller will not run,
+# leaving 0 pods created despite replicas: 2.
+# ==============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cka-controller-probe
+  namespace: default
+  labels:
+    app: controller-probe
+    cka-drill: static-pod-recovery
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: controller-probe
+  template:
+    metadata:
+      labels:
+        app: controller-probe
+    spec:
+      containers:
+        - name: probe
+          image: registry.k8s.io/pause:3.9
+          resources:
+            requests:
+              cpu: "10m"
+              memory: "16Mi"

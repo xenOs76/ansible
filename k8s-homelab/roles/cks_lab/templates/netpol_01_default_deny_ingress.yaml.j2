@@ -1,0 +1,13 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: cks-lab-default-deny-ingress
+  namespace: {{ cks_lab_netpol_backend_namespace | default('cks-net-backend') }}
+  labels:
+    app.kubernetes.io/name: cks-lab-default-deny-ingress
+    app.kubernetes.io/part-of: cks-lab
+    cks.practice/scenario: network-policies
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress

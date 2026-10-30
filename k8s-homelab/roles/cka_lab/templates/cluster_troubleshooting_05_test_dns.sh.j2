@@ -1,13 +1,19 @@
 #!/usr/bin/env bash
+# ==============================================================================
+# test-dns-resolution.sh: Verifies In-Cluster and External DNS Resolution
+# Managed by Ansible (roles/cka_lab)
+# ==============================================================================
 set -euo pipefail
 
-# Verify DNS resolution in the cluster
 echo "=== Verifying Cluster DNS Resolution ==="
 
-# Check coredns pods
+kubectl delete pod dns-test-runner --ignore-not-found=true --now >/dev/null 2>&1 || true
+
+echo "[1/2] Checking CoreDNS Pod status in kube-system..."
 kubectl get pods -n kube-system -l k8s-app=kube-dns
 
-# Run ephemeral query
-kubectl run dns-test-runner --rm -i --restart=Never --image=busybox:1.36 -- nslookup kubernetes.default.svc.cluster.local
+echo "[2/2] Running in-cluster DNS query for kubernetes.default.svc.cluster.local..."
+kubectl run dns-test-runner --rm -i --restart=Never --image=busybox:1.36.1 -- \
+  nslookup kubernetes.default.svc.cluster.local
 
 echo "=== CoreDNS Resolution Verification PASSED ==="

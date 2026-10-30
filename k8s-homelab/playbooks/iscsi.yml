@@ -9,18 +9,29 @@
     - iscsi_target
     - storage
 
-- name: Configure iSCSI initiator on worker nodes
-  hosts: workers
+- name: Configure iSCSI initiator on cluster nodes
+  hosts: k8s_cluster
   become: true
   tasks:
-    - name: Load iscsi_tcp kernel module on worker nodes
+    - name: Load iscsi_tcp kernel module on cluster nodes
       ansible.builtin.command: modprobe iscsi_tcp
       changed_when: false
       tags:
         - iscsi
         - initiator
 
-    - name: Install open-iscsi initiator package on worker nodes
+    - name: Persist iscsi_tcp module in /etc/modules-load.d/iscsi.conf
+      ansible.builtin.copy:
+        dest: /etc/modules-load.d/iscsi.conf
+        content: "iscsi_tcp\n"
+        owner: root
+        group: root
+        mode: "0644"
+      tags:
+        - iscsi
+        - initiator
+
+    - name: Install open-iscsi initiator package on cluster nodes
       ansible.builtin.apt:
         name: open-iscsi
         state: present
@@ -28,7 +39,7 @@
         - iscsi
         - initiator
 
-    - name: Ensure iscsid service is enabled and started on worker nodes
+    - name: Ensure iscsid service is enabled and started on cluster nodes
       ansible.builtin.systemd:
         name: iscsid
         enabled: true

@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# fix-storage.sh: Replaces Mismatched PVC and Fixes HostPath Pod fsGroup
+# ==============================================================================
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+echo "=== Remedying CKA Storage & Volume Mismatches ==="
+
+echo "1. Replacing mismatched PVC with matching accessModes and storage capacity..."
+# PVC accessModes and storage decreases are immutable in-place; delete and recreate
+kubectl delete pvc cka-mismatched-pvc -n default --ignore-not-found=true --wait=true
+kubectl apply -f "${SCRIPT_DIR}/02-fixed-pvc.yaml"
+
+echo "2. Re-applying hostPath pod with fsGroup: 1000..."
+# Pod spec is immutable; delete and recreate with securityContext.fsGroup
+kubectl delete pod cka-hostpath-app -n default --ignore-not-found=true --wait=true
+kubectl apply -f "${SCRIPT_DIR}/04-fixed-hostpath-pod.yaml"
+
+echo ""
+echo "3. Waiting for PVC binding and Pod readiness..."
+for i in {1..15}; do
+    PVC_STATUS="$(kubectl get pvc cka-mismatched-pvc -n default -o jsonpath='{.status.phase}' 2>/dev/null || echo "")"
+    POD_STATUS="$(kubectl get pod cka-hostpath-app -n default -o jsonpath='{.status.phase}' 2>/dev/null || echo "")"
+    echo "  Attempt ${i}/15: PVC Status='${PVC_STATUS}', Pod Status='${POD_STATUS}'"
+    if [[ "${PVC_STATUS}" == "Bound" && "${POD_STATUS}" == "Running" ]]; then
+        break
+    fi
+    sleep 2
+done
+
+echo ""
+echo "=== Storage Remediation Completed ==="
+kubectl get pv,pvc -n default -l app.kubernetes.io/part-of=cka-lab
+kubectl get pod cka-hostpath-app -n default

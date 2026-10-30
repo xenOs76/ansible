@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# setup-broken-storage.sh: Injects Storage Mismatch & Permissions Failure
+# ==============================================================================
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+echo "=== Injecting CKA Storage & Volume Break-Fix Scenario ==="
+
+echo "1. Applying PV and mismatched PVC..."
+kubectl apply -f "${SCRIPT_DIR}/01-pv-pvc-mismatch.yaml"
+
+echo "2. Applying permissions-mismatched hostPath pod..."
+# Ensure clean recreation if pod already exists
+kubectl delete pod cka-hostpath-app -n default --ignore-not-found=true --wait=false >/dev/null 2>&1
+kubectl apply -f "${SCRIPT_DIR}/03-hostpath-perm-pod.yaml"
+
+echo ""
+echo "=== Current Broken State ==="
+echo "Checking PVC status (Expect: Pending due to capacity/accessMode mismatch):"
+kubectl get pvc cka-mismatched-pvc -n default
+
+echo ""
+echo "Checking HostPath Pod status (Expect: Error or CrashLoopBackOff due to permission denied):"
+sleep 3
+kubectl get pod cka-hostpath-app -n default
+echo ""
+echo "Triage Commands:"
+echo "  kubectl describe pvc cka-mismatched-pvc"
+echo "  kubectl logs cka-hostpath-app"
+echo "Fix with: ${SCRIPT_DIR}/fix-storage.sh"

@@ -14,7 +14,7 @@ echo "===================================================================="
 # Drill 1: Node Maintenance (Cordon & Drain)
 # ------------------------------------------------------------------------------
 echo "--------------------------------------------------------------------"
-echo "  [1/5] Testing Node Maintenance (Cordon, Drain, Uncordon)          "
+echo "  [1/13] Testing Node Maintenance (Cordon, Drain, Uncordon)         "
 echo "--------------------------------------------------------------------"
 "${SCRIPT_DIR}/01-node-maintenance/drain-cordon-drill.sh"
 
@@ -22,7 +22,7 @@ echo "--------------------------------------------------------------------"
 # Drill 2: Cluster Metrics & Top
 # ------------------------------------------------------------------------------
 echo "--------------------------------------------------------------------"
-echo "  [2/5] Testing Cluster Metrics Telemetry                           "
+echo "  [2/13] Testing Cluster Metrics Telemetry                          "
 echo "--------------------------------------------------------------------"
 "${SCRIPT_DIR}/04-metrics-monitoring/test-metrics-top.sh"
 
@@ -30,7 +30,7 @@ echo "--------------------------------------------------------------------"
 # Drill 3: CoreDNS Resolution
 # ------------------------------------------------------------------------------
 echo "--------------------------------------------------------------------"
-echo "  [3/5] Testing CoreDNS Service Resolution                          "
+echo "  [3/13] Testing CoreDNS Service Resolution                         "
 echo "--------------------------------------------------------------------"
 "${SCRIPT_DIR}/05-coredns-recovery/test-dns-resolution.sh"
 
@@ -38,12 +38,11 @@ echo "--------------------------------------------------------------------"
 # Drill 4: Service Endpoints Triage
 # ------------------------------------------------------------------------------
 echo "--------------------------------------------------------------------"
-echo "  [4/5] Testing Service & Endpoints Triage                          "
+echo "  [4/13] Testing Service & Endpoints Triage                         "
 echo "--------------------------------------------------------------------"
 "${SCRIPT_DIR}/06-service-endpoints-recovery/setup-broken-service.sh"
 "${SCRIPT_DIR}/06-service-endpoints-recovery/fix-service.sh"
 "${SCRIPT_DIR}/06-service-endpoints-recovery/test-service-endpoints.sh"
-# Cleanup drill deployment and service
 kubectl delete deployment cka-order-backend -n default --ignore-not-found=true
 kubectl delete service cka-order-svc -n default --ignore-not-found=true
 
@@ -51,9 +50,73 @@ kubectl delete service cka-order-svc -n default --ignore-not-found=true
 # Drill 5: Container Runtime Diagnostics (crictl)
 # ------------------------------------------------------------------------------
 echo "--------------------------------------------------------------------"
-echo "  [5/5] Testing Container Runtime Diagnostics (crictl)              "
+echo "  [5/13] Testing Container Runtime Diagnostics (crictl)             "
 echo "--------------------------------------------------------------------"
 "${SCRIPT_DIR}/08-containerd-diagnostics/test-crictl.sh"
+
+# ------------------------------------------------------------------------------
+# Drill 6: CNI Network Plugin Diagnostics
+# ------------------------------------------------------------------------------
+echo "--------------------------------------------------------------------"
+echo "  [6/13] Testing CNI Plugin Recovery (/etc/cni/net.d/)              "
+echo "--------------------------------------------------------------------"
+"${SCRIPT_DIR}/09-cni-recovery/test-cni-recovery.sh"
+
+# ------------------------------------------------------------------------------
+# Drill 7: RBAC ServiceAccount & RoleBinding Alignment
+# ------------------------------------------------------------------------------
+echo "--------------------------------------------------------------------"
+echo "  [7/13] Testing RBAC ServiceAccount & RoleBinding Recovery         "
+echo "--------------------------------------------------------------------"
+"${SCRIPT_DIR}/10-rbac-recovery/test-rbac-recovery.sh"
+
+# ------------------------------------------------------------------------------
+# Drill 8: Kubelet Client Certificate Diagnostics
+# ------------------------------------------------------------------------------
+echo "--------------------------------------------------------------------"
+echo "  [8/13] Testing Kubelet TLS Client Certificate Recovery            "
+echo "--------------------------------------------------------------------"
+"${SCRIPT_DIR}/03-kubelet-diagnostics/test-kubelet-cert.sh"
+
+# ------------------------------------------------------------------------------
+# Drill 9: Ingress Routing Backend Port Triage
+# ------------------------------------------------------------------------------
+echo "--------------------------------------------------------------------"
+echo "  [9/13] Testing Ingress Routing Backend Port Triage                "
+echo "--------------------------------------------------------------------"
+"${SCRIPT_DIR}/06-service-endpoints-recovery/test-ingress-routing.sh"
+
+# ------------------------------------------------------------------------------
+# Drill 10: Storage & Volume Mismatch Recovery
+# ------------------------------------------------------------------------------
+echo "--------------------------------------------------------------------"
+echo "  [10/13] Testing Storage & Volume Mismatch Recovery                "
+echo "--------------------------------------------------------------------"
+"${SCRIPT_DIR}/11-storage-recovery/test-storage-recovery.sh"
+
+# ------------------------------------------------------------------------------
+# Drill 11: Advanced Node Scheduling & Taint Recovery
+# ------------------------------------------------------------------------------
+echo "--------------------------------------------------------------------"
+echo "  [11/13] Testing Node Scheduling & Taint Recovery                  "
+echo "--------------------------------------------------------------------"
+"${SCRIPT_DIR}/12-scheduling-recovery/test-scheduling-recovery.sh"
+
+# ------------------------------------------------------------------------------
+# Drill 12: Cluster Reconnaissance & Network Discovery
+# ------------------------------------------------------------------------------
+echo "--------------------------------------------------------------------"
+echo "  [12/13] Testing Cluster Reconnaissance & Network Discovery       "
+echo "--------------------------------------------------------------------"
+"${SCRIPT_DIR}/13-cluster-recon/test-cluster-recon.sh"
+
+# ------------------------------------------------------------------------------
+# Drill 13: PKI Certificate Expiration & Lifecycle
+# ------------------------------------------------------------------------------
+echo "--------------------------------------------------------------------"
+echo "  [13/13] Testing PKI Certificate Expiration & Health               "
+echo "--------------------------------------------------------------------"
+"${SCRIPT_DIR}/14-pki-certs/test-pki-certs.sh"
 
 echo "===================================================================="
 echo "  [SUCCESS] All CKA Troubleshooting drills verified successfully!   "

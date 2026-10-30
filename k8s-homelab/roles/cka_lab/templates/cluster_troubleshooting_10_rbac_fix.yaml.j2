@@ -1,0 +1,21 @@
+---
+# ==============================================================================
+# CKA Lab: RBAC Diagnostics Fixed ClusterRoleBinding
+# Managed by Ansible (roles/cka_lab)
+# Corrects the subject namespace from 'default' to 'security-ops'.
+# ==============================================================================
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: node-reader-binding
+  labels:
+    app.kubernetes.io/part-of: cka-lab
+    cka-drill: rbac-recovery
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: node-reader
+subjects:
+  - kind: ServiceAccount
+    name: node-inspector
+    namespace: security-ops

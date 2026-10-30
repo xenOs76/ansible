@@ -1,0 +1,55 @@
+---
+- name: Ensure CKS lab network-policies directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ cks_lab_user }}"
+    group: "{{ cks_lab_user }}"
+    mode: "0755"
+  loop:
+    - "{{ cks_lab_netpol_workspace }}"
+    - "{{ cks_lab_netpol_workspace }}/01-basic-isolation"
+    - "{{ cks_lab_netpol_workspace }}/02-progressive-microsegmentation"
+    - "{{ cks_lab_netpol_workspace }}/03-multi-tenant-isolation"
+    - "{{ cks_lab_netpol_workspace }}/04-policy-analysis-cyclonus"
+  tags:
+    - cks_lab
+    - netpol
+    - network_policy
+    - microservices
+
+- name: Deploy CKS NetworkPolicy drill manifests, guides, and runners
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "{{ cks_lab_netpol_workspace }}/{{ item.dest }}"
+    owner: "{{ cks_lab_user }}"
+    group: "{{ cks_lab_user }}"
+    mode: "{{ item.mode | default('0644') }}"
+  loop:
+    - {src: "netpol_readme.md.j2", dest: "README.md", mode: "0644"}
+    - {src: "netpol_test_drills.sh.j2", dest: "test-network-policies.sh", mode: "0755"}
+    - {src: "netpol_01_namespaces_workloads.yaml.j2", dest: "01-basic-isolation/01-namespaces-workloads.yaml"}
+    - {src: "netpol_01_default_deny_ingress.yaml.j2", dest: "01-basic-isolation/02-default-deny-ingress.yaml"}
+    - {src: "netpol_01_allow_client_to_backend.yaml.j2", dest: "01-basic-isolation/03-allow-client-to-backend.yaml"}
+    - {src: "netpol_01_allow_coredns_egress.yaml.j2", dest: "01-basic-isolation/04-allow-coredns-egress.yaml"}
+    - {src: "netpol_01_protect_cloud_metadata.yaml.j2", dest: "01-basic-isolation/05-protect-cloud-metadata.yaml"}
+    - {src: "netpol_01_test_basic_isolation.sh.j2", dest: "01-basic-isolation/test-basic-isolation.sh", mode: "0755"}
+    - {src: "netpol_02_workloads.yaml.j2", dest: "02-progressive-microsegmentation/01-workloads.yaml"}
+    - {src: "netpol_02_default_deny_all.yaml.j2", dest: "02-progressive-microsegmentation/02-default-deny-all.yaml"}
+    - {src: "netpol_02_allow_kube_dns.yaml.j2", dest: "02-progressive-microsegmentation/03-allow-kube-dns.yaml"}
+    - {src: "netpol_02_allow_external_dns.yaml.j2", dest: "02-progressive-microsegmentation/04-allow-external-dns.yaml"}
+    - {src: "netpol_02_allow_internal_api.yaml.j2", dest: "02-progressive-microsegmentation/05-allow-internal-api.yaml"}
+    - {src: "netpol_02_hubble_troubleshooting.md.j2", dest: "02-progressive-microsegmentation/hubble-troubleshooting.md", mode: "0644"}
+    - {src: "netpol_02_test_progressive_netpol.sh.j2", dest: "02-progressive-microsegmentation/test-progressive-netpol.sh", mode: "0755"}
+    - {src: "netpol_03_cross_tenant_workloads.yaml.j2", dest: "03-multi-tenant-isolation/01-cross-tenant-workloads.yaml"}
+    - {src: "netpol_03_allow_cross_tenant.yaml.j2", dest: "03-multi-tenant-isolation/02-allow-cross-tenant.yaml"}
+    - {src: "netpol_03_test_multi_tenant.sh.j2", dest: "03-multi-tenant-isolation/test-multi-tenant.sh", mode: "0755"}
+    - {src: "netpol_04_readme.md.j2", dest: "04-policy-analysis-cyclonus/README.md", mode: "0644"}
+    - {src: "netpol_04_run_cyclonus_analysis.sh.j2", dest: "04-policy-analysis-cyclonus/run-cyclonus-analysis.sh", mode: "0755"}
+  loop_control:
+    label: "network-policies/{{ item.dest }}"
+  tags:
+    - cks_lab
+    - netpol
+    - network_policy
+    - microservices

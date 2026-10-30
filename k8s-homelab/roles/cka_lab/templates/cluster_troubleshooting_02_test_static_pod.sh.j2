@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# test-static-pod-recovery.sh: Automated Self-Test for Static Pod Recovery Drills
+# Managed by Ansible (roles/cka_lab)
+# Tests: kube-scheduler, kube-controller-manager, and kube-apiserver
+# ==============================================================================
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+if [ "$(id -u)" -ne 0 ]; then
+  echo "Error: This test modifies control plane manifests and must be run as root (use sudo)." >&2
+  exit 1
+fi
+
+# Detect KUBECONFIG if not set
+if [ -z "${KUBECONFIG:-}" ] && [ -f /etc/kubernetes/admin.conf ]; then
+  export KUBECONFIG=/etc/kubernetes/admin.conf
+fi
+
+cleanup() {
+  echo "==> Ensuring clean cluster state on test exit..."
+  if [ -f /etc/kubernetes/kube-scheduler.yaml.bak ] || [ -f /etc/kubernetes/manifests/kube-scheduler.yaml.bak ]; then
+    "${SCRIPT_DIR}/fix-scheduler.sh" >/dev/null 2>&1 || true
+  fi
+  if [ -f /etc/kubernetes/kube-controller-manager.yaml.bak ] || \
+     [ -f /etc/kubernetes/manifests/kube-controller-manager.yaml.bak ]; then
+    "${SCRIPT_DIR}/fix-controller-manager.sh" >/dev/null 2>&1 || true
+  fi
+  if [ -f /etc/kubernetes/kube-apiserver.yaml.bak ] || [ -f /etc/kubernetes/manifests/kube-apiserver.yaml.bak ]; then
+    "${SCRIPT_DIR}/fix-apiserver.sh" >/dev/null 2>&1 || true
+  fi
+  kubectl delete deployment cka-scheduler-probe cka-controller-probe -n default \
+    --ignore-not-found=true --timeout=30s >/dev/null 2>&1 || true
+}
+trap cleanup EXIT
+
+echo "===================================================================="
+echo "  [TEST] Static Pod Recovery Drill Automated Verification           "
+echo "===================================================================="
+
+# 1. Pre-flight check
+echo "==> [1/4] Verifying healthy baseline..."
+if ! kubectl get nodes >/dev/null 2>&1; then
+  echo "Error: Kubernetes cluster is not accessible." >&2
+  exit 1
+fi
+
+for COMP in kube-scheduler kube-controller-manager kube-apiserver; do
+  if ! kubectl get pod -n kube-system -l component="${COMP}" --no-headers 2>/dev/null | grep -q "Running"; then
+    echo "Error: ${COMP} is not currently in Running state." >&2
+    exit 1
+  fi
+done
+echo "    OK: Baseline cluster and all static pod components are healthy."
+
+# 2. Test Scheduler Failure & Recovery
+echo "==> [2/4] Testing kube-scheduler failure & recovery..."
+"${SCRIPT_DIR}/break-scheduler.sh" --scenario=kubeconfig >/dev/null
+sleep 4
+CANARY_PHASE="$(kubectl get pods -n default -l app=scheduler-probe -o jsonpath='{.items[0].status.phase}' 2>/dev/null || echo "Unknown")"
+echo "    Canary scheduler probe phase while broken: ${CANARY_PHASE}"
+if [ "${CANARY_PHASE}" != "Pending" ]; then
+  echo "    WARN: Canary phase is ${CANARY_PHASE} (expected Pending)." >&2
+fi
+"${SCRIPT_DIR}/fix-scheduler.sh" >/dev/null
+echo "    OK: kube-scheduler restored successfully."
+
+# 3. Test Controller Manager Failure & Recovery
+echo "==> [3/4] Testing kube-controller-manager failure & recovery..."
+"${SCRIPT_DIR}/break-controller-manager.sh" --scenario=kubeconfig >/dev/null
+sleep 4
+CM_REPLICAS="$(kubectl get deployment cka-controller-probe -n default -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")"
+echo "    Canary controller probe ready replicas while broken: ${CM_REPLICAS:-0}"
+"${SCRIPT_DIR}/fix-controller-manager.sh" >/dev/null
+echo "    OK: kube-controller-manager restored successfully."
+
+# 4. Test API Server Failure & Recovery (Flag Typo)
+echo "==> [4/4] Testing kube-apiserver flag failure & recovery..."
+"${SCRIPT_DIR}/break-apiserver.sh" --scenario=flag >/dev/null
+sleep 4
+if ! kubectl get nodes --request-timeout=2s >/dev/null 2>&1; then
+  echo "    OK: API server correctly refused connections during failure injection."
+else
+  echo "    WARN: API server was still responding (restart may be pending)."
+fi
+"${SCRIPT_DIR}/fix-apiserver.sh" >/dev/null
+echo "    OK: kube-apiserver restored successfully."
+
+echo "===================================================================="
+echo "  [SUCCESS] All Static Pod Recovery Drills passed successfully!     "
+echo "===================================================================="

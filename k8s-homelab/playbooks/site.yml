@@ -67,7 +67,7 @@
   become: true
   roles:
     - role: rook_ceph
-      when: rook_ceph_enabled | default(true)
+      when: rook_ceph_enabled | default(false)
   tags:
     - ceph
     - storage

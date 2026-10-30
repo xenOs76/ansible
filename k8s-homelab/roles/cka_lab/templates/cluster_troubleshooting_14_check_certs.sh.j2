@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Inspect PKI certificate expiration on control plane
+echo "=== 1. Checking Certificate Expiration via kubeadm ==="
+sudo kubeadm certs check-expiration
+
+echo ""
+echo "=== 2. Inspecting API Server Certificate via OpenSSL ==="
+CERT_PATH="/etc/kubernetes/pki/apiserver.crt"
+if [[ -f "${CERT_PATH}" ]]; then
+    echo "Certificate Path: ${CERT_PATH}"
+    echo "Subject: $(sudo openssl x509 -in "${CERT_PATH}" -noout -subject)"
+    echo "Validity Period:"
+    sudo openssl x509 -in "${CERT_PATH}" -noout -dates
+else
+    echo "WARNING: ${CERT_PATH} not found on this node."
+fi
+
+echo ""
+echo "=== 3. Inspecting Kubelet Client Certificate ==="
+KUBELET_CONF="/etc/kubernetes/kubelet.conf"
+if [[ -f "${KUBELET_CONF}" ]]; then
+    echo "Inspecting client cert embedded in ${KUBELET_CONF}:"
+    CLIENT_CERT=$(sudo grep 'client-certificate-data:' "${KUBELET_CONF}" | awk '{print $2}' || true)
+    if [[ -n "${CLIENT_CERT}" ]]; then
+        echo "${CLIENT_CERT}" | base64 -d | openssl x509 -noout -dates -subject
+    else
+        echo "Kubelet client cert rotation configured via /var/lib/kubelet/pki/kubelet-client-current.pem"
+        if [[ -f "/var/lib/kubelet/pki/kubelet-client-current.pem" ]]; then
+            sudo openssl x509 -in /var/lib/kubelet/pki/kubelet-client-current.pem -noout -dates -subject
+        fi
+    fi
+fi

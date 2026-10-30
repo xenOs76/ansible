@@ -1,0 +1,85 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# break-kubelet-cert.sh: Simulates Kubelet TLS Authentication / Client Cert Failure
+# Managed by Ansible (roles/cka_lab)
+# Corrupts client-certificate path in /etc/kubernetes/kubelet.conf
+# ==============================================================================
+set -euo pipefail
+
+TARGET_NODE="${1:-kube-worker-1}"
+case "${TARGET_NODE}" in
+  --node=*)
+    TARGET_NODE="${TARGET_NODE#*=}"
+    ;;
+esac
+
+break_cert_local() {
+  local KCONF="/etc/kubernetes/kubelet.conf"
+  local BACKUP="/etc/kubernetes/kubelet.conf.bak"
+
+  if [ "$(id -u)" -ne 0 ]; then
+    echo "Error: Modifying kubelet.conf requires root (use sudo)." >&2
+    exit 1
+  fi
+
+  if [ ! -f "${KCONF}" ]; then
+    echo "Error: ${KCONF} not found." >&2
+    exit 1
+  fi
+
+  echo "==> Backing up ${KCONF} to ${BACKUP}..."
+  cp -f "${KCONF}" "${BACKUP}"
+
+  echo "==> Corrupting client-certificate path in ${KCONF}..."
+  sed -i 's|client-certificate:.*|client-certificate: /var/lib/kubelet/pki/kubelet-client-broken.pem|g' "${KCONF}"
+
+  echo "==> Restarting kubelet service..."
+  systemctl restart kubelet || true
+
+  echo "==> Verifying TLS authentication failure in journalctl:"
+  sleep 2
+  journalctl -u kubelet -n 20 --no-pager | grep -iE "x509|certificate|broken|no such file" || true
+}
+
+if [ "${TARGET_NODE}" = "local" ] || [ "${TARGET_NODE}" = "$(hostname)" ]; then
+  echo "===================================================================="
+  echo "  [CKA LAB] Simulating Kubelet TLS Failure on Local Host ($(hostname))"
+  echo "===================================================================="
+  break_cert_local
+else
+  TARGET_HOST="${TARGET_NODE}"
+  if ! getent hosts "${TARGET_NODE}" >/dev/null 2>&1; then
+    k8s_ip="$(kubectl get node "${TARGET_NODE}" -o jsonpath='{.status.addresses[?(@.type=="InternalIP")].address}' 2>/dev/null || true)"
+    if [ -n "${k8s_ip}" ]; then
+      echo "==> [NOTICE] '${TARGET_NODE}' resolved via Kubernetes Node API to ${k8s_ip}"
+      TARGET_HOST="${k8s_ip}"
+    fi
+  fi
+  echo "===================================================================="
+  echo "  [CKA LAB] Simulating Kubelet TLS Failure on Remote Node: ${TARGET_NODE}"
+  echo "===================================================================="
+  ssh -o StrictHostKeyChecking=no "${TARGET_HOST}" "sudo bash -c '
+    KCONF=\"/etc/kubernetes/kubelet.conf\"
+    BACKUP=\"/etc/kubernetes/kubelet.conf.bak\"
+    cp -f \"\${KCONF}\" \"\${BACKUP}\"
+    sed -i \"s|client-certificate:.*|client-certificate: /var/lib/kubelet/pki/kubelet-client-broken.pem|g\" \"\${KCONF}\"
+    systemctl restart kubelet || true
+  '"
+  echo "==> Modification applied on ${TARGET_NODE}."
+fi
+
+echo ""
+echo "--- Troubleshooting Checklist ---"
+echo "1. Observe node transitions to NotReady in Kubernetes:"
+echo "   kubectl get nodes   # (Check ${TARGET_NODE})"
+echo ""
+echo "2. Connect to affected node and inspect journalctl:"
+echo "   ssh ${TARGET_NODE}"
+echo "   sudo journalctl -u kubelet -e --no-pager | grep -iE \"certificate|tls|token|x509\""
+echo ""
+echo "3. Inspect client certificate configuration:"
+echo "   sudo grep -i client-certificate /etc/kubernetes/kubelet.conf"
+echo ""
+echo "4. Restore working certificate and verify Ready status:"
+echo "   sudo ./fix-kubelet-cert.sh --node=${TARGET_NODE}"
+echo "===================================================================="

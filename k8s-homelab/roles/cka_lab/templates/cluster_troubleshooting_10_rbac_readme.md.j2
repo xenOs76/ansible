@@ -1,0 +1,100 @@
+# ServiceAccount & RoleBinding Alignment Diagnostics Guide
+
+In Kubernetes, applications and background controllers query the API server using tokens mounted to their Pods under
+`/var/run/secrets/kubernetes.io/serviceaccount/token`. If the ServiceAccount name or namespace in the
+`RoleBinding` or `ClusterRoleBinding` is misaligned, requests fail with `403 Forbidden`.
+
+---
+
+## Official Documentation References & In-Exam Lookups
+
+### Permitted Exam Documentation
+
+- **Using RBAC Authorization**: [Using RBAC Authorization](https://kubernetes.io/docs/reference/access-authn-authz/rbac/) `[EXAM ALLOWED]`
+- **Configure Service Accounts for Pods**: [Configure Service Accounts](https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/) `[EXAM ALLOWED]`
+
+### In-Exam Search Keywords
+
+- `"using rbac authorization"`
+- `"service account role binding"`
+
+### Terminal Fast Lookups
+
+```bash
+kubectl auth can-i <verb> <resource> --as=system:serviceaccount:<namespace>:<serviceaccount>
+kubectl describe clusterrolebinding <binding-name>
+kubectl describe rolebinding <binding-name> -n <namespace>
+```
+
+---
+
+## 1. Failure Symptoms & Diagnostic Triage
+
+When an application fails to access cluster resources:
+
+1. **Pod Logs**: Check application container logs for authorization errors:
+
+   ```bash
+   kubectl logs -n <namespace> <pod-name>
+   ```
+
+   Notice messages like:
+
+   ```text
+   Error from server (Forbidden): <resource> is forbidden: User "system:serviceaccount:<ns>:<sa>" cannot <verb>
+   ```
+
+2. **Verify Permissions with `kubectl auth can-i`**:
+
+   ```bash
+   kubectl auth can-i list nodes --as=system:serviceaccount:security-ops:node-inspector
+   ```
+
+3. **Inspect the Binding Subjects**: Check the `subjects` field to identify mismatched names or namespaces:
+
+   ```bash
+   kubectl describe clusterrolebinding node-reader-binding
+   ```
+
+---
+
+## 2. Interactive Break-Fix Drill
+
+### Step 1: Deploy Broken RBAC Setup
+
+```bash
+kubectl apply -f 01-rbac-setup.yaml
+kubectl apply -f 02-probe-pod.yaml
+```
+
+Observe the probe pod failing with `403 Forbidden`:
+
+```bash
+kubectl logs -n security-ops node-inspector-pod
+```
+
+### Step 2: Trace and Fix the Binding
+
+Inspect the binding and notice that `namespace` is incorrectly set to `default`:
+
+```bash
+kubectl describe clusterrolebinding node-reader-binding
+```
+
+Apply the corrected binding pointing to `namespace: security-ops`:
+
+```bash
+kubectl apply -f 03-fixed-binding.yaml
+```
+
+### Step 3: Verify Resolution
+
+```bash
+kubectl auth can-i list nodes --as=system:serviceaccount:security-ops:node-inspector
+```
+
+### Step 4: Automated Verification
+
+```bash
+./test-rbac-recovery.sh
+```

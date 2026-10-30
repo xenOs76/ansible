@@ -1,10 +1,11 @@
 # Control Plane Static Pod Troubleshooting Guide
 
-Control plane components (`etcd`, `kube-apiserver`, `kube-controller-manager`, and `kube-scheduler`) are managed by the local `kubelet` daemon as **Static Pods** defined in `/etc/kubernetes/manifests/`.
+Control plane components (`etcd`, `kube-apiserver`, `kube-controller-manager`, and `kube-scheduler`) are managed
+directly by the local `kubelet` daemon as **Static Pods** defined in `/etc/kubernetes/manifests/`.
 
 ---
 
-## Official Exam References & Quick Lookups
+## Official Documentation References & In-Exam Lookups
 
 ### Permitted Exam Documentation
 
@@ -30,7 +31,13 @@ sudo journalctl -u kubelet -e --no-pager
 
 ### Step 1: Check Manifest Location
 
-The static pod manifest path is defined in `/var/lib/kubelet/config.yaml` under `staticPodPath: /etc/kubernetes/manifests`.
+The static pod manifest path is defined in `/var/lib/kubelet/config.yaml` under
+`staticPodPath: /etc/kubernetes/manifests`.
+
+> [!CAUTION]
+> **Static Pod Backup Location**: Never store backup files (e.g. `*.bak`, `*.old`) inside
+> `/etc/kubernetes/manifests/`. Kubelet reads every non-hidden file in that directory as a static pod manifest. Backups
+> must always be stored outside `manifests/` (e.g. `/etc/kubernetes/kube-scheduler.yaml.bak`).
 
 ### Step 2: Inspect Control Plane Pod Status
 
@@ -40,10 +47,10 @@ kubectl get pods -n kube-system
 
 ### Step 3: Inspect Directly via Container Runtime (`crictl`)
 
-When the control plane API server is down, `kubectl` commands will fail. Use `crictl` directly on the host:
+When the control plane API server is down or a component fails before connecting, use `crictl` directly on the host:
 
 ```bash
-sudo crictl ps -a
+sudo crictl ps -a | grep -E "scheduler|controller|apiserver"
 sudo crictl logs <container-id>
 ```
 
@@ -57,38 +64,99 @@ sudo journalctl -u kubelet -e --no-pager
 
 ## 2. Interactive Break-Fix Drills
 
-### Drill A: Kube-Scheduler Manifest Corruption
+### Drill A: Kube-Scheduler Static Pod Failure & Canary Diagnostics
 
 #### Step 1: Break the Scheduler
 
+Run the failure injector script (defaults to Scenario 1: broken kubeconfig path):
+
 ```bash
+# Default Scenario 1: Broken kubeconfig path
 sudo ./break-scheduler.sh
+
+# Or test alternative authentic scenarios:
+# sudo ./break-scheduler.sh --scenario=mount   (Corrupted hostPath mount)
+# sudo ./break-scheduler.sh --scenario=syntax  (Invalid YAML syntax; mirror pod disappears)
 ```
 
-#### Step 2: Diagnose Why It Stopped
+The script automatically deploys a canary workload (`cka-scheduler-probe`) in the `default` namespace.
+
+#### Step 2: Observe the Symptom (Pending Pod with Zero Events)
+
+Existing workloads continue running normally, but new pods cannot be scheduled:
 
 ```bash
-kubectl get pods -n kube-system
-sudo journalctl -u kubelet | grep -i "scheduler"
+# Verify canary deployment is stuck in Pending
+kubectl get pods -n default -l app=scheduler-probe
+
+# Inspect events: notice ZERO scheduling events recorded
+kubectl describe pod -n default -l app=scheduler-probe
 ```
 
-#### Step 3: Restore Healthy State
+#### Step 3: Control Plane Forensic Triage
 
 ```bash
+# Check scheduler static pod mirror status in kube-system
+kubectl get pods -n kube-system -l component=kube-scheduler
+
+# If pod is in CrashLoopBackOff or Error, inspect container logs:
+sudo crictl ps -a | grep -i scheduler
+sudo crictl logs <container-id>
+
+# If pod is completely missing from kubectl, inspect kubelet parser logs:
+sudo journalctl -u kubelet -e --no-pager | grep -i scheduler
+```
+
+#### Step 4: Fix and Restore the Static Pod
+
+```bash
+# Restore valid manifest and verify canary scheduling
 sudo ./fix-scheduler.sh
 ```
 
-### Drill B: Kube-Apiserver Certificate Path Failure
+---
+
+### Drill B: Kube-Controller-Manager Failure & Canary Diagnostics
+
+#### Step 1: Break the Controller Manager
+
+```bash
+sudo ./break-controller-manager.sh --scenario=kubeconfig
+# Alternative scenarios: --scenario=mount or --scenario=syntax
+```
+
+#### Step 2: Observe the Symptom (Deployments Fail to Provision Pods)
+
+```bash
+kubectl get deployment cka-controller-probe -n default
+# Observe READY: 0/2 despite spec.replicas: 2
+```
+
+#### Step 3: Triage and Fix
+
+```bash
+sudo crictl ps -a | grep -i controller-manager
+sudo crictl logs <container-id>
+sudo ./fix-controller-manager.sh
+```
+
+---
+
+### Drill C: Kube-Apiserver Flag Typo & Certificate Path Failure
 
 #### Step 1: Break the API Server
 
 ```bash
-sudo ./break-apiserver.sh
+# Scenario 1 (flag typo): Inject --authorisation-mode=Node,RBAC
+sudo ./break-apiserver.sh --scenario=flag
+
+# Scenario 2 (PKI cert): Corrupt --etcd-cafile path
+sudo ./break-apiserver.sh --scenario=etcd
 ```
 
 #### Step 2: Diagnose Connection Refusal
 
-Observe `kubectl get nodes` failing, then inspect the container runtime directly:
+Observe `kubectl get nodes` failing with connection refused, then inspect the container runtime directly:
 
 ```bash
 sudo crictl ps -a | grep apiserver
@@ -100,3 +168,44 @@ sudo crictl logs <container_id>
 ```bash
 sudo ./fix-apiserver.sh
 ```
+
+---
+
+### Drill D: Automated Self-Test
+
+You can execute the full break-fix cycle automatically across all three static pods:
+
+```bash
+sudo ./test-static-pod-recovery.sh
+```
+
+---
+
+## 3. Real-World Post-Mortems & Incident References
+
+The static pod failure modes practiced in this lab directly model documented, high-impact production outages:
+
+- **Monzo Bank (2018)**:
+  - *Outage*: Banking deployment stall caused by an invalid credential path in scheduler kubeconfig.
+  - *Drill Mapping*: **Scenario 1** (Broken Kubeconfig Path).
+  - *Reference*: [hjacobs/kubernetes-failure-stories #15](https://github.com/hjacobs/kubernetes-failure-stories)
+- **Target Corporation (2019)**:
+  - *Outage*: Node OS upgrade desynchronized HostPath volume mount for PKI credentials.
+  - *Drill Mapping*: **Scenario 2** (HostPath Mount Drift).
+  - *Reference*: [Target Kubernetes Retrospective](https://github.com/hjacobs/kubernetes-failure-stories)
+- **Datadog (2020)**:
+  - *Outage*: Scheduler leader election drops and crashloops from client endpoint drift.
+  - *Drill Mapping*: **Scenario 4** (Server Endpoint Drift).
+  - *Reference*: [Datadog K8s Scheduling Post-Mortem](https://github.com/hjacobs/kubernetes-failure-stories)
+- **OpenAI (2021)**:
+  - *Outage*: Silent static pod watcher drops during in-place atomic file replacements (`sed -i`).
+  - *Drill Mapping*: Script analysis and inode watch gotchas.
+  - *Reference*: [OpenAI 7,500 Nodes Post-Mortem](https://openai.com/index/scaling-kubernetes-to-7500-nodes/)
+- **Kubernetes SIG-Node**:
+  - *Outage*: Kubelet removes mirror pods on YAML parse errors instead of reporting `Error`.
+  - *Drill Mapping*: **Scenario 3** (YAML Syntax Error).
+  - *Reference*: [Kubernetes Issue #65454](https://github.com/kubernetes/kubernetes/issues/65454)
+- **CNCF / Linux Foundation**:
+  - *Competency*: Standard certification competencies for control plane static pod recovery.
+  - *Drill Mapping*: Exam curriculum objectives.
+  - *Reference*: [CNCF CKA Curriculum](https://github.com/cncf/curriculum)

@@ -1,0 +1,85 @@
+# Storage & Volume Break-Fix Triage
+
+Troubleshoot PersistentVolume (PV), PersistentVolumeClaim (PVC) binding failures, and hostPath permission errors.
+
+## Official Exam References & Quick Lookups
+
+### Permitted Exam Documentation
+
+- **Configure Pod to Use a PersistentVolume**: [Configure PV](https://kubernetes.io/docs/tasks/configure-pod-container/configure-persistent-volume-storage/) `[EXAM ALLOWED]`
+- **Persistent Volumes Specification**: [Persistent Volumes](https://kubernetes.io/docs/concepts/storage/persistent-volumes/) `[EXAM ALLOWED]`
+
+### In-Exam Search Keywords
+
+- `"configure persistentvolume"`
+- `"persistent volume claim"`
+- `"storageclass"`
+
+### Terminal Fast Lookups (`kubectl`)
+
+```bash
+kubectl get pv,pvc -A
+kubectl describe pvc <pvc-name>
+kubectl describe pv <pv-name>
+kubectl describe pod <pod-name>
+```
+
+---
+
+## Failure Modes & Diagnostic Walkthrough
+
+### Failure Mode 1: PVC Pending (Capacity & AccessMode Mismatch)
+
+A static PersistentVolume `cka-manual-pv` is created with:
+
+- `capacity.storage: 5Gi`
+- `accessModes: [ReadWriteOnce]`
+- `storageClassName: manual-storage`
+
+A developer submits a PVC requesting `10Gi` and `ReadWriteMany`.
+
+**Diagnostic Step**:
+Inspect PVC status and events:
+
+```bash
+kubectl get pvc cka-mismatched-pvc
+kubectl describe pvc cka-mismatched-pvc
+```
+
+**Symptom**:
+`Status: Pending` with event:
+`FailedBinding: no persistent volumes available for this claim and no storage class is set`.
+
+**Remediation**:
+Recreate or adjust the PVC manifest (`02-fixed-pvc.yaml`) to match the PV attributes:
+
+- `resources.requests.storage: 5Gi`
+- `accessModes: [ReadWriteOnce]`
+- `storageClassName: manual-storage`
+
+### Failure Mode 2: HostPath Permissions Mismatch (`runAsUser: 1000`)
+
+A container configured with non-root security context `runAsUser: 1000` mounts a hostPath volume at `/mnt/data/app-data`
+
+(owned by `root:root 0755` on the host). When the container entrypoint writes to `/data/app.log`, it fails:
+`touch: cannot touch '/data/app.log': Permission denied`.
+
+**Diagnostic Step**:
+Check container status and logs:
+
+```bash
+kubectl get pod cka-hostpath-app
+kubectl logs cka-hostpath-app
+```
+
+**Remediation**:
+Configure `securityContext.fsGroup: 1000` at the pod level so Kubernetes recursively assigns volume ownership to GID
+1000, or grant group write permissions to the host directory.
+
+---
+
+## Practice Scripts
+
+- `setup-broken-storage.sh`: Injects the mismatched PVC and permissions-broken hostPath pod.
+- `fix-storage.sh`: Deploys the corrected PVC and updates the hostPath pod security context.
+- `test-storage-recovery.sh`: Automated verification that PVC binds and the pod writes successfully.

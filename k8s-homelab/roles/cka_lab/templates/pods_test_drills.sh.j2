@@ -151,9 +151,16 @@ echo "Namespace ${STAGING_NS} and its workloads deleted."
 # ------------------------------------------------------------------------------
 # Test 8: Pod Quarantine & Autopsy Pattern
 # ------------------------------------------------------------------------------
-echo "==> [8/8] Testing Pod Quarantine & Autopsy Pattern..."
+echo "==> [8/9] Testing Pod Quarantine & Autopsy Pattern..."
 "${SCRIPT_DIR}/07-quarantine-autopsy/test-quarantine.sh"
+
+# ------------------------------------------------------------------------------
+# Test 9: Readiness Probe Inter-Service Dependency
+# ------------------------------------------------------------------------------
+echo "==> [9/9] Testing Readiness Probe Inter-Service Dependency..."
+"${SCRIPT_DIR}/08-readiness-dependency/test-readiness-dependency.sh"
 
 echo "===================================================================="
 echo "  [SUCCESS] All CKA Pods & Namespaces drills verified successfully! "
 echo "===================================================================="
+

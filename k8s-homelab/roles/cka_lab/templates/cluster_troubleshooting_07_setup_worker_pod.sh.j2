@@ -13,10 +13,19 @@ if [[ ! -f "${MANIFEST_SRC}" ]]; then
     exit 1
 fi
 
-echo "[1/3] Copying manifest to ${WORKER_NODE}:/etc/kubernetes/manifests/ ..."
-ssh -o StrictHostKeyChecking=no "${WORKER_NODE}" "sudo mkdir -p /etc/kubernetes/manifests"
-scp -o StrictHostKeyChecking=no "${MANIFEST_SRC}" "${WORKER_NODE}:/tmp/static-web.yaml"
-ssh -o StrictHostKeyChecking=no "${WORKER_NODE}" "sudo mv /tmp/static-web.yaml /etc/kubernetes/manifests/"
+WORKER_HOST="${WORKER_NODE}"
+if ! getent hosts "${WORKER_NODE}" >/dev/null 2>&1; then
+    K8S_IP="$(kubectl get node "${WORKER_NODE}" -o jsonpath='{.status.addresses[?(@.type=="InternalIP")].address}' 2>/dev/null || true)"
+    if [ -n "${K8S_IP}" ]; then
+        echo "==> [NOTICE] '${WORKER_NODE}' resolved via Kubernetes Node API to ${K8S_IP}"
+        WORKER_HOST="${K8S_IP}"
+    fi
+fi
+
+echo "[1/3] Copying manifest to ${WORKER_NODE} (${WORKER_HOST}):/etc/kubernetes/manifests/ ..."
+ssh -o StrictHostKeyChecking=no "${WORKER_HOST}" "sudo mkdir -p /etc/kubernetes/manifests"
+scp -o StrictHostKeyChecking=no "${MANIFEST_SRC}" "${WORKER_HOST}:/tmp/static-web.yaml"
+ssh -o StrictHostKeyChecking=no "${WORKER_HOST}" "sudo mv /tmp/static-web.yaml /etc/kubernetes/manifests/"
 
 echo "[2/3] Waiting for mirror pod to register on control plane..."
 sleep 5

@@ -1,0 +1,80 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# test-basic-isolation.sh: Non-Interactive Verification of Basic Network Policies
+# Scenario: Pod Microsegmentation, Ingress Isolation, and Egress DNS Control
+# ==============================================================================
+set -euo pipefail
+
+CLIENT_NS="{{ cks_lab_netpol_client_namespace | default('cks-net-client') }}"
+BACKEND_NS="{{ cks_lab_netpol_backend_namespace | default('cks-net-backend') }}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+echo "==> [CKS NetPol Drill 1] Setting up namespaces and test workloads..."
+kubectl apply -f "${SCRIPT_DIR}/01-namespaces-workloads.yaml"
+
+echo "Waiting for backend and client pods to be Ready..."
+kubectl rollout status deployment/cks-lab-target-backend -n "${BACKEND_NS}" --timeout=60s
+kubectl wait --for=condition=Ready pod/cks-lab-client-authorized -n "${CLIENT_NS}" --timeout=60s
+kubectl wait --for=condition=Ready pod/cks-lab-client-unauthorized -n "${CLIENT_NS}" --timeout=60s
+
+BACKEND_URL="http://cks-lab-target-backend-svc.${BACKEND_NS}.svc.cluster.local:80"
+
+echo "==> 1. Testing baseline connectivity before applying NetworkPolicies (expect SUCCESS)..."
+if kubectl exec -n "${CLIENT_NS}" cks-lab-client-authorized -- wget -qO- -T 3 "${BACKEND_URL}" >/dev/null 2>&1; then
+  echo "    OK: Initial baseline connection succeeded as expected."
+else
+  echo "    ERROR: Initial baseline connection failed." >&2
+  exit 1
+fi
+
+echo "==> 2. Applying Default Deny Ingress policy in ${BACKEND_NS}..."
+kubectl apply -f "${SCRIPT_DIR}/02-default-deny-ingress.yaml"
+
+echo "Verifying traffic is blocked (expect TIMEOUT / FAILURE)..."
+if ! kubectl exec -n "${CLIENT_NS}" cks-lab-client-authorized -- wget -qO- -T 2 "${BACKEND_URL}" >/dev/null 2>&1; then
+  echo "    OK: Default deny ingress successfully dropped packet."
+else
+  echo "    ERROR: Traffic was not dropped by default-deny ingress policy!" >&2
+  exit 1
+fi
+
+echo "==> 3. Applying Selective Ingress and Egress DNS policies..."
+kubectl apply -f "${SCRIPT_DIR}/03-allow-client-to-backend.yaml"
+kubectl apply -f "${SCRIPT_DIR}/04-allow-coredns-egress.yaml"
+
+echo "==> 4. Verifying Authorized client can reach backend (expect SUCCESS)..."
+if kubectl exec -n "${CLIENT_NS}" cks-lab-client-authorized -- wget -qO- -T 3 "${BACKEND_URL}" >/dev/null 2>&1; then
+  echo "    OK: Authorized client successfully reached backend."
+else
+  echo "    ERROR: Authorized client failed to reach backend." >&2
+  exit 1
+fi
+
+echo "==> 5. Verifying Unauthorized client is blocked (expect FAILURE)..."
+if ! kubectl exec -n "${CLIENT_NS}" cks-lab-client-unauthorized -- wget -qO- -T 2 "${BACKEND_URL}" >/dev/null 2>&1; then
+  echo "    OK: Unauthorized client was rejected by NetworkPolicy."
+else
+  echo "    ERROR: Unauthorized client was NOT blocked by NetworkPolicy!" >&2
+  exit 1
+fi
+
+echo "==> 6. Applying Cloud Metadata Protection policy (169.254.169.254/32)..."
+kubectl apply -f "${SCRIPT_DIR}/05-protect-cloud-metadata.yaml"
+
+echo "==> 7. Verifying access to Cloud Metadata endpoint is strictly blocked (expect FAILURE)..."
+if ! kubectl exec -n "${CLIENT_NS}" cks-lab-client-authorized -- wget -qO- -T 2 "http://169.254.169.254/latest/meta-data/" >/dev/null 2>&1; then
+  echo "    OK: Cloud metadata endpoint access was blocked by NetworkPolicy."
+else
+  echo "    ERROR: Cloud metadata endpoint was accessible! Security rule failure." >&2
+  exit 1
+fi
+
+echo "==> 8. Verifying Authorized client can still reach backend service (expect SUCCESS)..."
+if kubectl exec -n "${CLIENT_NS}" cks-lab-client-authorized -- wget -qO- -T 3 "${BACKEND_URL}" >/dev/null 2>&1; then
+  echo "    OK: Authorized client connectivity to backend remains functional."
+else
+  echo "    ERROR: Authorized client lost connectivity to backend." >&2
+  exit 1
+fi
+
+echo "==> [SUCCESS] Basic NetworkPolicy drill completed successfully."

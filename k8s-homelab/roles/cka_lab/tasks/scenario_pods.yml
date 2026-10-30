@@ -15,10 +15,12 @@
     - "{{ cka_lab_pods_dir }}/05-spec-immutability"
     - "{{ cka_lab_pods_dir }}/06-namespaces-context"
     - "{{ cka_lab_pods_dir }}/07-quarantine-autopsy"
+    - "{{ cka_lab_pods_dir }}/08-readiness-dependency"
   tags:
     - cka_lab
     - pods
     - workloads
+    - probes
 
 - name: Render CKA pods drill manifests and guides
   ansible.builtin.template:
@@ -52,9 +54,14 @@
     - {src: "pods_07_quarantine_app.yaml.j2", dest: "07-quarantine-autopsy/01-quarantine-app.yaml"}
     - {src: "pods_07_quarantine_drill.sh.j2", dest: "07-quarantine-autopsy/quarantine-drill.sh", mode: "0755"}
     - {src: "pods_07_test_quarantine.sh.j2", dest: "07-quarantine-autopsy/test-quarantine.sh", mode: "0755"}
+    - {src: "pods_08_upstream_backend.yaml.j2", dest: "08-readiness-dependency/01-upstream-backend.yaml"}
+    - {src: "pods_08_dependent_frontend.yaml.j2", dest: "08-readiness-dependency/02-dependent-frontend.yaml"}
+    - {src: "pods_08_test_readiness.sh.j2", dest: "08-readiness-dependency/test-readiness-dependency.sh", mode: "0755"}
+    - {src: "pods_08_guide.md.j2", dest: "08-readiness-dependency/README.md", mode: "0644"}
   loop_control:
     label: "pods/{{ item.dest }}"
   tags:
     - cka_lab
     - pods
     - workloads
+    - probes

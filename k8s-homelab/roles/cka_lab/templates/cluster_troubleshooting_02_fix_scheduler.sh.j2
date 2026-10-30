@@ -1,28 +1,82 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # fix-scheduler.sh: Restores and Recovers Control Plane Static Pod
+# Managed by Ansible (roles/cka_lab)
 # ==============================================================================
 set -euo pipefail
 
 MANIFEST="/etc/kubernetes/manifests/kube-scheduler.yaml"
-BACKUP="/etc/kubernetes/manifests/kube-scheduler.yaml.bak"
+BACKUP="/etc/kubernetes/kube-scheduler.yaml.bak"
+LEGACY_BACKUP="/etc/kubernetes/manifests/kube-scheduler.yaml.bak"
 
-if [[ ! -f "${BACKUP}" ]]; then
-  echo "ERROR: Backup ${BACKUP} not found! Check /etc/kubernetes/manifests."
+if [ "$(id -u)" -ne 0 ]; then
+  echo "Error: This script modifies static pod manifests and must be run as root (use sudo)." >&2
   exit 1
 fi
 
-echo "1. Restoring valid kube-scheduler manifest from backup..."
-sudo cp "${BACKUP}" "${MANIFEST}"
-sudo rm -f "${BACKUP}"
+if [ ! -f "${BACKUP}" ] && [ -f "${LEGACY_BACKUP}" ]; then
+  BACKUP="${LEGACY_BACKUP}"
+fi
 
-echo "2. Waiting for kubelet to reload static pod..."
-for _ in {1..30}; do
-  if kubectl get pod -n kube-system -l component=kube-scheduler --no-headers | grep -q "Running"; then
-    echo "    OK: kube-scheduler restored to Running state."
-    exit 0
+# Detect KUBECONFIG if not set
+if [ -z "${KUBECONFIG:-}" ] && [ -f /etc/kubernetes/admin.conf ]; then
+  export KUBECONFIG=/etc/kubernetes/admin.conf
+fi
+
+echo "===================================================================="
+echo "  [CKA LAB] Restoring Control Plane Static Pod (kube-scheduler)     "
+echo "===================================================================="
+
+if [ -f "${BACKUP}" ]; then
+  echo "==> [1/4] Restoring valid kube-scheduler manifest from backup..."
+  cp -f "${BACKUP}" "${MANIFEST}"
+  rm -f "${BACKUP}" "${LEGACY_BACKUP}"
+else
+  echo "==> [1/4] Backup not found, repairing manifest in-place..."
+  sed -i 's|scheduler-broken.conf|scheduler.conf|g' "${MANIFEST}"
+  sed -i 's|missing-scheduler.conf|scheduler.conf|g' "${MANIFEST}"
+  sed -i '/^corrupted_unmarshal_syntax:/d' "${MANIFEST}"
+fi
+
+# Ensure no stray backup files remain inside manifests directory
+rm -f /etc/kubernetes/manifests/*.bak 2>/dev/null || true
+
+# Force container restart
+crictl ps --name kube-scheduler -q 2>/dev/null | xargs -r crictl stop >/dev/null 2>&1 || true
+
+echo "==> [2/4] Waiting for kubelet to reload static pod..."
+SCHEDULER_RESTORED=false
+for i in {1..30}; do
+  if kubectl get pod -n kube-system -l component=kube-scheduler --no-headers 2>/dev/null | grep -q "Running"; then
+    echo "    OK: kube-scheduler restored to Running state after ${i}s."
+    SCHEDULER_RESTORED=true
+    break
   fi
   sleep 1
 done
 
-echo "==> kube-scheduler recovery verification complete."
+if [ "${SCHEDULER_RESTORED}" != "true" ]; then
+  echo "    WARN: kube-scheduler did not enter Running state within 30s." >&2
+fi
+
+echo "==> [3/4] Verifying canary workload scheduling..."
+if kubectl get deployment cka-scheduler-probe -n default >/dev/null 2>&1; then
+  CANARY_SCHEDULED=false
+  for i in {1..30}; do
+    POD_PHASE="$(kubectl get pods -n default -l app=scheduler-probe -o jsonpath='{.items[0].status.phase}' 2>/dev/null || echo "Unknown")"
+    if [ "${POD_PHASE}" = "Running" ]; then
+      echo "    OK: Canary workload scheduled and Running after ${i}s."
+      CANARY_SCHEDULED=true
+      break
+    fi
+    sleep 1
+  done
+  if [ "${CANARY_SCHEDULED}" != "true" ]; then
+    echo "    WARN: Canary workload remained in ${POD_PHASE} state." >&2
+  fi
+  # Clean up canary deployment
+  kubectl delete deployment cka-scheduler-probe -n default --ignore-not-found=true --timeout=15s >/dev/null 2>&1 || true
+fi
+
+echo "==> [4/4] Scheduler restoration completed."
+echo "===================================================================="

@@ -1,5 +1,11 @@
 # Architecture & Implementation Plan: Advanced NetworkPolicies & Hubble Troubleshooting Drill
 
+> [!NOTE]
+> **SUPERSEDED BY CKS MIGRATION**:
+> All NetworkPolicy practice scenarios have been transferred from CKA to CKS under `roles/cks_lab`
+> (`~/cks/network-policies/`). See
+> [`plan_move_network_policies_to_cks_lab.md`](plan_move_network_policies_to_cks_lab.md).
+
 ## 1. Overview & Pedagogical Objectives
 
 This plan details the modernization of Module 5 (`11-networking/05-advanced-network-policies/`) in the CKA lab suite.

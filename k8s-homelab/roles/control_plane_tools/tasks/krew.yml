@@ -1,0 +1,123 @@
+---
+- name: Determine system architecture for krew
+  ansible.builtin.set_fact:
+    control_plane_tools_krew_arch: "{{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}"
+  tags:
+    - bootstrap
+    - tools
+    - krew
+
+- name: Check installed krew version
+  ansible.builtin.command: kubectl-krew version
+  register: control_plane_tools_installed_krew
+  failed_when: false
+  changed_when: false
+  tags:
+    - bootstrap
+    - tools
+    - krew
+
+- name: Install krew binary from official release archive
+  when: >-
+    (control_plane_tools_installed_krew.rc != 0) or
+    (control_plane_tools_krew_version not in control_plane_tools_installed_krew.stdout)
+  tags:
+    - bootstrap
+    - tools
+    - krew
+  block:
+    - name: Create temporary directory for krew archive
+      ansible.builtin.tempfile:
+        state: directory
+        suffix: krew
+      register: control_plane_tools_krew_temp_dir
+
+    - name: Download and unpack krew archive
+      ansible.builtin.unarchive:
+        src: >-
+          {{
+            'https://github.com/kubernetes-sigs/krew/releases/download/' ~
+            control_plane_tools_krew_version ~
+            '/krew-linux_' ~ control_plane_tools_krew_arch ~ '.tar.gz'
+          }}
+        dest: "{{ control_plane_tools_krew_temp_dir.path }}"
+        remote_src: true
+
+    - name: Copy krew binary to /usr/local/bin/kubectl-krew
+      ansible.builtin.copy:
+        src: "{{ control_plane_tools_krew_temp_dir.path }}/krew-linux_{{ control_plane_tools_krew_arch }}"
+        dest: /usr/local/bin/kubectl-krew
+        owner: root
+        group: root
+        mode: "0755"
+        remote_src: true
+
+    - name: Ensure symlink /usr/local/bin/krew points to kubectl-krew
+      ansible.builtin.file:
+        src: /usr/local/bin/kubectl-krew
+        dest: /usr/local/bin/krew
+        state: link
+        owner: root
+        group: root
+
+    - name: Remove temporary krew archive directory
+      ansible.builtin.file:
+        path: "{{ control_plane_tools_krew_temp_dir.path }}"
+        state: absent
+
+- name: Configure krew PATH environment profile
+  ansible.builtin.copy:
+    dest: /etc/profile.d/krew.sh
+    content: |
+      export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
+    owner: root
+    group: root
+    mode: "0644"
+  tags:
+    - bootstrap
+    - tools
+    - krew
+
+- name: Check if user .bashrc exists for krew PATH
+  ansible.builtin.stat:
+    path: "/home/{{ control_plane_tools_user }}/.bashrc"
+  register: control_plane_tools_user_bashrc_krew_stat
+  tags:
+    - bootstrap
+    - tools
+    - krew
+
+- name: Ensure krew PATH in user .bashrc
+  ansible.builtin.lineinfile:
+    path: "/home/{{ control_plane_tools_user }}/.bashrc"
+    line: 'export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"'
+    regexp: '.*\.krew/bin.*'
+    state: present
+  when:
+    - control_plane_tools_user != 'root'
+    - control_plane_tools_user_bashrc_krew_stat.stat.exists
+  tags:
+    - bootstrap
+    - tools
+    - krew
+
+- name: Check if root .bashrc exists for krew PATH
+  ansible.builtin.stat:
+    path: /root/.bashrc
+  register: control_plane_tools_root_bashrc_krew_stat
+  tags:
+    - bootstrap
+    - tools
+    - krew
+
+- name: Ensure krew PATH in root .bashrc
+  ansible.builtin.lineinfile:
+    path: /root/.bashrc
+    line: 'export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"'
+    regexp: '.*\.krew/bin.*'
+    state: present
+  when: control_plane_tools_root_bashrc_krew_stat.stat.exists
+  tags:
+    - bootstrap
+    - tools
+    - krew

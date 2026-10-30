@@ -1,0 +1,212 @@
+# CKS Lab Exercise: Pod-to-Pod Security & Kubernetes Network Policies
+
+Hands-on training scenario for the Certified Kubernetes Security Specialist (CKS) certification, covering
+pod-to-pod microsegmentation, zero-trust default-deny architectures, cross-tenant isolation, Cilium Hubble eBPF
+packet drop tracing, and static policy auditing via `kubectl-cyclonus`.
+
+---
+
+## 1. Overview & Curriculum Alignment
+
+In the CNCF / Linux Foundation CKS curriculum, Network Policies form a major component across two primary domains:
+
+1. **Minimize Microservice Vulnerabilities (20%)**:
+   - Implement Pod-to-Pod security using Network Policies.
+   - Enforce fine-grained egress filtering (restricting egress to DNS and specific internal microservices).
+2. **Cluster Setup (10%)**:
+   - Use NetworkSecurityPolicies to restrict cluster-level access.
+   - Prevent unauthorized lateral movement across tenant boundaries.
+
+### Scenario Directory Structure
+
+```text
+{{ cks_lab_netpol_workspace }}/
+├── README.md                                  # Master CKS NetworkPolicy guide
+├── test-network-policies.sh                  # Non-interactive automated test suite
+├── 01-basic-isolation/                        # Drill 1: Foundational Pod Microsegmentation
+│   ├── 01-namespaces-workloads.yaml           # Isolated client & backend namespaces and probe pods
+│   ├── 02-default-deny-ingress.yaml           # Ingress default-deny policy
+│   ├── 03-allow-client-to-backend.yaml        # Whitelisted ingress via podSelector & namespaceSelector
+│   ├── 04-allow-coredns-egress.yaml           # Whitelisted egress to CoreDNS UDP/TCP 53
+│   ├── 05-protect-cloud-metadata.yaml         # Egress policy isolating cloud metadata endpoint (169.254.169.254/32)
+│   └── test-basic-isolation.sh                # Non-interactive verification script for Drill 1
+├── 02-progressive-microsegmentation/          # Drill 2: Progressive Zero-Trust Lockdown & Hubble
+│   ├── 01-workloads.yaml                      # Multi-tier microservice test client & internal API
+│   ├── 02-default-deny-all.yaml               # Strict ingress + egress namespace lockdown
+│   ├── 03-allow-kube-dns.yaml                 # CoreDNS in-cluster egress rule
+│   ├── 04-allow-external-dns.yaml             # External DNS egress rule via ipBlock (1.1.1.1, 8.8.8.8)
+│   ├── 05-allow-internal-api.yaml             # Egress to internal backend tier on port 8080
+│   ├── hubble-troubleshooting.md              # Live Hubble eBPF drop tracing & flow debugging guide
+│   └── test-progressive-netpol.sh             # Progressive validation runner for Drill 2
+├── 03-multi-tenant-isolation/                 # Drill 3: Cross-Tenant Logical AND Boundaries
+│   ├── 01-cross-tenant-workloads.yaml         # Tenant A (frontend/analytics) & Tenant B (secure-db)
+│   ├── 02-allow-cross-tenant.yaml             # Logical AND policy (namespaceSelector + podSelector)
+│   └── test-multi-tenant.sh                   # Non-interactive verification runner for Drill 3
+└── 04-policy-analysis-cyclonus/               # Drill 4: Static Policy Auditing & Matrix Analysis
+    ├── README.md                              # Cyclonus explain, lint, and probe usage guide
+    └── run-cyclonus-analysis.sh               # Non-interactive cyclonus lint & matrix check
+```
+
+---
+
+## 2. Core Security Primitives & CKS Exam Traps
+
+### 1. Whitelist-Only Security Model
+
+Kubernetes NetworkPolicies are purely additive (whitelists). They cannot define explicit `DENY` rules.
+- **Unselected Pods**: If no policy selects a pod, it accepts traffic from all sources and can send to all destinations.
+- **Selected Pods**: As soon as a pod matches `spec.podSelector`, it drops all traffic for the declared `policyTypes`
+  (`Ingress`, `Egress`) unless explicitly whitelisted.
+
+### 2. The CoreDNS Egress Exam Trap
+
+When applying an `Egress` policy to isolate outbound traffic, you **must** allow egress to CoreDNS on port 53 (UDP
+and TCP), otherwise all in-cluster and external DNS queries will immediately time out.
+
+### 3. Logical AND vs. Logical OR in Ingress/Egress Rules
+
+- **Logical AND**: Placing `namespaceSelector` and `podSelector` inside the **same list item** (under a single dash
+  `-`):
+
+  ```yaml
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              team: frontend
+          podSelector:
+            matchLabels:
+              role: authorized
+  ```
+
+  Traffic is accepted *only* from pods labeled `role: authorized` inside namespaces labeled `team: frontend`.
+
+- **Logical OR**: Placing them as **separate list items** (with distinct dashes `-`):
+
+  ```yaml
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              team: frontend
+        - podSelector:
+            matchLabels:
+              role: authorized
+  ```
+
+  Traffic is accepted from *any* pod in `team: frontend` **OR** from `role: authorized` pods in the *same* namespace.
+
+### 4. Protecting Cloud Instance Metadata Service (IMDS)
+
+In cloud environments (AWS, GCP, Azure), workloads running on Kubernetes nodes may attempt to access the Instance
+Metadata Service at `169.254.169.254` (e.g., `http://169.254.169.254/latest/meta-data/` on AWS) to extract node IAM
+credentials and bootstrap tokens. Because NetworkPolicies operate on an allowlist model, the standard defensive pattern
+for allowing broad external or internet egress while strictly denying the metadata endpoint is to use `ipBlock.except`:
+
+```yaml
+egress:
+  - to:
+      - ipBlock:
+          cidr: 0.0.0.0/0
+          except:
+            - 169.254.169.254/32
+```
+
+---
+
+## 3. Walkthrough & Exam Drills
+
+### Drill 1: Basic Pod Microsegmentation (`01-basic-isolation/`)
+
+1. **Deploy Workloads**:
+
+   ```bash
+   cd {{ cks_lab_netpol_workspace }}/01-basic-isolation
+   kubectl apply -f 01-namespaces-workloads.yaml
+   ```
+
+2. **Apply Default-Deny & Whitelist Rules**:
+
+   ```bash
+   kubectl apply -f 02-default-deny-ingress.yaml
+   kubectl apply -f 03-allow-client-to-backend.yaml
+   kubectl apply -f 04-allow-coredns-egress.yaml
+   kubectl apply -f 05-protect-cloud-metadata.yaml
+   ```
+
+3. **Verify Selective Enforcement**:
+
+   ```bash
+   ./test-basic-isolation.sh
+   ```
+
+### Drill 2: Progressive Zero-Trust Lockdown & Hubble (`02-progressive-microsegmentation/`)
+
+1. **Deploy Workloads & Enforce Strict Default-Deny**:
+
+   ```bash
+   cd {{ cks_lab_netpol_workspace }}/02-progressive-microsegmentation
+   kubectl apply -f 01-workloads.yaml
+   kubectl apply -f 02-default-deny-all.yaml
+   ```
+
+2. **Progressively Whitelist Egress & Microservice Access**:
+
+   ```bash
+   kubectl apply -f 03-allow-kube-dns.yaml
+   kubectl apply -f 04-allow-external-dns.yaml
+   kubectl apply -f 05-allow-internal-api.yaml
+   ```
+
+3. **Inspect Drops with Hubble eBPF CLI**:
+
+   ```bash
+   hubble observe --namespace {{ cks_lab_netpol_namespace | default('default') }} --verdict DROPPED
+   ```
+
+4. **Run Verification**:
+
+   ```bash
+   ./test-progressive-netpol.sh
+   ```
+
+### Drill 3: Cross-Tenant Logical AND Isolation (`03-multi-tenant-isolation/`)
+
+1. **Deploy Cross-Tenant Workloads**:
+
+   ```bash
+   cd {{ cks_lab_netpol_workspace }}/03-multi-tenant-isolation
+   kubectl apply -f 01-cross-tenant-workloads.yaml
+   ```
+
+2. **Apply Cross-Tenant Allow Rules**:
+
+   ```bash
+   kubectl apply -f 02-allow-cross-tenant.yaml
+   ```
+
+3. **Run Verification**:
+
+   ```bash
+   ./test-multi-tenant.sh
+   ```
+
+### Drill 4: Policy Auditing with `kubectl-cyclonus` (`04-policy-analysis-cyclonus/`)
+
+1. **Run Static Policy Linting**:
+
+   ```bash
+   cd {{ cks_lab_netpol_workspace }}/04-policy-analysis-cyclonus
+   ./run-cyclonus-analysis.sh
+   ```
+
+---
+
+## 4. Master Automated Validation
+
+Execute the non-interactive end-to-end verification suite across all drills:
+
+```bash
+cd {{ cks_lab_netpol_workspace }}
+./test-network-policies.sh
+```

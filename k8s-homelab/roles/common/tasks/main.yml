@@ -40,22 +40,6 @@
     - common
     - modules
 
-- name: Load rbd kernel module
-  ansible.builtin.command: modprobe rbd
-  changed_when: false
-  tags:
-    - common
-    - modules
-    - ceph
-
-- name: Load iscsi_tcp kernel module
-  ansible.builtin.command: modprobe iscsi_tcp
-  changed_when: false
-  tags:
-    - common
-    - modules
-    - iscsi
-
 - name: Configure sysctl parameters for Kubernetes
   ansible.builtin.template:
     src: k8s-sysctl.conf.j2
@@ -124,7 +108,6 @@
       - tar
       - bash-completion
       - nfs-common
-      - open-iscsi
       - vim
     state: present
     update_cache: true
@@ -189,16 +172,6 @@
   tags:
     - common
     - editor
-
-- name: Ensure iscsid service is enabled and started
-  ansible.builtin.systemd:
-    name: iscsid
-    enabled: true
-    state: started
-  tags:
-    - common
-    - packages
-    - iscsi
 
 - name: Ensure nfs-server.local DNS mapping exists in /etc/hosts
   ansible.builtin.lineinfile:

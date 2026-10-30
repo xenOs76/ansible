@@ -3,11 +3,11 @@ apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: allow-frontend-to-db
-  namespace: {{ cka_lab_networking_tenant_b | default('tenant-b') }}
+  namespace: {{ cks_lab_netpol_tenant_b | default('cks-tenant-b') }}
   labels:
     app.kubernetes.io/name: allow-frontend-to-db
-    app.kubernetes.io/part-of: cka-lab
-    cka.practice/scenario: networking
+    app.kubernetes.io/part-of: cks-lab
+    cks.practice/scenario: network-policies
 spec:
   podSelector:
     matchLabels:
@@ -18,7 +18,7 @@ spec:
     - from:
         - namespaceSelector:
             matchLabels:
-              kubernetes.io/metadata.name: {{ cka_lab_networking_tenant_a | default('tenant-a') }}
+              kubernetes.io/metadata.name: {{ cks_lab_netpol_tenant_a | default('cks-tenant-a') }}
           podSelector:
             matchLabels:
               role: frontend
@@ -30,11 +30,11 @@ apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: allow-db-egress
-  namespace: {{ cka_lab_networking_tenant_a | default('tenant-a') }}
+  namespace: {{ cks_lab_netpol_tenant_a | default('cks-tenant-a') }}
   labels:
     app.kubernetes.io/name: allow-db-egress
-    app.kubernetes.io/part-of: cka-lab
-    cka.practice/scenario: networking
+    app.kubernetes.io/part-of: cks-lab
+    cks.practice/scenario: network-policies
 spec:
   podSelector:
     matchLabels:
@@ -45,7 +45,7 @@ spec:
     - to:
         - namespaceSelector:
             matchLabels:
-              kubernetes.io/metadata.name: {{ cka_lab_networking_tenant_b | default('tenant-b') }}
+              kubernetes.io/metadata.name: {{ cks_lab_netpol_tenant_b | default('cks-tenant-b') }}
           podSelector:
             matchLabels:
               role: database

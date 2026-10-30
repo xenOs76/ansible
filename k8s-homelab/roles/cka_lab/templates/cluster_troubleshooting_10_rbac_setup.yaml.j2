@@ -1,0 +1,51 @@
+---
+# ==============================================================================
+# CKA Lab: RBAC ServiceAccount & ClusterRoleBinding Diagnostics (Setup)
+# Managed by Ansible (roles/cka_lab)
+# Demonstrates a ServiceAccount / ClusterRoleBinding mismatch resulting in 403.
+# ==============================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: security-ops
+  labels:
+    app.kubernetes.io/part-of: cka-lab
+    cka-drill: rbac-recovery
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: node-inspector
+  namespace: security-ops
+  labels:
+    app.kubernetes.io/part-of: cka-lab
+    cka-drill: rbac-recovery
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: node-reader
+  labels:
+    app.kubernetes.io/part-of: cka-lab
+    cka-drill: rbac-recovery
+rules:
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: node-reader-binding
+  labels:
+    app.kubernetes.io/part-of: cka-lab
+    cka-drill: rbac-recovery
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: node-reader
+subjects:
+  # Intentional error: points to default namespace instead of security-ops
+  - kind: ServiceAccount
+    name: node-inspector
+    namespace: default

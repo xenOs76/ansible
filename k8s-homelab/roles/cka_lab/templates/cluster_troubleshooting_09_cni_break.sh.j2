@@ -1,0 +1,98 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# break-cni.sh: Simulates Missing / Corrupted CNI Plugin Configuration
+# Managed by Ansible (roles/cka_lab)
+# Renames /etc/cni/net.d/* configuration on target node
+# Supports local node execution or remote worker targeting (--node=kube-worker-1)
+# ==============================================================================
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TARGET_NODE="${1:-{{ cka_lab_target_worker_node | default('kube-worker-1') }}}"
+case "${TARGET_NODE}" in
+  --node=*)
+    TARGET_NODE="${TARGET_NODE#*=}"
+    ;;
+esac
+
+PROBE_MANIFEST="${SCRIPT_DIR}/cni-probe-pod.yaml"
+
+echo "===================================================================="
+echo "  [CKA LAB] Simulating Missing CNI Plugin Config                    "
+echo "  Target Node: ${TARGET_NODE}                                       "
+echo "===================================================================="
+
+# 1. Back up and disable CNI configuration on the target node
+echo "==> [1/3] Moving /etc/cni/net.d/ configurations on ${TARGET_NODE}..."
+
+break_cni_local() {
+  if [ "$(id -u)" -ne 0 ]; then
+    echo "Error: Modifying /etc/cni/net.d requires root (use sudo)." >&2
+    exit 1
+  fi
+  mkdir -p /etc/cni/net.d.bak
+  if compgen -G "/etc/cni/net.d/*" > /dev/null; then
+    cp -rf /etc/cni/net.d/* /etc/cni/net.d.bak/
+    rm -rf /etc/cni/net.d/*
+    echo "CNI configurations moved to backup directory."
+  else
+    echo "Warning: No CNI configuration files found in /etc/cni/net.d/"
+  fi
+}
+
+break_cni_remote() {
+  local target_host="${1}"
+  ssh -o StrictHostKeyChecking=no "${target_host}" "sudo bash -c '
+    mkdir -p /etc/cni/net.d.bak
+    if compgen -G \"/etc/cni/net.d/*\" > /dev/null; then
+      cp -rf /etc/cni/net.d/* /etc/cni/net.d.bak/
+      rm -rf /etc/cni/net.d/*
+      echo \"CNI configurations moved to backup directory.\"
+    else
+      echo \"Warning: No CNI configuration files found in /etc/cni/net.d/\"
+    fi
+  '"
+}
+
+if [ "${TARGET_NODE}" = "local" ] || [ "${TARGET_NODE}" = "$(hostname)" ]; then
+  break_cni_local
+else
+  TARGET_HOST="${TARGET_NODE}"
+  if ! getent hosts "${TARGET_NODE}" >/dev/null 2>&1; then
+    K8S_IP="$(kubectl get node "${TARGET_NODE}" -o jsonpath='{.status.addresses[?(@.type=="InternalIP")].address}' 2>/dev/null || true)"
+    if [ -n "${K8S_IP}" ]; then
+      echo "==> [NOTICE] '${TARGET_NODE}' resolved via Kubernetes Node API to ${K8S_IP}"
+      TARGET_HOST="${K8S_IP}"
+    fi
+  fi
+  break_cni_remote "${TARGET_HOST}"
+fi
+
+# 2. Deploy probe workload targeted to the affected node
+echo "==> [2/3] Deploying probe pod targeted to ${TARGET_NODE}..."
+kubectl delete pod cni-probe-pod -n default --ignore-not-found=true --timeout=15s >/dev/null 2>&1 || true
+kubectl apply -f "${PROBE_MANIFEST}" >/dev/null 2>&1 || true
+
+sleep 3
+echo "    Current pod status on ${TARGET_NODE}:"
+kubectl get pod cni-probe-pod -n default -o wide || true
+
+# 3. Triage checklist
+echo ""
+echo "==> [3/3] Failure simulation active."
+echo "--- Troubleshooting Checklist ---"
+echo "1. Observe probe pod stuck in ContainerCreating:"
+echo "   kubectl get pod cni-probe-pod -n default"
+echo ""
+echo "2. Inspect pod failure events (notice networkPlugin cni errors):"
+echo "   kubectl describe pod cni-probe-pod -n default"
+echo ""
+echo "3. Connect to node and inspect CNI directory & Kubelet logs:"
+echo "   ssh ${TARGET_NODE}"
+echo "   ls -la /etc/cni/net.d/"
+echo "   sudo journalctl -u kubelet -e --no-pager | grep -i cni"
+echo ""
+echo "4. Restore healthy CNI state when finished:"
+echo "   ./fix-cni.sh --node=${TARGET_NODE}"
+echo "===================================================================="
+

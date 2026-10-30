@@ -139,14 +139,10 @@ echo "==> [4/6] Configuring kernel networking and sysctl..."
 cat <<EOF | sudo tee /etc/modules-load.d/k8s.conf >/dev/null
 overlay
 br_netfilter
-rbd
-iscsi_tcp
 EOF
 
 sudo modprobe overlay
 sudo modprobe br_netfilter
-sudo modprobe rbd
-sudo modprobe iscsi_tcp
 
 cat <<EOF | sudo tee /etc/sysctl.d/k8s.conf >/dev/null
 net.bridge.bridge-nf-call-iptables  = 1
@@ -169,8 +165,7 @@ sudo sed -i '/\sswap\s/ s/^\(.*\)$/#\1/g' /etc/fstab
 echo "==> [6/7] Installing diagnostic tools and default editor (vim)..."
 echo "deb [trusted=yes] https://repo.os76.xyz/apt stable main" | sudo tee /etc/apt/sources.list.d/os76.list >/dev/null
 sudo apt-get update -y
-sudo apt-get -y install socat kubectl-netdrill bash-completion open-iscsi nfs-common vim
-sudo systemctl enable --now iscsid || true
+sudo apt-get -y install socat kubectl-netdrill bash-completion nfs-common vim
 
 # Set vim as default system editor alternative
 if command -v update-alternatives >/dev/null 2>&1; then

@@ -1,0 +1,24 @@
+---
+# ==============================================================================
+# CKA Lab: CNI Plugin Diagnostics Probe Pod
+# Managed by Ansible (roles/cka_lab)
+# Targeted specifically to a worker node to test CNI sandbox creation.
+# ==============================================================================
+apiVersion: v1
+kind: Pod
+metadata:
+  name: cni-probe-pod
+  namespace: default
+  labels:
+    app: cni-probe
+    cka-drill: cni-recovery
+spec:
+  nodeSelector:
+    kubernetes.io/hostname: {{ cka_lab_target_worker_node | default('kube-worker-1') }}
+  containers:
+    - name: probe
+      image: registry.k8s.io/pause:3.9
+      resources:
+        requests:
+          cpu: "10m"
+          memory: "16Mi"

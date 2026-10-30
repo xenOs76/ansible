@@ -1,0 +1,79 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# test-rbac-recovery.sh: Automated Self-Test for RBAC Recovery Drill
+# Managed by Ansible (roles/cka_lab)
+# ==============================================================================
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+cleanup() {
+  echo "==> Cleaning up RBAC troubleshooting resources..."
+  kubectl delete namespace security-ops --ignore-not-found=true --now >/dev/null 2>&1 || true
+  kubectl delete clusterrole node-reader --ignore-not-found=true --now >/dev/null 2>&1 || true
+  kubectl delete clusterrolebinding node-reader-binding --ignore-not-found=true --now >/dev/null 2>&1 || true
+}
+trap cleanup EXIT
+
+echo "===================================================================="
+echo "  [TEST] RBAC ServiceAccount & RoleBinding Recovery Verification    "
+echo "===================================================================="
+
+# 1. Clean up prior runs
+cleanup
+
+# 2. Deploy broken setup
+echo "==> [1/4] Applying broken RBAC setup (subject namespace mismatch)..."
+kubectl apply -f "${SCRIPT_DIR}/01-rbac-setup.yaml" >/dev/null
+
+# 3. Assert initial permission failure
+echo "==> [2/4] Verifying auth can-i confirms permission denial..."
+if kubectl auth can-i list nodes --as=system:serviceaccount:security-ops:node-inspector 2>/dev/null | grep -wq "no"; then
+  echo "    OK: Permission is denied as expected (ServiceAccount not properly bound)."
+else
+  echo "    ERROR: Expected permission denial, but access was granted!" >&2
+  exit 1
+fi
+
+# Run probe pod expecting failure
+echo "    Running probe pod (expecting 403 Forbidden)..."
+kubectl apply -f "${SCRIPT_DIR}/02-probe-pod.yaml" >/dev/null
+for i in $(seq 1 15); do
+  PHASE="$(kubectl get pod node-inspector-pod -n security-ops -o jsonpath='{.status.phase}' 2>/dev/null || echo "Unknown")"
+  if [ "${PHASE}" = "Failed" ] || [ "${PHASE}" = "Error" ]; then
+    echo "    OK: Probe pod failed with 403 as expected."
+    break
+  fi
+  echo "    Attempt ${i}/15: Waiting for probe pod to finish..."
+  sleep 2
+done
+
+# 4. Apply fix
+echo "==> [3/4] Applying fixed ClusterRoleBinding (correct subject namespace)..."
+kubectl apply -f "${SCRIPT_DIR}/03-fixed-binding.yaml" >/dev/null
+
+# 5. Verify resolution
+echo "==> [4/4] Verifying permission granted after fix..."
+if kubectl auth can-i list nodes --as=system:serviceaccount:security-ops:node-inspector 2>/dev/null | grep -wq "yes"; then
+  echo "    OK: Permission granted: node-inspector can list nodes!"
+else
+  echo "    ERROR: Permission still denied after applying fix!" >&2
+  exit 1
+fi
+
+# Rerun probe pod expecting success
+kubectl delete pod node-inspector-pod -n security-ops --now >/dev/null 2>&1 || true
+kubectl apply -f "${SCRIPT_DIR}/02-probe-pod.yaml" >/dev/null
+for i in $(seq 1 20); do
+  PHASE="$(kubectl get pod node-inspector-pod -n security-ops -o jsonpath='{.status.phase}' 2>/dev/null || echo "Unknown")"
+  if [ "${PHASE}" = "Succeeded" ]; then
+    echo "    OK: Probe pod completed successfully with HTTP 200 OK!"
+    break
+  fi
+  echo "    Attempt ${i}/20: Waiting for probe pod to complete..."
+  sleep 2
+done
+
+echo "===================================================================="
+echo "  [SUCCESS] RBAC ServiceAccount & RoleBinding Recovery verified!    "
+echo "===================================================================="

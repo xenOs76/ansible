@@ -1,0 +1,55 @@
+# NetworkPolicy Troubleshooting with Cilium Hubble
+
+Troubleshoot NetworkPolicy packet drops and traffic flow denials using the Cilium `hubble` CLI.
+
+## 1. Prerequisites & Health Verification
+
+Ensure Cilium and Hubble relay are active on the control plane node:
+
+```bash
+# Verify Cilium status
+cilium status --wait
+
+# Start Hubble port-forward if not already listening locally
+cilium hubble port-forward &
+
+# Verify local Hubble connectivity
+hubble status
+```
+
+---
+
+## 2. Tracing NetworkPolicy Drops in Real-Time
+
+When Kubernetes NetworkPolicies block traffic, packets are dropped silently at the eBPF layer. Use Hubble's
+`--verdict DROPPED` flag to capture these events live:
+
+```bash
+# Watch all dropped packets live in the backend namespace
+hubble observe --namespace {{ cka_lab_networking_backend_namespace | default('cka-lab-net-backend') }} --verdict DROPPED -f
+
+# Filter drops originating specifically from the client namespace
+hubble observe --from-namespace {{ cka_lab_networking_client_namespace | default('cka-lab-net-client') }} --verdict DROPPED -f
+
+# Filter drops targeting port 80
+hubble observe --to-port 80 --verdict DROPPED -f
+```
+
+### Common Drop Verdicts
+
+- `Policy denied (INGRESS)`: Inbound request was rejected by a default-deny rule or missing `ingress` allow rule.
+- `Policy denied (EGRESS)`: Outbound request was blocked because destination namespace/pod or port is not permitted.
+
+---
+
+## 3. Verifying Allowed Connections
+
+Confirm that authorized traffic flows successfully across namespaces:
+
+```bash
+# Observe allowed traffic from authorized client
+hubble observe --from-pod {{ cka_lab_networking_client_namespace | default('cka-lab-net-client') }}/cka-lab-client-authorized -f
+
+# Output in compact one-line format
+hubble observe --namespace {{ cka_lab_networking_backend_namespace | default('cka-lab-net-backend') }} -o compact
+```

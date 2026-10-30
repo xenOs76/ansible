@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# test-ingress-routing.sh: Automated Verification for Ingress Backend Port
+# ==============================================================================
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+echo "=== Verifying Ingress Backend Port Alignment ==="
+
+echo "1. Deploying broken Ingress scenario..."
+"${SCRIPT_DIR}/setup-broken-ingress.sh"
+
+echo "2. Asserting broken port configuration (Expect: 8080)..."
+INITIAL_PORT="$(kubectl get ingress cka-broken-ingress -n default -o jsonpath='{.spec.rules[0].http.paths[0].backend.service.port.number}')"
+if [[ "${INITIAL_PORT}" != "8080" ]]; then
+    echo "WARNING: Expected initial Ingress port to be 8080, found '${INITIAL_PORT}'"
+fi
+
+echo "3. Applying Ingress fix..."
+"${SCRIPT_DIR}/fix-ingress.sh"
+
+echo "4. Validating healed Ingress port configuration..."
+FIXED_PORT="$(kubectl get ingress cka-broken-ingress -n default -o jsonpath='{.spec.rules[0].http.paths[0].backend.service.port.number}')"
+if [[ "${FIXED_PORT}" != "80" ]]; then
+    echo "ERROR: Ingress port is not 80! Current: '${FIXED_PORT}'"
+    exit 1
+fi
+echo "  [PASS] Ingress backend port successfully aligned with Service port 80"
+
+# Optional end-to-end curl check if Ingress-NGINX controller is active
+if kubectl get svc -n ingress-nginx ingress-nginx-controller >/dev/null 2>&1; then
+    echo "Testing HTTP curl through Ingress-NGINX controller (NodePort 30080)..."
+    HTTP_CODE="$(curl -s -o /dev/null -w "%{http_code}" -H "Host: ingress-triage.local" http://127.0.0.1:30080/ || echo "000")"
+    echo "HTTP Response: ${HTTP_CODE}"
+fi
+
+echo "5. Cleaning up Ingress drill resources..."
+kubectl delete ingress cka-broken-ingress -n default --ignore-not-found=true --wait=false >/dev/null 2>&1
+kubectl delete service cka-ingress-svc -n default --ignore-not-found=true --wait=false >/dev/null 2>&1
+kubectl delete deployment cka-ingress-backend -n default --ignore-not-found=true --wait=false >/dev/null 2>&1
+
+echo "=== Ingress Routing Triage Test PASSED! ==="

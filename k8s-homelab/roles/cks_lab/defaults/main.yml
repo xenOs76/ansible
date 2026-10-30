@@ -12,6 +12,7 @@ cks_lab_scenario_gvisor_enabled: true
 cks_lab_scenario_admission_enabled: true
 cks_lab_scenario_supply_chain_enabled: true
 cks_lab_scenario_falco_enabled: true
+cks_lab_scenario_netpol_enabled: true
 
 # User and workspace settings
 cks_lab_user: "{{ ansible_user | default('vagrant') }}"
@@ -19,6 +20,14 @@ cks_lab_workspace_dir: "/home/{{ cks_lab_user }}/cks"
 cks_lab_apparmor_workspace: "{{ cks_lab_workspace_dir }}/apparmor"
 cks_lab_seccomp_workspace: "{{ cks_lab_workspace_dir }}/seccomp"
 cks_lab_system_workspace: "{{ cks_lab_workspace_dir }}/system"
+cks_lab_netpol_workspace: "{{ cks_lab_workspace_dir }}/network-policies"
+
+# NetworkPolicy scenario namespaces
+cks_lab_netpol_client_namespace: "cks-net-client"
+cks_lab_netpol_backend_namespace: "cks-net-backend"
+cks_lab_netpol_tenant_a: "cks-tenant-a"
+cks_lab_netpol_tenant_b: "cks-tenant-b"
+cks_lab_netpol_namespace: "default"
 
 # AppArmor and Seccomp host directories
 cks_lab_apparmor_profiles_dir: "/etc/apparmor.d"

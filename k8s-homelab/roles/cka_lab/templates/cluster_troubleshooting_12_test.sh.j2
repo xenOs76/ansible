@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# test-scheduling-recovery.sh: Automated Verification for Scheduling Recovery
+# ==============================================================================
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+echo "=== Testing Node Scheduling & Taint Recovery Scenario ==="
+
+echo "1. Injecting broken scheduling state (taints + mismatched toleration)..."
+"${SCRIPT_DIR}/setup-broken-scheduling.sh"
+
+echo "2. Asserting initial Pending state..."
+PENDING_PODS="$(kubectl get pods -l app=gpu-processor -n default --no-headers 2>/dev/null | grep -c "Pending" || echo "0")"
+if [[ "${PENDING_PODS}" -eq 0 ]]; then
+    echo "WARNING: Expected at least 1 Pending pod, found 0"
+fi
+
+echo "3. Applying scheduling fix..."
+"${SCRIPT_DIR}/fix-scheduling.sh"
+
+echo "4. Validating healed running state on tainted nodes..."
+RUNNING_PODS="$(kubectl get pods -l app=gpu-processor -n default --no-headers 2>/dev/null | grep -c "Running" || echo "0")"
+if [[ "${RUNNING_PODS}" -lt 2 ]]; then
+    echo "ERROR: Expected 2 running pods, found '${RUNNING_PODS}'"
+    kubectl describe pods -l app=gpu-processor -n default
+    exit 1
+fi
+echo "  [PASS] Pods successfully running on tainted worker nodes (${RUNNING_PODS}/2 Running)"
+
+echo "5. Cleaning up scheduling scenario and node taints..."
+"${SCRIPT_DIR}/fix-scheduling.sh" --cleanup
+
+echo "=== Node Scheduling & Taint Recovery PASSED! ==="

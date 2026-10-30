@@ -1,0 +1,81 @@
+# Advanced Node Scheduling Break-Fix Triage
+
+Troubleshoot why a Pod remains in `Pending` state due to untolerated node taints or malformed toleration rules.
+
+## Official Exam References & Quick Lookups
+
+### Permitted Exam Documentation
+
+- **Taints and Tolerations**: [Taints & Tolerations](https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/) `[EXAM ALLOWED]`
+- **Assigning Pods to Nodes**: [Assigning Pods](https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/) `[EXAM ALLOWED]`
+
+### In-Exam Search Keywords
+
+- `"taints and tolerations"`
+- `"assigning pods to nodes"`
+- `"nodeSelector"`
+
+### Terminal Fast Lookups (`kubectl`)
+
+```bash
+kubectl describe node <node-name> | grep -i taints
+kubectl get pods -o wide
+kubectl describe pod <pod-name>
+kubectl explain pod.spec.tolerations
+```
+
+---
+
+## Failure Modes & Diagnostic Walkthrough
+
+### Symptom: Pod Stuck in `Pending` State
+
+A batch workload `cka-gpu-processor` is deployed, but its pods remain indefinitely in `Pending` phase.
+
+#### Step 1: Inspect Pod Events
+
+```bash
+kubectl describe pod -l app=gpu-processor
+```
+
+Observe the scheduling failure reason in `Events`:
+`0/3 nodes are available: 1 node(s) had untolerated taint {node-role...}, 2 node(s) had untolerated taint {sku: gpu}`.
+
+#### Step 2: Inspect Node Taints
+
+```bash
+kubectl get nodes -o custom-columns=NAME:.metadata.name,TAINTS:.spec.taints
+```
+
+Output indicates worker nodes are tainted with `sku=gpu:NoSchedule`.
+
+#### Step 3: Compare Tolerations in Pod Spec
+
+```bash
+kubectl get pod -l app=gpu-processor -o jsonpath='{.items[0].spec.tolerations}' | jq .
+```
+
+Observe the mismatch:
+
+- Node taint: `key=sku`, `value=gpu`, `effect=NoSchedule`
+- Pod toleration: `key=skuu` (typo) or `effect=NoExecute` (mismatch)
+
+**Remediation**:
+Update the deployment manifest (`02-fixed-workload.yaml`) or patch tolerations:
+
+```yaml
+tolerations:
+  - key: "sku"
+    operator: "Equal"
+    value: "gpu"
+    effect: "NoSchedule"
+```
+
+---
+
+## Practice Scripts
+
+- `setup-broken-scheduling.sh`: Taints worker nodes with `sku=gpu:NoSchedule` and deploys workload with typo toleration.
+- `fix-scheduling.sh`: Patches the deployment with the correct toleration rule.
+- `test-scheduling-recovery.sh`: Automated verification that pods transition from `Pending` to `Running` on tainted
+  nodes.

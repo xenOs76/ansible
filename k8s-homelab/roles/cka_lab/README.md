@@ -56,7 +56,7 @@ compatibility with existing scripts and user habits.
 | **08** | `08-workloads-advanced/` | Workloads (15%) | DaemonSets (node agents), batch Jobs (parallelism), and CronJobs |
 | **09** | `09-kustomize/` | Workloads (15%) | Declarative configuration management, base manifests, and env overlays |
 | **10** | `10-scheduling/` | Scheduling (15%) | Taints & tolerations, nodeAffinity, podAffinity, PriorityClasses, preemption |
-| **11** | `11-networking/` | Networking (20%) | Services (ClusterIP, NodePort), Ingress, Gateway API, and NetworkPolicies |
+| **11** | `11-networking/` | Networking (20%) | Services, Ingress, Gateway API, and NetworkPolicies with Hubble |
 | **12** | `12-volumes/` | Storage (10%) | `emptyDir`, `hostPath`, static PV/PVC lifecycle, and reclaim policy mutation |
 | **13** | `13-storage-classes/` | Storage (10%) | Dynamic CSI provisioners, `WaitForFirstConsumer`, and online PVC expansion |
 | **14** | `14-crds-operators/` | Architecture (25%) | CustomResourceDefinitions, OpenAPI schema validation, and operators |
@@ -397,45 +397,48 @@ A master navigation guide is generated at `/home/vagrant/cka/README.md` and styl
      --current --namespace=...`.
   1. **Pod Quarantine & Autopsy (`07-quarantine-autopsy/`)**: Isolating unhealthy pods from Service endpoints via label
      manipulation for live debugging.
+  1. **Inter-Service Readiness Dependencies (`08-readiness-dependency/`)**: Configuring an `exec` `readinessProbe`
+     checking an upstream ClusterIP Service (`wget -T2 -q -O- http://order-service:80/`) ensuring pods only receive
+     traffic when dependencies are available.
 - **Artifacts**:
   - Pods drill directory: `/home/vagrant/cka/pods/`
   - Automated test suite: `test-pods-drills.sh`
   - Master practice guide: `README.md`
 
-### Scenario 8: Services, Ingress, Gateway API & Network Policies (`networking`)
+### Scenario 8: Services, Ingress & Gateway API (`networking`)
 
 - **Domain**: Services & Networking (20%).
 - **Exam References & Permitted Documentation**:
   - [Services](https://kubernetes.io/docs/concepts/services-networking/service/) `[EXAM ALLOWED]`
   - [Ingress](https://kubernetes.io/docs/concepts/services-networking/ingress/) `[EXAM ALLOWED]`
-  - [Network Policies](https://kubernetes.io/docs/concepts/services-networking/network-policies/) `[EXAM ALLOWED]`
   - [DNS for Services and Pods](https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/) `[EXAM ALLOWED]`
   - [Gateway API Official Documentation](https://gateway-api.sigs.k8s.io/) `[EXAM ALLOWED]`
-- **In-Exam Search Keywords**: `"service nodeport"`, `"ingress path"`, `"network policy default deny"`, `"httproute"`
+- **In-Exam Search Keywords**: `"service nodeport"`, `"ingress path"`, `"httproute"`
 - **Fast Terminal Lookups**:
 
   ```bash
   kubectl expose deployment web --port=80 --target-port=8080 --type=NodePort --dry-run=client -o yaml
   kubectl explain service.spec.type
   kubectl explain ingress.spec.rules
-  kubectl explain networkpolicy.spec.ingress
-  kubectl explain networkpolicy.spec.egress
   ```
 
 - **Exam Context & Permissibility Notes**:
   - Caddy acts as a homelab edge reverse proxy terminating external TLS `[HOMELAB AUXILIARY]`. CKA exam networking
     focuses on Kubernetes Ingress controllers, Ingress resources, and Gateway API CRDs (`Gateway`, `HTTPRoute`).
-- **Objective**: Comprehensive training across core Kubernetes networking abstractions, edge routing, and pod-to-pod
-  microsegmentation:
+- **Objective**: Comprehensive training across core Kubernetes networking abstractions and edge routing:
   1. **Services & CoreDNS (`01-services/`)**: ClusterIP, NodePort, and Headless services with CoreDNS resolution
      (`<service>.<namespace>.svc.cluster.local`).
   1. **Ingresses (`02-ingresses/`)**: Multi-host and path-based Ingress routing (`ingressClassName: nginx`).
   1. **Gateway API & Caddy Integration (`03-gateway-api/`)**: Standard Gateway and HTTPRoute resources with path prefix
      routing and URL rewrite rules.
-  1. **Network Policies (`04-network-policies/`)**: Default-deny ingress, client-to-backend authorization via
-     `podSelector`, and egress DNS policy.
-  1. **Advanced Multi-Namespace NetworkPolicies (`05-advanced-netpol/`)**: Combined `namespaceSelector` and
-     `podSelector` rules.
+  1. **Network Policies & Microsegmentation (`04-network-policies/`)**: Namespace isolation, default-deny ingress,
+     client pod ingress allow rules, CoreDNS egress, database egress restrictions, and live Hubble packet drop
+     troubleshooting (`hubble observe --verdict DROPPED`).
+  > [!NOTE]
+  > **Network Policies in CKA vs CKS**: Core functional NetworkPolicy isolation (ingress/egress selectors, CIDR blocks,
+  > port rules) and Hubble CLI diagnostics are fully integrated here for CKA. Advanced zero-trust cloud metadata
+  > isolation (`169.254.169.254/32`) and automated Cyclonus policy auditing are featured in the dedicated CKS training
+  > lab (`~/cks/network-policies/`).
 - **Artifacts**:
   - Networking drill directory: `/home/vagrant/cka/networking/`
   - Automated test suite: `test-networking-drills.sh`
@@ -573,19 +576,31 @@ A master navigation guide is generated at `/home/vagrant/cka/README.md` and styl
   1. **Node Maintenance (`01-node-maintenance/`)**: Non-interactive node cordoning (`kubectl cordon`), workload eviction
      (`kubectl drain --ignore-daemonsets --delete-emptydir-data`), and return to service (`kubectl uncordon`).
   1. **Static Pod Break-Fix (`02-static-pod-recovery/`)**: Diagnosing and repairing corrupted control plane manifests in
-     `/etc/kubernetes/manifests/` using `crictl` and system logs.
-  1. **Kubelet Diagnostics (`03-kubelet-diagnostics/`)**: Troubleshooting worker node systemd `kubelet.service` failures
-     and configuration syntax errors (`/var/lib/kubelet/config.yaml`).
+     `/etc/kubernetes/manifests/` (`kube-apiserver` flag typo, `kube-controller-manager`, and `kube-scheduler`).
+  1. **Kubelet Diagnostics (`03-kubelet-diagnostics/`)**: Troubleshooting worker node systemd `kubelet.service`
+     failures, configuration syntax errors (`config.yaml`), and client certificate TLS auth errors in `kubelet.conf`.
   1. **Resource Telemetry (`04-metrics-monitoring/`)**: Live node and pod CPU/memory consumption inspection using
      `kubectl top nodes` and `kubectl top pods`.
   1. **CoreDNS Recovery (`05-coredns-recovery/`)**: Diagnosing and repairing CoreDNS ConfigMap `Corefile` syntax errors
      and upstream forwarders.
   1. **Service & Endpoints Triage (`06-service-endpoints-recovery/`)**: Resolving mismatched label selectors and
-     targetPort definitions causing unreachable services.
-  1. **Worker Static Pods (`07-worker-static-pods/`)**: Configuring worker node kubelet `staticPodPath` and validating
-     mirror pod creation on the API server.
+     targetPort definitions, and diagnosing L7 Ingress routing backend service port mismatches.
+  1. **Worker Static Pods (`07-worker-static-pods/`)**: Configuring worker node kubelet `staticPodPath`, validating
+     mirror pod creation on the API server, and exposing mirror pods via NodePort Services.
   1. **Container Runtime Diagnostics (`08-containerd-diagnostics/`)**: Direct CRI triage using `crictl` and container
      logs.
+  1. **CNI Network Plugin Diagnostics (`09-cni-recovery/`)**: Diagnosing missing `/etc/cni/net.d/` configurations
+     causing pods to remain stuck in `ContainerCreating` with sandbox creation failures.
+  1. **RBAC ServiceAccount Alignment (`10-rbac-recovery/`)**: Diagnosing and repairing ServiceAccount name and namespace
+     mismatches in RoleBindings and ClusterRoleBindings causing `403 Forbidden` API errors.
+  1. **Storage & Volume Triage (`11-storage-recovery/`)**: Resolving PersistentVolume and PersistentVolumeClaim
+     capacity and accessMode binding mismatches, and hostPath volume permission failures with non-root containers.
+  1. **Advanced Node Scheduling (`12-scheduling-recovery/`)**: Diagnosing untolerated node taints
+     (`sku=gpu:NoSchedule`) and malformed pod toleration rules causing persistent `Pending` status.
+  1. **Cluster Reconnaissance & Discovery (`13-cluster-recon/`)**: Discovering cluster topology, control plane vs
+     worker node counts, Pod CIDRs, Service CIDRs, CNI configuration, and namespaced vs non-namespaced API resources.
+  1. **PKI Certificate Lifecycle & Renewal (`14-pki-certs/`)**: Inspecting certificate expiration using `kubeadm certs
+     check-expiration` and `openssl x509`, and renewing control plane certificates without cluster disruption.
 - **Artifacts**:
   - Troubleshooting drill directory: `/home/vagrant/cka/cluster-troubleshooting/`
   - Automated test suite: `test-cluster-troubleshooting.sh`
@@ -966,7 +981,6 @@ cd /home/vagrant/cka/networking
 ./01-services/test-services.sh
 ./02-ingresses/test-ingress.sh
 ./03-gateway-api/test-gateway.sh
-./04-network-policies/test-network-policies.sh
 ```
 
 ### Verify Scheduling Scenario

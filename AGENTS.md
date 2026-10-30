@@ -35,7 +35,9 @@ Multi-node Kubernetes 1.34+ cluster automated using `kubeadm`, `containerd`, and
 
 ### Roles Summary
 
-1. **`common`**: Pinned base packages (`socat`, `kubectl-netdrill`, `bash-completion`, `vim`), sysctl network tuning, default system editor configuration (`vim`), global YAML indentation defaults (`/etc/vim/vimrc.local`), and kernel modules (`overlay`, `br_netfilter`, `rbd`, `iscsi_tcp`).
+1. **`common`**: Pinned base packages (`socat`, `kubectl-netdrill`, `bash-completion`, `vim`), sysctl network tuning,
+   default system editor configuration (`vim`), global YAML indentation defaults (`/etc/vim/vimrc.local`), and kernel
+   modules (`overlay`, `br_netfilter`).
 1. **`containerd`**: Container runtime installation, configuration (`SystemdCgroup = true`), and service health validation.
 1. **`kubernetes_packages`**: APT repository setup (`pkgs.k8s.io`), pinned binaries (`kubeadm`, `kubelet`, `kubectl`), and apt-mark hold.
 1. **`control_plane`**: `kubeadm init` automation, dynamic IP discovery for kube-apiserver TLS SANs, automated daily etcd backup with systemd timer (`etcd-backup.timer`), `~/.kube/config` distribution, user shell preferences (`alias k=kubectl`, `export kdo/koyaml="..."`, `export know="..."`, `alias etcdctl="..."`, bash completion, and `~/.kube/kuberc`), and training MOTD cleanup.
@@ -45,7 +47,9 @@ Multi-node Kubernetes 1.34+ cluster automated using `kubeadm`, `containerd`, and
 1. **`rook_ceph`**: Cloud-native block storage orchestration via Rook-Ceph operator, backed by a dedicated unformatted volume on the control plane node and dynamically provisioned to worker nodes via Ceph CSI.
 1. **`nfs_server`**: Linux kernel NFS storage server on control plane exporting `/srv/nfsroot` to cluster worker nodes, provisioned automatically during `make preprod-up` and supported across preprod and prod.
 1. **`iscsi_target`**: Standalone Linux-IO (LIO) iSCSI target server on control plane with file-backed LUNs for raw block and PV/PVC testing (`make preprod-iscsi`).
-1. **`control_plane_tools`**: Control plane utilities including `etcdctl`, `etcdutl` (pinned `v3.5.16` with system-wide `ETCDCTL_API=3`), `k9s` (pinned `v0.51.0` with transparent Nord skin), `glow` (pinned `2.1.1` with `glow="glow -s tokyo-night -w 150"` alias), and diagnostics.
+1. **`control_plane_tools`**: Control plane utilities including `etcdctl`, `etcdutl` (pinned `v3.5.16` with system-wide
+   `ETCDCTL_API=3`), `k9s` (pinned `v0.51.0` with transparent Nord skin), `glow` (pinned `2.1.1` with styled alias),
+   `krew` (pinned `v0.5.0` plugin manager), and `kubectl-cyclonus` (pinned `v0.2.1` NetworkPolicy analyzer).
 1. **`cka_lab`**: Hands-on CKA exam practice scenarios deployed exclusively via `make preprod-cka-lab` (`playbooks/cka_lab.yml`), including initial steps reminder MOTD activation.
 1. **`upgrade`**: Rolling node upgrades (`kubeadm upgrade apply/node`, `kubelet`, `kubectl`).
 1. **`reset`**: Safe cluster teardown and node state reset (`kubeadm reset -f`, interface cleanups).

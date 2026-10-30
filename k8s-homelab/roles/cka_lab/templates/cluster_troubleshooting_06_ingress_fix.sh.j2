@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# fix-ingress.sh: Corrects Ingress Backend Service Port
+# ==============================================================================
+set -euo pipefail
+
+echo "=== Fixing Ingress Backend Port Mismatch ==="
+
+kubectl patch ingress cka-broken-ingress -n default --type='json' -p='[
+  {
+    "op": "replace",
+    "path": "/spec/rules/0/http/paths/0/backend/service/port/number",
+    "value": 80
+  }
+]'
+
+echo "Waiting for Ingress controller synchronization..."
+sleep 2
+
+echo "=== Ingress successfully patched to port 80 ==="
+kubectl get ingress cka-broken-ingress -n default

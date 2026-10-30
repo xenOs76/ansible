@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# setup-broken-scheduling.sh: Taints Worker Nodes & Applies Untolerated Workload
+# ==============================================================================
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+echo "=== Injecting CKA Scheduling Taint Break-Fix Scenario ==="
+
+# Discover worker nodes (nodes without control-plane role)
+WORKER_NODES=$(kubectl get nodes --no-headers -l '!node-role.kubernetes.io/control-plane' -o custom-columns=NAME:.metadata.name)
+
+if [[ -z "${WORKER_NODES}" ]]; then
+    echo "ERROR: No worker nodes discovered to taint!"
+    exit 1
+fi
+
+echo "1. Applying taint 'sku=gpu:NoSchedule' to worker nodes..."
+for node in ${WORKER_NODES}; do
+    echo "  Tainting node: ${node}"
+    kubectl taint nodes "${node}" sku=gpu:NoSchedule --overwrite
+done
+
+echo ""
+echo "2. Deploying workload with mismatched toleration..."
+kubectl delete deployment cka-gpu-processor -n default --ignore-not-found=true --wait=false >/dev/null 2>&1
+kubectl apply -f "${SCRIPT_DIR}/01-tainted-workload.yaml"
+
+echo ""
+echo "3. Observing Pod status (Expect: Pending due to untolerated taint)..."
+sleep 3
+kubectl get pods -l app=gpu-processor -n default -o wide
+
+echo ""
+echo "Diagnostic Commands:"
+echo "  kubectl describe pod -l app=gpu-processor -n default"
+echo "  kubectl get nodes -o custom-columns=NAME:.metadata.name,TAINTS:.spec.taints"
+echo "Fix with: ${SCRIPT_DIR}/fix-scheduling.sh"

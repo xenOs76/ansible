@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# fix-scheduling.sh: Patches Workload Toleration and Manages Taints
+# ==============================================================================
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CLEANUP="${1:-}"
+
+if [[ "${CLEANUP}" == "--cleanup" ]]; then
+    echo "=== Cleaning Up Scheduling Drill Resources & Taints ==="
+    kubectl delete deployment cka-gpu-processor -n default --ignore-not-found=true --wait=false >/dev/null 2>&1
+    WORKER_NODES=$(kubectl get nodes --no-headers -l '!node-role.kubernetes.io/control-plane' -o custom-columns=NAME:.metadata.name)
+    for node in ${WORKER_NODES}; do
+        echo "  Removing taint 'sku=gpu:NoSchedule' from: ${node}"
+        kubectl taint nodes "${node}" sku:NoSchedule- 2>/dev/null || true
+    done
+    echo "=== Scheduling cleanup completed ==="
+    exit 0
+fi
+
+echo "=== Remedying Scheduling Toleration Mismatch ==="
+
+echo "1. Applying fixed deployment manifest with matching toleration (sku=gpu:NoSchedule)..."
+kubectl apply -f "${SCRIPT_DIR}/02-fixed-workload.yaml"
+
+echo ""
+echo "2. Waiting for Pods to transition from Pending to Running..."
+for i in {1..20}; do
+    PENDING_COUNT="$(kubectl get pods -l app=gpu-processor -n default --no-headers 2>/dev/null | grep -c "Pending" || echo "0")"
+    RUNNING_COUNT="$(kubectl get pods -l app=gpu-processor -n default --no-headers 2>/dev/null | grep -c "Running" || echo "0")"
+    echo "  Attempt ${i}/20: Running=${RUNNING_COUNT}, Pending=${PENDING_COUNT}"
+    if [[ "${RUNNING_COUNT}" -ge 2 && "${PENDING_COUNT}" -eq 0 ]]; then
+        break
+    fi
+    sleep 2
+done
+
+echo ""
+echo "=== Workload Successfully Scheduled! ==="
+kubectl get pods -l app=gpu-processor -n default -o wide

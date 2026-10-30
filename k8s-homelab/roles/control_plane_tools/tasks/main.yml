@@ -26,3 +26,17 @@
     - bootstrap
     - tools
     - glow
+
+- name: Install krew kubectl plugin manager
+  ansible.builtin.include_tasks: krew.yml
+  tags:
+    - bootstrap
+    - tools
+    - krew
+
+- name: Install kubectl-cyclonus NetworkPolicy analysis tool
+  ansible.builtin.include_tasks: cyclonus.yml
+  tags:
+    - bootstrap
+    - tools
+    - cyclonus

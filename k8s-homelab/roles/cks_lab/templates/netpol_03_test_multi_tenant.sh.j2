@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# test-cross-tenant.sh: Automated Verification for Multi-Tenant Pod Isolation
+# test-multi-tenant.sh: Automated Verification for Multi-Tenant Pod Isolation
 # Tests logical AND with namespaceSelector + podSelector under default-deny
 # ==============================================================================
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-TENANT_A="{{ cka_lab_networking_tenant_a | default('tenant-a') }}"
-TENANT_B="{{ cka_lab_networking_tenant_b | default('tenant-b') }}"
+TENANT_A="{{ cks_lab_netpol_tenant_a | default('cks-tenant-a') }}"
+TENANT_B="{{ cks_lab_netpol_tenant_b | default('cks-tenant-b') }}"
 
-echo "=== [Multi-Tenant Drill] Testing Cross-Namespace Pod Isolation ==="
+echo "=== [CKS NetPol Drill 3] Testing Cross-Namespace Multi-Tenant Pod Isolation ==="
 
 cleanup() {
   echo ""
@@ -23,7 +23,7 @@ cleanup
 
 # 2. Deploy workloads and default-deny policies
 echo "==> [Phase 1] Deploying multi-tenant workloads and default-deny policies..."
-kubectl apply -f "${SCRIPT_DIR}/06-cross-tenant-workloads.yaml"
+kubectl apply -f "${SCRIPT_DIR}/01-cross-tenant-workloads.yaml"
 
 echo "Waiting for deployments to roll out..."
 kubectl rollout status deployment/secure-db -n "${TENANT_B}" --timeout=60s
@@ -51,7 +51,7 @@ fi
 
 # 4. Apply cross-tenant allow policies
 echo "==> [Phase 3] Applying cross-tenant allow policies (logical AND)..."
-kubectl apply -f "${SCRIPT_DIR}/07-allow-cross-tenant.yaml"
+kubectl apply -f "${SCRIPT_DIR}/02-allow-cross-tenant.yaml"
 sleep 2
 
 # 5. Verify selective reachability

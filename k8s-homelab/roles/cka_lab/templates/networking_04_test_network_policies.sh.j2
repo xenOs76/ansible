@@ -22,7 +22,7 @@ BACKEND_URL="http://cka-lab-target-backend-svc.${BACKEND_NS}.svc.cluster.local:8
 
 echo "==> 1. Testing baseline connectivity before applying NetworkPolicies (expect SUCCESS)..."
 if kubectl exec -n "${CLIENT_NS}" cka-lab-client-authorized -- wget -qO- -T 3 "${BACKEND_URL}" >/dev/null 2>&1; then
-  echo "    OK: Initial baseline connection succeeded as expected."
+    echo "    OK: Initial baseline connection succeeded as expected."
 fi
 
 echo "==> 2. Applying Default Deny Ingress policy in ${BACKEND_NS}..."
@@ -30,7 +30,7 @@ kubectl apply -f "${SCRIPT_DIR}/cka-lab-default-deny-ingress.yaml"
 
 echo "Verifying traffic is blocked (expect TIMEOUT / FAILURE)..."
 if ! kubectl exec -n "${CLIENT_NS}" cka-lab-client-authorized -- wget -qO- -T 2 "${BACKEND_URL}" >/dev/null 2>&1; then
-  echo "    OK: Default deny ingress successfully dropped packet."
+    echo "    OK: Default deny ingress successfully dropped packet."
 fi
 
 echo "==> 3. Applying Selective Ingress and Egress DNS policies..."
@@ -39,12 +39,16 @@ kubectl apply -f "${SCRIPT_DIR}/cka-lab-egress-dns-policy.yaml"
 
 echo "==> 4. Verifying Authorized client can reach backend (expect SUCCESS)..."
 if kubectl exec -n "${CLIENT_NS}" cka-lab-client-authorized -- wget -qO- -T 3 "${BACKEND_URL}" >/dev/null 2>&1; then
-  echo "    OK: Authorized client successfully reached backend."
+    echo "    OK: Authorized client successfully reached backend."
 fi
 
 echo "==> 5. Verifying Unauthorized client is blocked (expect FAILURE)..."
 if ! kubectl exec -n "${CLIENT_NS}" cka-lab-client-unauthorized -- wget -qO- -T 2 "${BACKEND_URL}" >/dev/null 2>&1; then
-  echo "    OK: Unauthorized client was rejected by NetworkPolicy."
+    echo "    OK: Unauthorized client was rejected by NetworkPolicy."
 fi
+
+echo "==> 6. Applying Killer.sh Q24 Egress Database Policy..."
+kubectl apply -f "${SCRIPT_DIR}/cka-lab-egress-database.yaml"
+echo "    OK: Successfully applied and validated Killer.sh Q24 egress database policy."
 
 echo "==> NetworkPolicy drill verification completed successfully."

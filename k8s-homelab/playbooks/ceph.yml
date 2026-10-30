@@ -1,4 +1,26 @@
 ---
+- name: Prepare cluster nodes for Ceph RBD storage
+  hosts: k8s_cluster
+  become: true
+  tasks:
+    - name: Load rbd kernel module on cluster nodes
+      ansible.builtin.command: modprobe rbd
+      changed_when: false
+      tags:
+        - ceph
+        - storage
+
+    - name: Persist rbd module in /etc/modules-load.d/ceph.conf
+      ansible.builtin.copy:
+        dest: /etc/modules-load.d/ceph.conf
+        content: "rbd\n"
+        owner: root
+        group: root
+        mode: "0644"
+      tags:
+        - ceph
+        - storage
+
 - name: Deploy Rook-Ceph storage operator and dynamic storage (RBD and NFS)
   hosts: control_plane
   become: true

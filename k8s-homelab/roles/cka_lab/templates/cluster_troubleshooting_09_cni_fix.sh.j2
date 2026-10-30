@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# fix-cni.sh: Restores CNI Plugin Configuration & Recovers Node Networking
+# Managed by Ansible (roles/cka_lab)
+# Supports local node execution or remote worker targeting (--node=kube-worker-1)
+# ==============================================================================
+set -euo pipefail
+
+TARGET_NODE="${1:-{{ cka_lab_target_worker_node | default('kube-worker-1') }}}"
+case "${TARGET_NODE}" in
+  --node=*)
+    TARGET_NODE="${TARGET_NODE#*=}"
+    ;;
+esac
+
+echo "===================================================================="
+echo "  [CKA LAB] Restoring CNI Plugin Configuration                      "
+echo "  Target Node: ${TARGET_NODE}                                       "
+echo "===================================================================="
+
+# 1. Restore CNI configurations from backup
+echo "==> [1/2] Restoring /etc/cni/net.d/ on ${TARGET_NODE}..."
+
+fix_cni_local() {
+  if [ "$(id -u)" -ne 0 ]; then
+    echo "Error: Modifying /etc/cni/net.d requires root (use sudo)." >&2
+    exit 1
+  fi
+  if [ -d /etc/cni/net.d.bak ] && compgen -G "/etc/cni/net.d.bak/*" > /dev/null; then
+    mkdir -p /etc/cni/net.d
+    cp -rf /etc/cni/net.d.bak/* /etc/cni/net.d/
+    rm -rf /etc/cni/net.d.bak
+    echo "CNI configurations restored from backup."
+  fi
+}
+
+fix_cni_remote() {
+  local target_host="${1}"
+  ssh -o StrictHostKeyChecking=no "${target_host}" "sudo bash -c '
+    if [ -d /etc/cni/net.d.bak ] && compgen -G \"/etc/cni/net.d.bak/*\" > /dev/null; then
+      mkdir -p /etc/cni/net.d
+      cp -rf /etc/cni/net.d.bak/* /etc/cni/net.d/
+      rm -rf /etc/cni/net.d.bak
+      echo \"CNI configurations restored from backup.\"
+    fi
+  '"
+}
+
+if [ "${TARGET_NODE}" = "local" ] || [ "${TARGET_NODE}" = "$(hostname)" ]; then
+  fix_cni_local
+else
+  TARGET_HOST="${TARGET_NODE}"
+  if ! getent hosts "${TARGET_NODE}" >/dev/null 2>&1; then
+    K8S_IP="$(kubectl get node "${TARGET_NODE}" -o jsonpath='{.status.addresses[?(@.type=="InternalIP")].address}' 2>/dev/null || true)"
+    if [ -n "${K8S_IP}" ]; then
+      echo "==> [NOTICE] '${TARGET_NODE}' resolved via Kubernetes Node API to ${K8S_IP}"
+      TARGET_HOST="${K8S_IP}"
+    fi
+  fi
+  fix_cni_remote "${TARGET_HOST}"
+fi
+
+# 2. Wait for Kubelet CNI sync and probe pod transition to Running
+echo "==> [2/2] Awaiting probe pod transition to Running..."
+for i in $(seq 1 20); do
+  PHASE="$(kubectl get pod cni-probe-pod -n default -o jsonpath='{.status.phase}' 2>/dev/null || echo "Unknown")"
+  if [ "${PHASE}" = "Running" ]; then
+    echo "==> [SUCCESS] Probe pod transitioned to Running on ${TARGET_NODE}!"
+    kubectl get pod cni-probe-pod -n default -o wide
+    # Clean up probe pod
+    kubectl delete pod cni-probe-pod -n default --ignore-not-found=true --timeout=15s >/dev/null 2>&1 || true
+    exit 0
+  fi
+  echo "    Attempt ${i}/20: Probe pod phase is '${PHASE}'. Waiting for CNI initialization..."
+  sleep 3
+done
+
+echo "==> [ERROR] Probe pod did not transition to Running within 60s." >&2
+kubectl describe pod cni-probe-pod -n default || true
+exit 1
+

@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# fix-kubelet-cert.sh: Restores Working Kubelet Client Certificate & Recovers Node
+# Managed by Ansible (roles/cka_lab)
+# ==============================================================================
+set -euo pipefail
+
+TARGET_NODE="${1:-kube-worker-1}"
+case "${TARGET_NODE}" in
+  --node=*)
+    TARGET_NODE="${TARGET_NODE#*=}"
+    ;;
+esac
+
+fix_cert_local() {
+  local KCONF="/etc/kubernetes/kubelet.conf"
+  local BACKUP="/etc/kubernetes/kubelet.conf.bak"
+
+  if [ "$(id -u)" -ne 0 ]; then
+    echo "Error: Modifying kubelet.conf requires root (use sudo)." >&2
+    exit 1
+  fi
+
+  if [ -f "${BACKUP}" ]; then
+    echo "==> Restoring ${KCONF} from ${BACKUP}..."
+    cp -f "${BACKUP}" "${KCONF}"
+    rm -f "${BACKUP}"
+  else
+    echo "==> Backup not found, resetting client-certificate to current PEM in-place..."
+    sed -i 's|kubelet-client-broken.pem|kubelet-client-current.pem|g' "${KCONF}"
+  fi
+
+  echo "==> Restarting kubelet..."
+  systemctl daemon-reload
+  systemctl restart kubelet
+
+  echo "==> Verifying local kubelet service is active:"
+  systemctl is-active kubelet
+}
+
+if [ "${TARGET_NODE}" = "local" ] || [ "${TARGET_NODE}" = "$(hostname)" ]; then
+  echo "===================================================================="
+  echo "  [CKA LAB] Restoring Kubelet Certificate on Local Host ($(hostname))"
+  echo "===================================================================="
+  fix_cert_local
+else
+  TARGET_HOST="${TARGET_NODE}"
+  if ! getent hosts "${TARGET_NODE}" >/dev/null 2>&1; then
+    k8s_ip="$(kubectl get node "${TARGET_NODE}" -o jsonpath='{.status.addresses[?(@.type=="InternalIP")].address}' 2>/dev/null || true)"
+    if [ -n "${k8s_ip}" ]; then
+      echo "==> [NOTICE] '${TARGET_NODE}' resolved via Kubernetes Node API to ${k8s_ip}"
+      TARGET_HOST="${k8s_ip}"
+    fi
+  fi
+  echo "===================================================================="
+  echo "  [CKA LAB] Restoring Kubelet Certificate on Remote Node: ${TARGET_NODE}"
+  echo "===================================================================="
+  ssh -o StrictHostKeyChecking=no "${TARGET_HOST}" "sudo bash -c '
+    KCONF=\"/etc/kubernetes/kubelet.conf\"
+    BACKUP=\"/etc/kubernetes/kubelet.conf.bak\"
+    if [ -f \"\${BACKUP}\" ]; then
+      cp -f \"\${BACKUP}\" \"\${KCONF}\"
+      rm -f \"\${BACKUP}\"
+    else
+      sed -i \"s|kubelet-client-broken.pem|kubelet-client-current.pem|g\" \"\${KCONF}\"
+    fi
+    systemctl daemon-reload
+    systemctl restart kubelet
+  '"
+  echo "==> Awaiting ${TARGET_NODE} Ready status in Kubernetes..."
+  for i in $(seq 1 20); do
+    if kubectl get node "${TARGET_NODE}" --no-headers 2>/dev/null | grep -wq "Ready"; then
+      echo "==> [SUCCESS] Node ${TARGET_NODE} is Ready!"
+      kubectl get node "${TARGET_NODE}"
+      exit 0
+    fi
+    echo "    Attempt ${i}/20: Waiting for ${TARGET_NODE} to report Ready..."
+    sleep 3
+  done
+  echo "==> [ERROR] Node ${TARGET_NODE} did not report Ready within 60s." >&2
+  exit 1
+fi

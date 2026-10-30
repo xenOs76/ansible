@@ -1,0 +1,96 @@
+---
+- name: Ensure all Kubernetes cluster nodes are in /etc/hosts on control plane
+  ansible.builtin.lineinfile:
+    path: /etc/hosts
+    regexp: '^.*(\s+){{ item }}(\s*)$'
+    line: "{{ hostvars[item]['node_ip'] | default(hostvars[item]['ansible_host']) }} {{ item }}"
+    state: present
+  loop: "{{ groups['k8s_cluster'] | default([]) }}"
+  tags:
+    - cka_lab
+    - cka_ssh
+
+- name: Ensure all Kubernetes cluster nodes are in /etc/hosts on worker nodes
+  ansible.builtin.lineinfile:
+    path: /etc/hosts
+    regexp: '^.*(\s+){{ item[1] }}(\s*)$'
+    line: "{{ hostvars[item[1]]['node_ip'] | default(hostvars[item[1]]['ansible_host']) }} {{ item[1] }}"
+    state: present
+  delegate_to: "{{ item[0] }}"
+  loop: "{{ (groups['workers'] | default([])) | product(groups['k8s_cluster'] | default([])) | list }}"
+  when:
+    - groups['workers'] is defined
+    - groups['workers'] | length > 0
+  tags:
+    - cka_lab
+    - cka_ssh
+
+- name: Ensure .ssh directory exists for trainee user on control plane
+  ansible.builtin.file:
+    path: "/home/{{ cka_lab_inter_node_ssh_user }}/.ssh"
+    state: directory
+    owner: "{{ cka_lab_inter_node_ssh_user }}"
+    group: "{{ cka_lab_inter_node_ssh_user }}"
+    mode: "0700"
+  tags:
+    - cka_lab
+    - cka_ssh
+
+- name: Generate internal SSH keypair on control plane for CKA trainee access
+  community.crypto.openssh_keypair:
+    path: "{{ cka_lab_inter_node_ssh_key_path }}"
+    type: ed25519
+    owner: "{{ cka_lab_inter_node_ssh_user }}"
+    group: "{{ cka_lab_inter_node_ssh_user }}"
+    mode: "0600"
+  tags:
+    - cka_lab
+    - cka_ssh
+
+- name: Slurp trainee public key from control plane
+  ansible.builtin.slurp:
+    src: "{{ cka_lab_inter_node_ssh_key_path }}.pub"
+  register: cka_lab_ssh_pubkey_slurp
+  tags:
+    - cka_lab
+    - cka_ssh
+
+- name: Ensure trainee public key is authorized on control plane
+  ansible.posix.authorized_key:
+    user: "{{ cka_lab_inter_node_ssh_user }}"
+    state: present
+    key: "{{ cka_lab_ssh_pubkey_slurp.content | b64decode }}"
+  tags:
+    - cka_lab
+    - cka_ssh
+
+- name: Ensure trainee public key is authorized on worker nodes
+  ansible.posix.authorized_key:
+    user: "{{ cka_lab_inter_node_ssh_user }}"
+    state: present
+    key: "{{ cka_lab_ssh_pubkey_slurp.content | b64decode }}"
+  delegate_to: "{{ item }}"
+  loop: "{{ groups['workers'] | default([]) }}"
+  when:
+    - groups['workers'] is defined
+    - groups['workers'] | length > 0
+  tags:
+    - cka_lab
+    - cka_ssh
+
+- name: Configure SSH client settings on control plane for seamless node access
+  ansible.builtin.blockinfile:
+    path: "/home/{{ cka_lab_inter_node_ssh_user }}/.ssh/config"
+    create: true
+    owner: "{{ cka_lab_inter_node_ssh_user }}"
+    group: "{{ cka_lab_inter_node_ssh_user }}"
+    mode: "0600"
+    marker: "# {mark} ANSIBLE MANAGED BLOCK (CKA LAB INTER-NODE SSH)"
+    block: |
+      Host kube-* worker* 192.168.56.*
+        StrictHostKeyChecking no
+        UserKnownHostsFile /dev/null
+        LogLevel ERROR
+  tags:
+    - cka_lab
+    - cka_ssh

@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Expose worker static mirror pod via NodePort Service and verify endpoints
+WORKER_NODE="${1:-kube-worker-1}"
+POD_NAME="static-worker-web-${WORKER_NODE}"
+SVC_NAME="static-worker-web-svc"
+
+echo "=== Exposing Static Mirror Pod: ${POD_NAME} via Service ${SVC_NAME} ==="
+
+# Check mirror pod existence
+if ! kubectl get pod "${POD_NAME}" >/dev/null 2>&1; then
+    echo "ERROR: Mirror pod ${POD_NAME} is not registered on the API server."
+    echo "Run ./setup-worker-static-pod.sh first."
+    exit 1
+fi
+
+# Clean up existing service if present
+kubectl delete svc "${SVC_NAME}" --ignore-not-found >/dev/null 2>&1
+
+echo "[1/3] Creating NodePort service targeting static pod labels..."
+kubectl expose pod "${POD_NAME}" \
+    --name="${SVC_NAME}" \
+    --type=NodePort \
+    --port=80 \
+    --target-port=80
+
+echo "[2/3] Waiting for endpoints registration..."
+RETRY=0
+MAX=10
+FOUND=0
+while [[ ${RETRY} -lt ${MAX} ]]; do
+    ENDPOINTS=$(kubectl get endpoints "${SVC_NAME}" -o jsonpath='{.subsets[*].addresses[*].ip}' 2>/dev/null || true)
+    if [[ -n "${ENDPOINTS}" ]]; then
+        echo "Registered endpoints for ${SVC_NAME}: ${ENDPOINTS}"
+        FOUND=1
+        break
+    fi
+    sleep 2
+    RETRY=$(( RETRY + 1 ))
+done
+
+if [[ ${FOUND} -ne 1 ]]; then
+    echo "ERROR: Endpoints controller failed to register static pod IP in service ${SVC_NAME}."
+    exit 1
+fi
+
+echo "[3/3] Inspecting allocated NodePort and connectivity..."
+NODE_PORT=$(kubectl get svc "${SVC_NAME}" -o jsonpath='{.spec.ports[0].nodePort}')
+echo "Service ${SVC_NAME} is listening on NodePort: ${NODE_PORT}"
+
+echo "=== Static Pod Service Exposure PASSED ==="

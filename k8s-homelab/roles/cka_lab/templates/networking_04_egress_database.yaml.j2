@@ -1,0 +1,31 @@
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: cka-lab-egress-database
+  namespace: {{ cka_lab_networking_client_namespace | default('cka-lab-net-client') }}
+  labels:
+    app.kubernetes.io/name: cka-lab-egress-database
+    app.kubernetes.io/part-of: cka-lab
+    cka.practice/scenario: networking
+spec:
+  podSelector:
+    matchLabels:
+      app: cka-lab-client
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: db1
+      ports:
+        - protocol: TCP
+          port: 1111
+    - to:
+        - podSelector:
+            matchLabels:
+              app: db2
+      ports:
+        - protocol: TCP
+          port: 2222

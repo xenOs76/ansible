@@ -1,0 +1,42 @@
+# Cluster Reconnaissance & Network Discovery
+
+Hands-on training drill covering cluster architecture inspection, network topology extraction, Pod CIDRs, Service
+CIDR discovery, and API resource taxonomy.
+
+## Official Exam References & Quick Lookups
+
+### Permitted Exam Documentation
+
+- **Cluster Networking**: [Cluster Networking](https://kubernetes.io/docs/concepts/cluster-administration/networking/) `[EXAM ALLOWED]`
+- **Kubernetes API Overview**: [API Overview](https://kubernetes.io/docs/concepts/overview/kubernetes-api/) `[EXAM ALLOWED]`
+
+### In-Exam Search Keywords
+
+- `"cluster networking"`
+- `"service-cluster-ip-range"`
+- `"podCIDR"`
+- `"api-resources"`
+
+### Terminal Fast Lookups (`kubectl` & Host Inspection)
+
+```bash
+# Extract assigned Pod CIDR per node:
+kubectl get nodes -o custom-columns=NODE:.metadata.name,POD_CIDR:.spec.podCIDR
+
+# Discover Service CIDR from apiserver manifest:
+grep -E -- "--service-cluster-ip-range" /etc/kubernetes/manifests/kube-apiserver.yaml
+
+# Inspect CNI plugin network configuration:
+ls -la /etc/cni/net.d/
+
+# Count namespaced vs non-namespaced API resources:
+kubectl api-resources --namespaced=true
+kubectl api-resources --namespaced=false
+```
+
+---
+
+## Practice Scripts
+
+- `cluster-recon.sh`: Gathers cluster topology, Pod CIDRs, Service CIDR, CNI config paths, and resource counts.
+- `test-cluster-recon.sh`: Automated non-interactive test verifying reconnaissance report generation.

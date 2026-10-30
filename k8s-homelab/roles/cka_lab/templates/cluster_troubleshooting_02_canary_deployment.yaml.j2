@@ -1,0 +1,31 @@
+---
+# ==============================================================================
+# CKA Lab: Static Pod Failure Diagnostic Canary Workload
+# Managed by Ansible (roles/cka_lab)
+# When the scheduler is broken, this pod will stay in Pending with 0 events.
+# ==============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cka-scheduler-probe
+  namespace: default
+  labels:
+    app: scheduler-probe
+    cka-drill: static-pod-recovery
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: scheduler-probe
+  template:
+    metadata:
+      labels:
+        app: scheduler-probe
+    spec:
+      containers:
+        - name: probe
+          image: registry.k8s.io/pause:3.9
+          resources:
+            requests:
+              cpu: "10m"
+              memory: "16Mi"

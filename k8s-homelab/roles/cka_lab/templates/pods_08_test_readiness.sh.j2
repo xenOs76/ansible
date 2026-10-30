@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# test-readiness-dependency.sh: Verifies Readiness Probe Gating on Dependency
+# ==============================================================================
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+echo "=== Testing Readiness Probe Inter-Service Dependency ==="
+
+echo "1. Cleaning up any pre-existing drill resources..."
+kubectl delete pod frontend-processor -n default --ignore-not-found=true --wait=false >/dev/null 2>&1
+kubectl delete service order-service -n default --ignore-not-found=true --wait=false >/dev/null 2>&1
+kubectl delete deployment order-backend -n default --ignore-not-found=true --wait=false >/dev/null 2>&1
+
+echo "2. Deploying frontend pod without upstream backend service..."
+kubectl apply -f "${SCRIPT_DIR}/02-dependent-frontend.yaml"
+
+echo "Waiting for frontend pod container to start..."
+kubectl wait --for=condition=Initialized pod/frontend-processor -n default --timeout=30s
+sleep 5
+
+echo "Asserting pod is Running but NOT Ready (READY 0/1)..."
+READY_STATUS="$(kubectl get pod frontend-processor -n default -o jsonpath='{.status.containerStatuses[0].ready}')"
+if [[ "${READY_STATUS}" == "true" ]]; then
+    echo "ERROR: Expected frontend-processor readiness to be false before backend is deployed!"
+    exit 1
+fi
+echo "  [PASS] Pod is unready as expected (ready=${READY_STATUS})"
+
+echo "3. Deploying upstream backend dependency (order-service)..."
+kubectl apply -f "${SCRIPT_DIR}/01-upstream-backend.yaml"
+kubectl rollout status deployment/order-backend -n default --timeout=60s
+
+echo "4. Waiting for frontend-processor readiness probe to succeed (READY 1/1)..."
+kubectl wait --for=condition=Ready pod/frontend-processor -n default --timeout=60s
+
+FINAL_READY="$(kubectl get pod frontend-processor -n default -o jsonpath='{.status.containerStatuses[0].ready}')"
+if [[ "${FINAL_READY}" != "true" ]]; then
+    echo "ERROR: frontend-processor failed to become Ready after backend deployment!"
+    kubectl describe pod frontend-processor -n default
+    exit 1
+fi
+echo "  [PASS] Successfully verified readiness probe transition to Ready!"
+
+echo "5. Cleaning up drill resources..."
+kubectl delete pod frontend-processor -n default --ignore-not-found=true --wait=false >/dev/null 2>&1
+kubectl delete service order-service -n default --ignore-not-found=true --wait=false >/dev/null 2>&1
+kubectl delete deployment order-backend -n default --ignore-not-found=true --wait=false >/dev/null 2>&1
+
+echo "=== Readiness Dependency Drill PASSED! ==="

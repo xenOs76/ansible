@@ -1,0 +1,76 @@
+---
+- name: Determine system architecture for kubectl-cyclonus
+  ansible.builtin.set_fact:
+    control_plane_tools_cyclonus_arch: "{{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}"
+  tags:
+    - bootstrap
+    - tools
+    - cyclonus
+
+- name: Check if kubectl-cyclonus binary is installed
+  ansible.builtin.stat:
+    path: /usr/local/bin/kubectl-cyclonus
+  register: control_plane_tools_cyclonus_bin_stat
+  tags:
+    - bootstrap
+    - tools
+    - cyclonus
+
+- name: Check installed kubectl-cyclonus version stamp
+  ansible.builtin.slurp:
+    src: /etc/kubectl-cyclonus-version
+  register: control_plane_tools_cyclonus_version_slurp
+  failed_when: false
+  tags:
+    - bootstrap
+    - tools
+    - cyclonus
+
+- name: Install kubectl-cyclonus binary from official release archive
+  when: >-
+    (not control_plane_tools_cyclonus_bin_stat.stat.exists) or
+    (control_plane_tools_cyclonus_version_slurp.failed | default(false)) or
+    ((control_plane_tools_cyclonus_version_slurp.content | default('') | b64decode | trim) != control_plane_tools_cyclonus_version)
+  tags:
+    - bootstrap
+    - tools
+    - cyclonus
+  block:
+    - name: Create temporary directory for kubectl-cyclonus archive
+      ansible.builtin.tempfile:
+        state: directory
+        suffix: cyclonus
+      register: control_plane_tools_cyclonus_temp_dir
+
+    - name: Download and unpack kubectl-cyclonus archive
+      ansible.builtin.unarchive:
+        src: >-
+          {{
+            'https://github.com/mattfenwick/kubectl-cyclonus/releases/download/' ~
+            control_plane_tools_cyclonus_version ~
+            '/kubectl-cyclonus_linux_' ~ control_plane_tools_cyclonus_arch ~ '.tar.gz'
+          }}
+        dest: "{{ control_plane_tools_cyclonus_temp_dir.path }}"
+        remote_src: true
+
+    - name: Copy kubectl-cyclonus binary to /usr/local/bin/kubectl-cyclonus
+      ansible.builtin.copy:
+        src: "{{ control_plane_tools_cyclonus_temp_dir.path }}/kubectl-cyclonus"
+        dest: /usr/local/bin/kubectl-cyclonus
+        owner: root
+        group: root
+        mode: "0755"
+        remote_src: true
+
+    - name: Record installed kubectl-cyclonus version stamp
+      ansible.builtin.copy:
+        dest: /etc/kubectl-cyclonus-version
+        content: "{{ control_plane_tools_cyclonus_version }}\n"
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Remove temporary kubectl-cyclonus archive directory
+      ansible.builtin.file:
+        path: "{{ control_plane_tools_cyclonus_temp_dir.path }}"
+        state: absent

@@ -9,6 +9,8 @@ BOX_IMAGE = ENV.fetch("BOX_IMAGE", "cloud-image/ubuntu-26.04")
 K8S_VERSION = ENV.fetch("K8S_VERSION", "1.36.0-1.1")
 K9S_VERSION = ENV.fetch("K9S_VERSION", "v0.51.0")
 ETCD_VERSION = ENV.fetch("ETCD_VERSION", "v3.5.16")
+KREW_VERSION = ENV.fetch("KREW_VERSION", "v0.5.0")
+CYCLONUS_VERSION = ENV.fetch("CYCLONUS_VERSION", "v0.2.1")
 ROOT_DISK_SIZE = ENV.fetch("ROOT_DISK_SIZE", "25").to_i
 
 if TOPOLOGY == "ha"
@@ -61,7 +63,12 @@ Vagrant.configure("2") do |config|
       node.vm.provision "shell", inline: "chmod +x /home/vagrant/*.sh && chown vagrant:vagrant /home/vagrant/*.sh"
 
       node.vm.provision "shell", path: "scripts/common.sh", env: { "K8S_VERSION" => K8S_VERSION }
-      node.vm.provision "shell", path: "scripts/control-plane-tools.sh", env: { "K9S_VERSION" => K9S_VERSION, "ETCD_VERSION" => ETCD_VERSION }
+      node.vm.provision "shell", path: "scripts/control-plane-tools.sh", env: {
+        "K9S_VERSION" => K9S_VERSION,
+        "ETCD_VERSION" => ETCD_VERSION,
+        "KREW_VERSION" => KREW_VERSION,
+        "CYCLONUS_VERSION" => CYCLONUS_VERSION
+      }
     end
   end
 

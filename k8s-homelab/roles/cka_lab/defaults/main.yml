@@ -20,6 +20,11 @@ cka_lab_scenario_etcd_enabled: true
 cka_lab_scenario_upgrade_drill_enabled: true
 cka_lab_scenario_jsonpath_enabled: true
 cka_lab_scenario_ha_cluster_enabled: true
+cka_lab_scenario_inter_node_ssh_enabled: true
+
+# Scenario: inter_node_ssh (Inter-Node DNS Resolution & Passwordless SSH for CKA Drills)
+cka_lab_inter_node_ssh_user: "{{ ansible_user | default('vagrant') }}"
+cka_lab_inter_node_ssh_key_path: "/home/{{ cka_lab_inter_node_ssh_user }}/.ssh/id_ed25519"
 
 # Scenario: motd (CKA Initial Steps Reminder Announcement)
 cka_lab_motd_user: "{{ ansible_user | default('vagrant') }}"
@@ -241,7 +246,7 @@ cka_lab_pods_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/04-pods"
 cka_lab_pods_namespace: "default"
 cka_lab_pods_staging_namespace: "cka-lab-staging"
 
-# Scenario: networking (Services, Ingress, Gateway API, and Network Policies)
+# Scenario: networking (Services, Ingress, and Gateway API)
 # Reference: Kubernetes Services & Networking CKA curriculum
 cka_lab_networking_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/11-networking"
 cka_lab_networking_namespace: "default"
@@ -251,6 +256,7 @@ cka_lab_networking_backend_namespace: "cka-lab-net-backend"
 cka_lab_networking_domain: "cka-lab.example.local"
 cka_lab_networking_gateway_domain: "httpbin.example.local"
 cka_lab_networking_gateway_unmatched_domain: "unmatched.example.local"
+
 
 # Scenario: scheduling (Taints, Tolerations, Affinities, HPA, and Resource Quotas)
 cka_lab_scheduling_dir: "/home/{{ ansible_user | default('vagrant') }}/cka/10-scheduling"

@@ -10,36 +10,89 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **CKA Training Lab - Inter-Node DNS Resolution & Passwordless SSH (`playbooks/cka_lab.yml`, `roles/cka_lab`)**:
+  Automated cluster-wide `/etc/hosts` population across `k8s_cluster` and distributed a dedicated Ed25519 lab SSH
+  keypair from `control_plane[0]` to all worker nodes (`~/.ssh/authorized_keys` and `~/.ssh/config`) exclusively for
+  CKA training. Enables 1:1 CKA exam terminal fidelity (`ssh kube-worker-1`), eliminates DNS resolution failures during
+  worker diagnostics (`break-cni.sh`, `break-kubelet.sh`), and adds dynamic Kubernetes Node API IP resolution
+  fallbacks.
+- **CKA Training Lab - Comprehensive Troubleshooting Drills Expansion (`roles/cka_lab`)**:
+  Expanded Chapter 17 with 14 end-to-end break-fix drills covering control plane static pods (`kube-apiserver`,
+  `kube-controller-manager`, `kube-scheduler`), worker node diagnostics (unparseable YAML, corrupted CRI socket,
+  systemd drop-in mismatch, expired client certificates), CNI plugin recovery (`09-cni-recovery/`), RBAC authorization
+  alignment (`10-rbac-recovery/`), storage & volume triage (`11-storage-recovery/`), Ingress routing triage
+  (`06-service-endpoints-recovery/`), worker static mirror pod NodePort exposure, advanced scheduling taints
+  (`12-scheduling-recovery/`), cluster reconnaissance (`13-cluster-recon/`), and PKI certificate renewal
+  (`14-pki-certs/`).
+- **CKA Training Lab - Pod Lifecycle & Upstream Dependency Probes (`roles/cka_lab`, `~/cka/04-pods/`)**:
+  Added Killer.sh practice scenarios for pod lifecycle management, including upstream ClusterIP service readiness
+  dependency validation via custom `exec` `readinessProbe` before marking pods Ready.
+- **CKA Training Lab - Network Policies & Hubble Diagnostics (`roles/cka_lab`, `~/cka/11-networking/`)**:
+  Restored comprehensive CKA NetworkPolicy scenarios covering default-deny ingress, client pod ingress allow rules,
+  CoreDNS egress, and database egress restrictions. Includes real-time packet drop troubleshooting via Hubble CLI
+  (`hubble observe --verdict DROPPED`) and non-interactive automated verification.
+- **CKS Training Lab - Pod-to-Pod Security & Network Policies (`roles/cks_lab`, `~/cks/network-policies/`)**:
+  Provisioned comprehensive CKS exam practice scenarios covering basic isolation and cloud metadata protection
+  (`01-basic-isolation/`, `169.254.169.254/32` via `ipBlock.except`), progressive zero-trust microsegmentation
+  (`02-progressive-microsegmentation/`), multi-tenant cross-namespace boundaries (`03-multi-tenant-isolation/`),
+  and static policy auditing via `kubectl-cyclonus` (`04-policy-analysis-cyclonus/`). Includes non-interactive
+  automated test suites, self-contained microservice test workloads, and Cilium Hubble eBPF drop analysis guides.
+- **Krew & kubectl-cyclonus Tooling (`roles/control_plane_tools`, `scripts/control-plane-tools.sh`)**:
+  Integrated `krew` (`v0.5.0`) kubectl plugin manager and `kubectl-cyclonus` (`v0.2.1`) NetworkPolicy analyzer into
+  control plane bootstrap automation across Ansible tasks, Vagrant shell provisioning, user environment profile
+  (`PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"`), and CKA training lab playbooks and scenario guides.
 - **CKA Shell Shortcuts & etcdctl TLS Alias (`roles/control_plane`, `roles/cka_lab`)**:
-  Added standard CKA productivity shortcuts and aliases across control plane shell profiles (`/etc/profile.d/k8s-completion.sh`,
-  `~/.bashrc`) and the initial steps reminder MOTD (`~/cka` / `~/.motd`). Includes dry-run manifest generator (`export
-  kdo="--dry-run=client -o yaml"`), fast deletion (`export know="--force --grace-period=0"`), and pre-configured static pod
-  TLS alias for `etcdctl`.
-- **Cilium Hubble CLI Installation & Vagrant Provisioning (`scripts/cni-install-hubble.sh`, `Vagrantfile`, `roles/cilium`)**:
+  Added standard CKA productivity shortcuts and aliases across control plane shell profiles
+  (`/etc/profile.d/k8s-completion.sh`, `~/.bashrc`) and the initial steps reminder MOTD (`~/cka` / `~/.motd`). Includes
+  dry-run manifest generator (`export kdo="--dry-run=client -o yaml"`), fast deletion (`export know="--force
+  --grace-period=0"`), and pre-configured static pod TLS alias for `etcdctl`.
+- **Cilium Hubble CLI Installation & Vagrant Provisioning (`scripts/cni-install-hubble.sh`, `roles/cilium`)**:
   Added automated Hubble CLI installation script (`cni-install-hubble.sh`) with official upstream release checksum
   verification and optional cluster enablement. Co-located with `cni-install-cilium.sh` in repository `scripts/`,
   Vagrant VM provisioning (`/home/vagrant/cni-install-hubble.sh`), and the Ansible `cilium` role.
-- **Progressive NetworkPolicies & Hubble Troubleshooting Drill (`roles/cka_lab`, `~/cka/11-networking/05-advanced-network-policies/`)**:
-  Modernized Module 5 into a progressive namespace microsegmentation drill: strict `default-deny-all` isolation on the
-  `default` namespace, staged whitelisting for CoreDNS (`kube-system` port 53), external DNS (`ipBlock`), and L7 HTTP
-  traffic routed through NGINX Gateway Fabric and backend `httpbingo`. Added dedicated Hubble CLI troubleshooting guide
-  (`hubble-troubleshooting.md`) and a 6-phase automated test runner (`test-advanced-netpol.sh`).
-- **Multi-Tenant Pod Isolation Drill & Manifests (`roles/cka_lab`, `~/cka/11-networking/05-advanced-network-policies/`)**:
-  Added packaged drill manifests (`06-cross-tenant-workloads.yaml`, `07-allow-cross-tenant.yaml`) and an automated
-  verification runner (`test-cross-tenant.sh`) exercising cross-namespace multi-tenant pod isolation using logical AND
-  (`namespaceSelector` + `podSelector`) between tenant namespaces under strict default-deny.
 
 ### Changed
 
+- **CKA vs CKS Network Policy Curriculum Separation (`roles/cka_lab`, `roles/cks_lab`)**:
+  Refined curriculum boundaries: CKA focuses on standard functional NetworkPolicy isolation (ingress/egress selectors,
+  port rules, and Hubble packet drop analysis), while CKS focuses on hardened zero-trust security (cloud metadata
+  endpoint isolation `169.254.169.254/32` and automated Cyclonus matrix auditing).
+- **Static Pod Troubleshooting & Canary Diagnostics (`roles/cka_lab`, `02-static-pod-recovery/`)**:
+  Modernized the control plane static pod recovery drill with multi-scenario failure injection (`--scenario=kubeconfig`,
+  `mount`, `syntax`), automated canary workload verification (`cka-scheduler-probe`), robust recovery scripting
+  (`fix-scheduler.sh`), automated self-testing (`test-static-pod-recovery.sh`), and real-world incident post-mortem
+  citations from `hjacobs/kubernetes-failure-stories`, OpenAI, Datadog, and CNCF curriculum standards.
+- **Storage Decoupling & Baseline Streamlining (`roles/common`, `playbooks/site.yml`, `scripts/common.sh`)**:
+  Removed optional storage layers from the default baseline cluster installation to accelerate provisioning and simplify
+  maintenance. Ceph (`rook_ceph`, `rbd.ko`) and iSCSI (`open-iscsi`, `iscsi_tcp.ko`, `iscsid.service`) are now strictly
+  on-demand auxiliary layers with self-contained module and service preparation in `playbooks/ceph.yml` (`make
+  preprod-ceph`) and `playbooks/iscsi.yml` (`make preprod-iscsi`). Classic NFS (`nfs-common`, `nfs-kernel-server`)
+  remains the guaranteed core storage baseline.
 - **Cross-Namespace Gateway Architecture & Simplified Network Policies (`roles/cka_lab`, `~/cka/11-networking`)**:
   Moved the Gateway resource to the dedicated infrastructure namespace (`nginx-gateway`) with cross-namespace routing
   allowed. Eliminated internal proxy lockdown boilerplate in tenant namespace `default`, reducing tenant policies to
   two clean cross-namespace rules: ingress to `httpbingo:8080` from `nginx-gateway` and egress to `nginx-gateway:80`
   from client pods. Updated `test-gateway.sh` and `test-advanced-netpol.sh` test suites, and documented in-cluster and
   external verification procedures in `README.md`.
+- **Terminal Ergonomics & Walkthrough Guide Formatting (`roles/cka_lab`)**:
+  Replaced wide multi-column markdown tables with structured incident and remediation lists across static pod and
+  networking walkthrough guides for optimal rendering in `glow` terminal viewer, and updated the CKA master index.
 
 ### Fixed
 
+- **Kubelet Diagnostics Drill & Modern Failure Injection (`roles/cka_lab`, `03-kubelet-diagnostics/`)**:
+  Fixed `break-kubelet.sh` where injecting `cgroupDriver: invalidDriverName` into `/var/lib/kubelet/config.yaml`
+  had no effect in Kubernetes v1.34+ due to `KubeletCgroupDriverFromCRI` reaching GA status and ignoring the field.
+  Replaced with authentic multi-scenario failure injection (`--scenario=config` with unparseable YAML syntax in
+  `config.yaml`, `--scenario=cri` with corrupted CRI runtime socket in `kubeadm-flags.env`, and `--scenario=systemd`
+  with invalid config path in `10-kubeadm.conf`), added defensive verification to ensure service failure detection,
+  and updated `fix-kubelet.sh` and guide documentation to restore all configuration layers.
+- **Static Pod Failure Drills & Backup Path Isolation (`roles/cka_lab`, `02-static-pod-recovery/`)**:
+  Fixed static pod recovery drills (`break-scheduler.sh`, `break-controller-manager.sh`, `break-apiserver.sh`) where
+  manifest backups stored inside `/etc/kubernetes/manifests/*.bak` caused kubelet to parse and run the healthy backup
+  manifest, preventing failure simulation. Relocated backup files outside the manifests directory
+  (`/etc/kubernetes/*.yaml.bak`), added immediate container process reload (`crictl stop`), and ensured canary workloads
+  consistently reflect scheduling and replica stalls.
 - **Headless Service & Advanced Netpol Test Harnesses (`roles/cka_lab`, `~/cka/11-networking`)**:
   Corrected the headless service manifest path in `test-headless.sh` to match `cka-lab-headless-service.yaml`, and
   added pre-test cleanup to `test-advanced-netpol.sh` to prevent stale policies from invalidating baseline checks.

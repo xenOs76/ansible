@@ -1,0 +1,40 @@
+---
+# ==============================================================================
+# CKA Lab: RBAC Diagnostics Diagnostic Probe Pod
+# Managed by Ansible (roles/cka_lab)
+# Attempts to query the API server /api/v1/nodes using mounted ServiceAccount token.
+# ==============================================================================
+apiVersion: v1
+kind: Pod
+metadata:
+  name: node-inspector-pod
+  namespace: security-ops
+  labels:
+    app: node-inspector
+    cka-drill: rbac-recovery
+spec:
+  serviceAccountName: node-inspector
+  restartPolicy: Never
+  containers:
+    - name: inspector
+      image: curlimages/curl:8.5.0
+      command: ["/bin/sh", "-c"]
+      args:
+        - |
+          TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
+          RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -k \
+            -H "Authorization: Bearer ${TOKEN}" \
+            https://kubernetes.default.svc/api/v1/nodes)
+          STATUS=$(echo "${RESPONSE}" | grep "HTTP_STATUS" | cut -d: -f2)
+          BODY=$(echo "${RESPONSE}" | grep -v "HTTP_STATUS")
+          echo "API Server Response (Status: ${STATUS}):"
+          echo "${BODY}"
+          if [ "${STATUS}" != "200" ]; then
+            echo "Access Denied! RBAC authorization error." >&2
+            exit 1
+          fi
+          echo "Successfully listed cluster nodes!"
+      resources:
+        requests:
+          cpu: "10m"
+          memory: "16Mi"

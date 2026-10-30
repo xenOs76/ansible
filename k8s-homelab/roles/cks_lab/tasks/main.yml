@@ -38,3 +38,12 @@
   tags:
     - cks_lab
     - seccomp
+
+- name: Execute CKS Lab Scenario - Network Policies & Pod Microsegmentation (netpol)
+  ansible.builtin.include_tasks: scenario_network_policy.yml
+  when: cks_lab_scenario_netpol_enabled | bool
+  tags:
+    - cks_lab
+    - netpol
+    - network_policy
+    - microservices

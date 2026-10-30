@@ -47,11 +47,16 @@ controllers (such as Deployments) manage multi-replica lifecycles, exam tasks ro
 ├── 06-namespaces-context/
 │   ├── cka-lab-namespace.yaml                 # Namespace manifest (cka-lab-staging)
 │   └── namespace-context-drill.sh             # Context namespace preference drill
-└── 07-quarantine-autopsy/
-    ├── 01-quarantine-app.yaml                 # 3-replica web deployment
-    ├── quarantine-drill.sh                    # Live pod label mutation and autopsy drill
-    ├── test-quarantine.sh                     # Automated quarantine verification
-    └── README.md                              # Autopsy troubleshooting guide
+├── 07-quarantine-autopsy/
+│   ├── 01-quarantine-app.yaml                 # 3-replica web deployment
+│   ├── quarantine-drill.sh                    # Live pod label mutation and autopsy drill
+│   ├── test-quarantine.sh                     # Automated quarantine verification
+│   └── README.md                              # Autopsy troubleshooting guide
+└── 08-readiness-dependency/                   # Section 8: Health Probes & Dependencies
+    ├── 01-upstream-backend.yaml               # Upstream backend service and deployment
+    ├── 02-dependent-frontend.yaml             # Frontend pod with readinessProbe checking service
+    ├── test-readiness-dependency.sh           # Automated test asserting 0/1 -> 1/1 transition
+    └── README.md                              # Readiness probe dependency guide
 ```
 
 ---
@@ -309,6 +314,46 @@ kubectl delete namespace {{ cka_lab_pods_staging_namespace }}
 ```bash
 cd {{ cka_lab_pods_dir }}/07-quarantine-autopsy
 ./quarantine-drill.sh
+```
+
+---
+
+### Drill 8: Health Probes with Inter-Service Dependency (`08-readiness-dependency/`)
+
+#### Step 1: Deploy Dependent Frontend Pod
+
+Deploy a pod that queries an upstream service during its readiness probe:
+
+```bash
+cd {{ cka_lab_pods_dir }}/08-readiness-dependency
+kubectl apply -f 02-dependent-frontend.yaml
+```
+
+Observe that the pod runs but remains unready (`READY 0/1`):
+
+```bash
+kubectl get pod frontend-processor
+kubectl describe pod frontend-processor | grep -A 5 Readiness
+```
+
+#### Step 2: Deploy Upstream Backend Service
+
+Deploy the backend deployment and service to satisfy the probe:
+
+```bash
+kubectl apply -f 01-upstream-backend.yaml
+```
+
+Observe `frontend-processor` transition to `1/1 Ready`:
+
+```bash
+kubectl get pod frontend-processor -w
+```
+
+#### Step 3: Run Automated Verification
+
+```bash
+./test-readiness-dependency.sh
 ```
 
 ---

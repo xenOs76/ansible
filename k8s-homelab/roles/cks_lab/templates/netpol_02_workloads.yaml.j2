@@ -1,0 +1,93 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: netpol-test-client
+  namespace: {{ cks_lab_netpol_namespace | default('default') }}
+  labels:
+    app.kubernetes.io/name: netpol-test-client
+    app.kubernetes.io/part-of: cks-lab
+    cks.practice/scenario: network-policies
+    app: netpol-client
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: netpol-client
+  template:
+    metadata:
+      labels:
+        app: netpol-client
+        app.kubernetes.io/name: netpol-test-client
+        app.kubernetes.io/part-of: cks-lab
+        cks.practice/scenario: network-policies
+    spec:
+      containers:
+        - name: client
+          image: curlimages/curl:latest
+          command:
+            - /bin/sh
+            - -c
+            - while true; do sleep 3600; done
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 50m
+              memory: 64Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: internal-api
+  namespace: {{ cks_lab_netpol_namespace | default('default') }}
+  labels:
+    app.kubernetes.io/name: internal-api
+    app.kubernetes.io/part-of: cks-lab
+    cks.practice/scenario: network-policies
+    app: internal-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: internal-api
+  template:
+    metadata:
+      labels:
+        app: internal-api
+        app.kubernetes.io/name: internal-api
+        app.kubernetes.io/part-of: cks-lab
+        cks.practice/scenario: network-policies
+    spec:
+      containers:
+        - name: api
+          image: nginx:alpine
+          ports:
+            - containerPort: 80
+              name: http
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 50m
+              memory: 32Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: internal-api
+  namespace: {{ cks_lab_netpol_namespace | default('default') }}
+  labels:
+    app.kubernetes.io/name: internal-api
+    app.kubernetes.io/part-of: cks-lab
+    cks.practice/scenario: network-policies
+spec:
+  type: ClusterIP
+  selector:
+    app: internal-api
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 80

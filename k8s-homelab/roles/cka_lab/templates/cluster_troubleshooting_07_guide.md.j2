@@ -1,6 +1,6 @@
 # Worker Node Static Pod Provisioning
 
-Configure a worker node's kubelet to manage a static pod without API server intervention.
+Configure a worker node's kubelet to manage a static pod without API server intervention and expose it via Services.
 
 ## Official Exam References & Quick Lookups
 
@@ -26,13 +26,19 @@ sudo systemctl restart kubelet
 ## Exam Importance & Requirements
 
 - **Domain**: Troubleshooting & Workloads.
-- **Exam Pattern**: *"On worker node `kube-worker-1`, run a static pod named `my-worker-web` using image `nginx:alpine`."*
+- **Exam Pattern**: *"On worker node `kube-worker-1`, run a static pod named `my-worker-web` using image `nginx:alpine`
+  and expose it via a NodePort Service named `my-worker-web-svc` on port 80."*
 - **Kubelet Discovery**:
   1. Inspect kubelet systemd service or config file at `/var/lib/kubelet/config.yaml`.
   1. Locate `staticPodPath:` (defaults to `/etc/kubernetes/manifests`).
   1. If missing, configure `staticPodPath: /etc/kubernetes/manifests` and restart `systemctl restart kubelet`.
   1. Place pod YAML directly into `/etc/kubernetes/manifests/`.
-  1. The kubelet automatically creates the static pod and registers a read-only mirror pod in the API server with name `<pod-name>-<node-name>`.
+  1. The kubelet automatically creates the static pod and registers a read-only mirror pod in the API server with name
+     `<pod-name>-<node-name>`.
+- **Exposing Static Mirror Pods**:
+  1. Static mirror pods contain labels matching the original manifest.
+  1. Use `kubectl expose pod <mirror-pod-name> --name=<svc-name> --type=NodePort --port=80` or target pod labels.
+  1. The endpoints controller detects the mirror pod's IP and populates the service endpoints automatically.
 
 ---
 
@@ -53,4 +59,13 @@ sudo cp static-web.yaml /etc/kubernetes/manifests/
 
 # 5. On control plane, verify mirror pod
 kubectl get pods -o wide | grep static-web
+
+# 6. Expose the static mirror pod via NodePort Service
+kubectl expose pod static-worker-web-kube-worker-1 \
+  --name=static-worker-web-svc \
+  --type=NodePort \
+  --port=80
+
+# 7. Verify service endpoints are populated with the static pod IP
+kubectl get endpoints static-worker-web-svc
 ```

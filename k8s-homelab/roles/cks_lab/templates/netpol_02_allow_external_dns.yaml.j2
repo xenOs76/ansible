@@ -3,11 +3,11 @@ apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: allow-external-dns-egress
-  namespace: {{ cka_lab_networking_namespace | default('default') }}
+  namespace: {{ cks_lab_netpol_namespace | default('default') }}
   labels:
     app.kubernetes.io/name: allow-external-dns-egress
-    app.kubernetes.io/part-of: cka-lab
-    cka.practice/scenario: networking
+    app.kubernetes.io/part-of: cks-lab
+    cks.practice/scenario: network-policies
 spec:
   podSelector:
     matchLabels:

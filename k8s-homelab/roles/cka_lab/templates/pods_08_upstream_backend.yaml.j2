@@ -1,0 +1,44 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: order-backend
+  namespace: default
+  labels:
+    app.kubernetes.io/part-of: cka-lab
+    app: order-backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: order-backend
+  template:
+    metadata:
+      labels:
+        app: order-backend
+    spec:
+      containers:
+        - name: web
+          image: nginx:alpine
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: order-service
+  namespace: default
+  labels:
+    app.kubernetes.io/part-of: cka-lab
+spec:
+  type: ClusterIP
+  selector:
+    app: order-backend
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80

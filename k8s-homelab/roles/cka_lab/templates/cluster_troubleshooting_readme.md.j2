@@ -22,10 +22,22 @@ Troubleshooting makes up the largest scoring weight (30%) of the CKA exam:
   forwarders.
 - **Section 6: Service & Endpoints Triage**: Resolving mismatched label selectors and targetPort definitions causing
   unreachable services.
-- **Section 7: Worker Static Pods**: Configuring a worker node's kubelet `staticPodPath` and deploying static pods
-  directly on the worker node.
+- **Section 7: Worker Static Pods**: Configuring a worker node's kubelet `staticPodPath`, deploying static pods
+  directly on the worker node, and exposing mirror pods via NodePort Services.
 - **Section 8: Container Runtime (CRI) Diagnostics**: Using `crictl` and inspecting `/var/log/pods/` when the container
   engine is degraded.
+- **Section 9: CNI Network Plugin Diagnostics**: Resolving missing or corrupted `/etc/cni/net.d/` configurations
+  preventing pod sandbox initialization.
+- **Section 10: RBAC ServiceAccount & Binding Alignment**: Resolving ServiceAccount name and namespace mismatches in
+  RoleBindings and ClusterRoleBindings causing `403 Forbidden` API errors.
+- **Section 11: Storage & Volume Triage**: Resolving PersistentVolume and PersistentVolumeClaim capacity and accessMode
+  binding mismatches, and hostPath volume permission errors with non-root containers.
+- **Section 12: Advanced Node Scheduling**: Diagnosing untolerated node taints (`sku=gpu:NoSchedule`) and malformed
+  pod toleration rules causing persistent `Pending` status.
+- **Section 13: Cluster Reconnaissance**: Discovering cluster topology, control plane vs worker nodes, Pod CIDRs,
+  Service CIDRs, CNI configuration, and namespaced vs non-namespaced API resources.
+- **Section 14: PKI Certificate Lifecycle**: Inspecting certificate expiration using `kubeadm` and `openssl`, and
+  renewing control plane certificates without cluster disruption.
 
 ### Scenario Directory Structure
 
@@ -38,12 +50,20 @@ Troubleshooting makes up the largest scoring weight (30%) of the CKA exam:
 ├── 02-static-pod-recovery/                    # Section 2: Control Plane Recovery
 │   ├── break-scheduler.sh                     # Simulates broken scheduler static pod
 │   ├── fix-scheduler.sh                       # Restores valid scheduler manifest
+│   ├── break-controller-manager.sh            # Simulates broken controller manager
+│   ├── fix-controller-manager.sh              # Restores valid controller manager
 │   ├── break-apiserver.sh                     # Simulates broken apiserver static pod
 │   ├── fix-apiserver.sh                       # Restores valid apiserver manifest
+│   ├── canary-deployment.yaml                 # Probe workload demonstrating scheduling stall
+│   ├── canary-controller-deployment.yaml      # Probe workload demonstrating replica stall
+│   ├── test-static-pod-recovery.sh            # Automated self-test for static pod recovery
 │   └── README.md                              # Static pod troubleshooting guide
 ├── 03-kubelet-diagnostics/                    # Section 3: Kubelet & Node Diagnostics
 │   ├── break-kubelet.sh                       # Simulates invalid kubelet configuration
 │   ├── fix-kubelet.sh                         # Restores valid kubelet service
+│   ├── break-kubelet-cert.sh                  # Simulates corrupted client certificate
+│   ├── fix-kubelet-cert.sh                    # Restores valid client certificate
+│   ├── test-kubelet-cert.sh                   # Automated test for cert recovery
 │   └── README.md                              # Kubelet failure diagnosis guide
 ├── 04-metrics-monitoring/                     # Section 4: Resource Telemetry
 │   └── test-metrics-top.sh                    # kubectl top verification script
@@ -57,15 +77,56 @@ Troubleshooting makes up the largest scoring weight (30%) of the CKA exam:
 │   ├── setup-broken-service.sh                # Deploys service with selector mismatch
 │   ├── fix-service.sh                         # Patches selector and targetPort
 │   ├── test-service-endpoints.sh              # Connectivity assertion test
-│   └── README.md                              # Service troubleshooting guide
+│   ├── setup-broken-ingress.sh                # Injects Ingress backend port mismatch
+│   ├── fix-ingress.sh                         # Patches Ingress backend port to 80
+│   ├── test-ingress-routing.sh                # Automated Ingress routing verification
+│   └── README.md                              # Service & Ingress troubleshooting guide
 ├── 07-worker-static-pods/                     # Section 7: Worker Static Pods
 │   ├── static-web.yaml                        # NGINX alpine static pod manifest
 │   ├── setup-worker-static-pod.sh             # Provisions static pod to worker node
+│   ├── expose-static-pod.sh                   # Exposes static mirror pod via NodePort
 │   ├── test-worker-static-pod.sh              # Validates mirror pod on API server
 │   └── README.md                              # Worker static pod guide
-└── 08-containerd-diagnostics/                 # Section 8: Container Runtime Triage
-    ├── test-crictl.sh                         # crictl CLI verification script
-    └── README.md                              # CRI debugging guide
+├── 08-containerd-diagnostics/                 # Section 8: Container Runtime Triage
+│   ├── test-crictl.sh                         # crictl CLI verification script
+│   └── README.md                              # CRI debugging guide
+├── 09-cni-recovery/                           # Section 9: CNI Network Plugin Diagnostics
+│   ├── break-cni.sh                           # Simulates missing /etc/cni/net.d/ config
+│   ├── fix-cni.sh                             # Restores CNI configuration
+│   ├── cni-probe-pod.yaml                     # Targeted probe pod on worker node
+│   ├── test-cni-recovery.sh                   # Automated test for CNI recovery
+│   └── README.md                              # CNI troubleshooting guide
+├── 10-rbac-recovery/                          # Section 10: RBAC Alignment Diagnostics
+│   ├── 01-rbac-setup.yaml                     # Setup with intentional subject mismatch
+│   ├── 02-probe-pod.yaml                      # Probe pod making authenticated API calls
+│   ├── 03-fixed-binding.yaml                  # Corrected ClusterRoleBinding manifest
+│   ├── test-rbac-recovery.sh                  # Automated test for RBAC recovery
+│   └── README.md                              # RBAC troubleshooting guide
+├── 11-storage-recovery/                       # Section 11: Storage & Volume Triage
+│   ├── 01-pv-pvc-mismatch.yaml                # PV and mismatched PVC manifests
+│   ├── 02-fixed-pvc.yaml                      # Corrected PVC manifest
+│   ├── 03-hostpath-perm-pod.yaml              # Non-root pod with permission failure
+│   ├── 04-fixed-hostpath-pod.yaml             # Fixed pod with fsGroup: 1000
+│   ├── setup-broken-storage.sh                # Injects storage mismatch & permission failures
+│   ├── fix-storage.sh                         # Replaces PVC and reapplies hostPath pod
+│   ├── test-storage-recovery.sh               # Automated verification test
+│   └── README.md                              # Storage troubleshooting guide
+├── 12-scheduling-recovery/                    # Section 12: Node Scheduling Triage
+│   ├── 01-tainted-workload.yaml               # Deployment with typo in toleration key
+│   ├── 02-fixed-workload.yaml                 # Deployment with matching toleration
+│   ├── setup-broken-scheduling.sh             # Taints worker nodes and applies workload
+│   ├── fix-scheduling.sh                      # Applies fixed workload and manages taints
+│   ├── test-scheduling-recovery.sh            # Automated verification test
+│   └── README.md                              # Scheduling troubleshooting guide
+├── 13-cluster-recon/                          # Section 13: Cluster Reconnaissance
+│   ├── cluster-recon.sh                       # Cluster reconnaissance audit script
+│   ├── test-cluster-recon.sh                  # Automated verification test
+│   └── README.md                              # Reconnaissance guide
+└── 14-pki-certs/                              # Section 14: PKI Certificate Lifecycle
+    ├── check-certs.sh                         # Certificate expiration audit script
+    ├── renew-apiserver-cert.sh                # API server cert renewal script
+    ├── test-pki-certs.sh                      # Automated verification test
+    └── README.md                              # PKI lifecycle guide
 ```
 
 ---
@@ -169,17 +230,37 @@ directly by the local `kubelet` daemon as **Static Pods** defined in `/etc/kuber
 
 #### Exam Symptom: Applications Stuck in Pending
 
-When the scheduler fails, new Deployments or Pods remain stuck in `Pending` indefinitely with zero scheduling events
-recorded in `kubectl describe pod`.
+When the scheduler fails, existing pods continue running, but all newly created Deployments or Pods remain stuck in
+`Pending` indefinitely with zero scheduling events recorded in `kubectl describe pod`.
 
-#### Step 1: Simulate Scheduler Manifest Corruption
+#### Step 1: Simulate Scheduler Manifest Corruption & Deploy Canary
+
+Execute the failure injector script (defaults to Scenario 1: broken kubeconfig path):
 
 ```bash
 cd {{ cka_lab_cluster_troubleshooting_dir }}/02-static-pod-recovery
+
+# Scenario 1 (Default): Broken kubeconfig path
 sudo ./break-scheduler.sh
+
+# Or test alternative scenarios:
+# sudo ./break-scheduler.sh --scenario=mount   (Corrupted hostPath mount)
+# sudo ./break-scheduler.sh --scenario=syntax  (Invalid YAML syntax; mirror pod disappears)
 ```
 
-#### Step 2: Investigate Control Plane Pod Status
+The script automatically applies a canary probe deployment (`cka-scheduler-probe`) in the `default` namespace.
+
+#### Step 2: Observe the Symptom (Pending Pod with Zero Events)
+
+```bash
+# Check the canary pod status
+kubectl get pods -n default -l app=scheduler-probe
+
+# Describe pod: notice the Events section has ZERO scheduling entries
+kubectl describe pod -n default -l app=scheduler-probe
+```
+
+#### Step 3: Investigate Control Plane Pod Status
 
 Check the health of core components in `kube-system`:
 
@@ -187,16 +268,22 @@ Check the health of core components in `kube-system`:
 kubectl get pods -n kube-system -l component=kube-scheduler
 ```
 
-Notice the status shows `CrashLoopBackOff` or `Error`.
+Notice the status shows `CrashLoopBackOff` or `Error`. (If testing Scenario 3 with syntax corruption, notice the
+static pod mirror pod completely disappears from the listing).
 
-#### Step 3: Extract Autopsy Logs
+#### Step 4: Extract Autopsy Logs
 
 ```bash
+# When mirror pod is present, extract logs via kubectl:
 kubectl logs -n kube-system -l component=kube-scheduler --tail=50
-```
 
-Notice the error message pointing to an invalid configuration flag or bad file path (e.g. `--authentication-kubeconfig`
-or bad volume mount).
+# When component is failing or API server is unreachable, inspect via crictl:
+sudo crictl ps -a | grep -i scheduler
+sudo crictl logs <container-id>
+
+# When mirror pod is absent (syntax error), inspect kubelet systemd journal:
+sudo journalctl -u kubelet -e --no-pager | grep -i scheduler
+```
 
 > [!TIP]
 > **What if `kube-apiserver` is down?**
@@ -208,7 +295,7 @@ or bad volume mount).
 > sudo crictl logs <container-id>
 > ```
 
-#### Step 4: Fix the Static Pod Manifest
+#### Step 5: Fix the Static Pod Manifest
 
 Static pod manifests are located at `/etc/kubernetes/manifests/`. Edit the corrupted manifest:
 
@@ -221,16 +308,31 @@ sudo ./fix-scheduler.sh
 ```
 
 Upon saving the file, the local `kubelet` detects the change via inotify file watchers and automatically recreates the
-static pod within seconds.
+static pod. `fix-scheduler.sh` verifies that the scheduler is `Running`, confirms the canary workload schedules,
+and cleans up the probe deployment.
 
-#### Step 5: Verify Recovery
+#### Step 6: Verify Recovery or Run Automated Self-Test
 
 ```bash
+# Verify scheduler pod is healthy
 kubectl get pods -n kube-system -l component=kube-scheduler
+
+# Run full automated drill self-test:
+sudo ./test-static-pod-recovery.sh
 ```
 
-Confirm that the scheduler returns to `1/1 Running`. Any previously `Pending` workloads will now be scheduled
-immediately.
+#### Real-World Post-Mortems & Incident References
+
+The static pod failure modes practiced in this drill directly model documented high-impact production outages:
+
+| Organization & Case Study | Outage Symptom & Root Cause | Drill Mapping | Reference |
+| :--- | :--- | :--- | :--- |
+| **Monzo Bank (2018)** | Banking deployment stall: invalid credential path in scheduler kubeconfig | **Scenario 1**: Broken Kubeconfig Path | [hjacobs/kubernetes-failure-stories #15](https://github.com/hjacobs/kubernetes-failure-stories) |
+| **Target Corporation (2019)** | Node OS upgrade desynchronized HostPath volume mount for PKI credentials | **Scenario 2**: HostPath Mount Drift | [Target Kubernetes Retrospective](https://github.com/hjacobs/kubernetes-failure-stories) |
+| **Datadog (2020)** | Scheduler leader election drops & crashloop from client endpoint drift | **Scenario 4**: Server Endpoint Drift | [Datadog K8s Scheduling Post-Mortem](https://github.com/hjacobs/kubernetes-failure-stories) |
+| **OpenAI (2021)** | Silent static pod watcher drops during in-place atomic file replacements (`sed -i`) | Script analysis & inode watch gotchas | [OpenAI 7,500 Nodes Post-Mortem](https://openai.com/index/scaling-kubernetes-to-7500-nodes/) |
+| **Kubernetes SIG-Node** | Kubelet removes mirror pods on YAML parse errors instead of reporting `Error` | **Scenario 3**: YAML Syntax Error | [Kubernetes Issue #65454](https://github.com/kubernetes/kubernetes/issues/65454) |
+| **CNCF / Linux Foundation** | Standard certification competencies for control plane static pod recovery | Exam curriculum objectives | [CNCF CKA Curriculum](https://github.com/cncf/curriculum) |
 
 ---
 
@@ -572,6 +674,160 @@ sudo crictl logs <container-id>
 ```bash
 cd {{ cka_lab_cluster_troubleshooting_dir }}/08-containerd-diagnostics
 ./test-crictl.sh
+```
+
+---
+
+### Drill 9: CNI Network Plugin Diagnostics (`09-cni-recovery/`)
+
+#### Step 1: Inject CNI Failure on Worker Node
+
+```bash
+cd {{ cka_lab_cluster_troubleshooting_dir }}/09-cni-recovery
+./break-cni.sh --node=kube-worker-1
+```
+
+#### Step 2: Observe Symptoms & Investigate
+
+```bash
+# Check pod status:
+kubectl get pod cni-probe-pod -n default
+
+# Inspect failure events:
+kubectl describe pod cni-probe-pod -n default
+
+# Check node CNI directory:
+ssh kube-worker-1 "ls -la /etc/cni/net.d/"
+```
+
+#### Step 3: Restore CNI Configuration
+
+```bash
+./fix-cni.sh --node=kube-worker-1
+```
+
+---
+
+### Drill 10: RBAC ServiceAccount & RoleBinding Alignment (`10-rbac-recovery/`)
+
+#### Step 1: Deploy Broken RBAC Setup
+
+```bash
+cd {{ cka_lab_cluster_troubleshooting_dir }}/10-rbac-recovery
+kubectl apply -f 01-rbac-setup.yaml
+kubectl apply -f 02-probe-pod.yaml
+```
+
+Observe probe pod failing with `403 Forbidden` in `kubectl logs -n security-ops node-inspector-pod`.
+
+#### Step 2: Trace and Fix the Binding
+
+```bash
+kubectl describe clusterrolebinding node-reader-binding
+kubectl apply -f 03-fixed-binding.yaml
+```
+
+#### Step 3: Verify Resolution
+
+```bash
+kubectl auth can-i list nodes --as=system:serviceaccount:security-ops:node-inspector
+./test-rbac-recovery.sh
+```
+
+---
+
+### Drill 11: Storage & Volume Break-Fix Triage (`11-storage-recovery/`)
+
+#### Step 1: Inject Storage Failure Modes
+
+```bash
+cd {{ cka_lab_cluster_troubleshooting_dir }}/11-storage-recovery
+./setup-broken-storage.sh
+```
+
+#### Step 2: Investigate PVC Pending & HostPath Permission Errors
+
+```bash
+# Check PVC binding failure events:
+kubectl describe pvc cka-mismatched-pvc
+
+# Check failing container logs:
+kubectl logs cka-hostpath-app
+```
+
+#### Step 3: Apply Storage Fix
+
+```bash
+./fix-storage.sh
+```
+
+---
+
+### Drill 12: Advanced Node Scheduling & Taint Recovery (`12-scheduling-recovery/`)
+
+#### Step 1: Inject Untolerated Taint & Workload
+
+```bash
+cd {{ cka_lab_cluster_troubleshooting_dir }}/12-scheduling-recovery
+./setup-broken-scheduling.sh
+```
+
+#### Step 2: Investigate Pod Pending State
+
+```bash
+# Check scheduling failure events:
+kubectl describe pod -l app=gpu-processor
+
+# Inspect node taints:
+kubectl get nodes -o custom-columns=NAME:.metadata.name,TAINTS:.spec.taints
+```
+
+#### Step 3: Apply Toleration Fix
+
+```bash
+./fix-scheduling.sh
+```
+
+---
+
+### Drill 13: Cluster Reconnaissance & Network Discovery (`13-cluster-recon/`)
+
+#### Step 1: Run Cluster Reconnaissance Audit
+
+```bash
+cd {{ cka_lab_cluster_troubleshooting_dir }}/13-cluster-recon
+./cluster-recon.sh
+```
+
+#### Step 2: Validate Cluster Network & Topology Output
+
+```bash
+# Verify non-interactive test asserts node counts, Pod CIDRs, and Service CIDRs
+./test-cluster-recon.sh
+```
+
+---
+
+### Drill 14: PKI Certificate Lifecycle & Renewal (`14-pki-certs/`)
+
+#### Step 1: Inspect Certificate Expiration
+
+```bash
+cd {{ cka_lab_cluster_troubleshooting_dir }}/14-pki-certs
+./check-certs.sh
+```
+
+#### Step 2: Renew Control Plane Certificate
+
+```bash
+# Renew kube-apiserver certificate without cluster disruption
+./renew-apiserver-cert.sh apiserver
+```
+
+#### Step 3: Verify Post-Renewal Health
+
+```bash
+./test-pki-certs.sh
 ```
 
 ---

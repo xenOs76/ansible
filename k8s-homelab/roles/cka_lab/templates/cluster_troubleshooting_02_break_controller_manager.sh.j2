@@ -1,0 +1,121 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# break-controller-manager.sh: Simulates Controller Manager Static Pod Failure
+# Managed by Ansible (roles/cka_lab)
+# Models real-world production incident patterns and CKA troubleshooting drills
+# ==============================================================================
+set -euo pipefail
+
+MANIFEST="/etc/kubernetes/manifests/kube-controller-manager.yaml"
+# CRITICAL: Backups must NEVER be stored in /etc/kubernetes/manifests/
+# Kubelet scans that directory and parses any file (including .bak) as a static pod manifest!
+BACKUP="/etc/kubernetes/kube-controller-manager.yaml.bak"
+LEGACY_BACKUP="/etc/kubernetes/manifests/kube-controller-manager.yaml.bak"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CANARY_MANIFEST="${SCRIPT_DIR}/canary-controller-deployment.yaml"
+
+if [ "$(id -u)" -ne 0 ]; then
+  echo "Error: This script modifies static pod manifests and must be run as root (use sudo)." >&2
+  exit 1
+fi
+
+if [ ! -f "${MANIFEST}" ]; then
+  echo "Error: Manifest ${MANIFEST} not found. Must be executed on the control plane node." >&2
+  exit 1
+fi
+
+# Clean up any legacy backup files inside manifests directory that prevent kubelet failures
+rm -f "${LEGACY_BACKUP}" /etc/kubernetes/manifests/*.bak 2>/dev/null || true
+
+# Detect KUBECONFIG if not set
+if [ -z "${KUBECONFIG:-}" ] && [ -f /etc/kubernetes/admin.conf ]; then
+  export KUBECONFIG=/etc/kubernetes/admin.conf
+fi
+
+SCENARIO="${1:-kubeconfig}"
+case "${SCENARIO}" in
+  --scenario=*)
+    SCENARIO="${SCENARIO#*=}"
+    ;;
+esac
+
+echo "===================================================================="
+echo "  [CKA LAB] Simulating Control Plane Static Pod Failure             "
+echo "  Target: kube-controller-manager | Scenario: ${SCENARIO}           "
+echo "===================================================================="
+
+# 1. Back up original manifest if not already backed up
+if [ ! -f "${BACKUP}" ]; then
+  echo "==> [1/4] Creating backup at ${BACKUP}..."
+  cp -f "${MANIFEST}" "${BACKUP}"
+else
+  echo "==> [1/4] Existing backup found at ${BACKUP}."
+fi
+
+# 2. Inject failure scenario
+echo "==> [2/4] Injecting failure scenario into ${MANIFEST}..."
+case "${SCENARIO}" in
+  1|kubeconfig)
+    echo "    Corrupting controller-manager kubeconfig parameter..."
+    sed -i 's|--kubeconfig=.*|--kubeconfig=/etc/kubernetes/controller-manager-broken.conf|g' "${MANIFEST}"
+    if ! grep -q "controller-manager-broken.conf" "${MANIFEST}"; then
+      echo "Error: Failed to patch --kubeconfig in ${MANIFEST}." >&2
+      exit 1
+    fi
+    ;;
+  2|mount)
+    echo "    Corrupting controller-manager hostPath volume mount..."
+    sed -i 's|path: /etc/kubernetes/controller-manager.conf|path: /etc/kubernetes/missing-cm.conf|g' "${MANIFEST}"
+    if ! grep -q "missing-cm.conf" "${MANIFEST}"; then
+      echo "Error: Failed to patch hostPath in ${MANIFEST}." >&2
+      exit 1
+    fi
+    ;;
+  3|syntax)
+    echo "    Corrupting YAML syntax (unparseable scalar key)..."
+    sed -i '1i\corrupted_unmarshal_syntax: [' "${MANIFEST}"
+    ;;
+  *)
+    echo "Error: Unknown scenario '${SCENARIO}'." >&2
+    echo "Supported scenarios: kubeconfig (default), mount, syntax" >&2
+    exit 1
+    ;;
+esac
+
+echo "    Manifest modification applied successfully."
+
+# Force immediate container reload so existing healthy controller-manager stops immediately
+echo "    Stopping active controller-manager container to trigger kubelet sync..."
+crictl ps --name kube-controller-manager -q 2>/dev/null | xargs -r crictl stop >/dev/null 2>&1 || true
+
+# 3. Deploy Canary Workload to prove ReplicaSet reconciliation is stalled
+echo "==> [3/4] Deploying canary workload to demonstrate controller-manager failure..."
+if [ -f "${CANARY_MANIFEST}" ] && [ -n "${KUBECONFIG:-}" ] && [ -f "${KUBECONFIG}" ]; then
+  kubectl delete deployment cka-controller-probe -n default --ignore-not-found=true --timeout=30s >/dev/null 2>&1 || true
+  kubectl apply -f "${CANARY_MANIFEST}" >/dev/null 2>&1 || true
+  sleep 3
+  echo "    Canary deployment status (should show 0 available replicas):"
+  kubectl get deployment cka-controller-probe -n default || true
+fi
+
+# 4. Instructions for Triage
+echo "==> [4/4] Failure simulation active."
+echo ""
+echo "--- Troubleshooting Checklist ---"
+echo "1. Verify canary deployment has 0 available replicas:"
+echo "   kubectl get deployment cka-controller-probe -n default"
+echo "   kubectl describe deployment cka-controller-probe -n default"
+echo ""
+echo "2. Check control plane static pod mirror status in kube-system:"
+echo "   kubectl get pods -n kube-system -l component=kube-controller-manager"
+echo ""
+echo "3. Inspect host container runtime directly if pod is failing or absent:"
+echo "   sudo crictl ps -a | grep -i controller-manager"
+echo "   sudo crictl logs <container_id>"
+echo ""
+echo "4. If the static pod is completely missing from kubectl, inspect kubelet logs:"
+echo "   sudo journalctl -u kubelet -e --no-pager | grep -i controller-manager"
+echo ""
+echo "5. Once diagnosed, restore healthy cluster state by running:"
+echo "   sudo ./fix-controller-manager.sh"
+echo "===================================================================="

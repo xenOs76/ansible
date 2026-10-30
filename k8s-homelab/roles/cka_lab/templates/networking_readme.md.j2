@@ -1,8 +1,7 @@
-# CKA Lab Exercise: Kubernetes Networking (Services, Ingress, Gateway API & Network Policies)
+# CKA Lab Exercise: Kubernetes Networking (Services, Ingress & Gateway API)
 
 Hands-on training scenario for the Certified Kubernetes Administrator (CKA) certification, covering Services, Headless
-services, Ingress controllers, the Gateway API (with NGINX Gateway Fabric & Caddy reverse proxy), and multi-namespace
-Network Policies.
+services, Ingress controllers, and the Gateway API (with NGINX Gateway Fabric & Caddy reverse proxy).
 
 ---
 
@@ -17,10 +16,15 @@ primitives and modern architectural patterns:
   path-prefix matching.
 - **Module 3 (Gateway API)**: Role-oriented routing using standard Gateway API CRDs (`GatewayClass`, `Gateway`,
   `HTTPRoute`), NGINX Gateway Fabric, and Caddy TLS edge forwarding.
-- **Module 4 (Network Policies)**: Microsegmentation, default-deny ingress/egress, pod label selectors, DNS port 53
-  allow rules, and verification via `httpbin-go`.
-- **Module 5 (Advanced Network Policies)**: Complex cross-namespace microsegmentation combining `namespaceSelector` and
-  `podSelector`, with strict port-level egress filtering.
+- **Module 4 (Network Policies & Hubble Triage)**: Standard CKA NetworkPolicy creation (`podSelector`,
+  `namespaceSelector`, `ports`), default-deny ingress isolation, authorized client gating, and database egress
+  filtering (Killer.sh Q24), paired with real-time Cilium Hubble packet drop troubleshooting.
+
+> [!NOTE]
+> **Advanced Security Hardening in CKS**:
+> While standard CKA functional NetworkPolicies are practiced in Module 4, advanced security hardening
+> (cloud metadata protection `169.254.169.254/32`, strict zero-trust microsegmentation, and `kubectl-cyclonus`
+> matrix analysis) resides in the dedicated CKS training lab under `/home/vagrant/cks/network-policies/`.
 
 ### Scenario Directory Structure
 
@@ -44,26 +48,16 @@ primitives and modern architectural patterns:
 │   ├── cka-lab-httproute.yaml                 # HTTPRoute matching /httpbin and /api
 │   ├── cka-lab-caddy-integration.md           # Edge forwarding architecture (Caddy -> NGF)
 │   └── test-gateway.sh                        # Non-interactive Gateway API test script
-├── 04-network-policies/                       # Module 4: Network Policies with httpbin-go
-│   ├── cka-lab-namespaces.yaml                # Isolated client & backend namespaces
-│   ├── cka-lab-backend-workload.yaml          # httpbin-go target application & service
-│   ├── cka-lab-client-workloads.yaml          # Authorized & unauthorized client pods
-│   ├── cka-lab-default-deny-ingress.yaml      # Default deny all ingress policy
-│   ├── cka-lab-allow-client-to-backend.yaml   # Selective ingress policy from authorized clients
-│   ├── cka-lab-egress-dns-policy.yaml         # Egress policy allowing CoreDNS & backend calls
-│   └── test-network-policies.sh               # Non-interactive policy enforcement test
-└── 05-advanced-network-policies/              # Module 5: Progressive Microsegmentation & Hubble
-    ├── README.md                              # Advanced NetworkPolicy progressive guide
-    ├── hubble-troubleshooting.md              # Live Hubble CLI flow & drop inspection
-    ├── 01-workloads.yaml                      # Test client workload in default namespace
-    ├── 02-default-deny-all.yaml               # Strict namespace isolation policy
-    ├── 03-allow-kube-dns.yaml                 # CoreDNS in-cluster whitelisting
-    ├── 04-allow-external-dns.yaml             # External DNS public resolver whitelisting
-    ├── 05-allow-gateway-httpbin.yaml          # Gateway API and httpbingo traffic rules
-    ├── 06-cross-tenant-workloads.yaml         # Multi-tenant isolated workloads & default-deny
-    ├── 07-allow-cross-tenant.yaml             # Cross-namespace logical AND network policies
-    ├── test-advanced-netpol.sh                # Gateway NetPol progressive validation script
-    └── test-cross-tenant.sh                   # Multi-tenant pod isolation test script
+└── 04-network-policies/                       # Module 4: Network Policies & Hubble Triage
+    ├── cka-lab-namespaces.yaml                # Client and backend namespaces
+    ├── cka-lab-backend-workload.yaml          # Target backend deployment & ClusterIP service
+    ├── cka-lab-client-workloads.yaml          # Authorized and unauthorized client pods
+    ├── cka-lab-default-deny-ingress.yaml      # Default-deny ingress rule
+    ├── cka-lab-allow-client-to-backend.yaml   # Ingress allow rule for authorized clients
+    ├── cka-lab-egress-dns-policy.yaml         # Port 53 UDP/TCP egress allow rule
+    ├── cka-lab-egress-database.yaml           # Killer.sh Q24: Egress to db1:1111 & db2:2222
+    ├── hubble-troubleshooting.md              # Real-time packet drop inspection with Hubble
+    └── test-network-policies.sh               # Non-interactive automated test suite
 ```
 
 ---
@@ -75,7 +69,6 @@ primitives and modern architectural patterns:
 - **Services Architecture**: [Services](https://kubernetes.io/docs/concepts/services-networking/service/) `[EXAM ALLOWED]`
 - **DNS for Services & Pods**: [DNS for Services and Pods](https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/) `[EXAM ALLOWED]`
 - **Ingress Controllers & Routing**: [Ingress](https://kubernetes.io/docs/concepts/services-networking/ingress/) `[EXAM ALLOWED]`
-- **Network Policies**: [Network Policies](https://kubernetes.io/docs/concepts/services-networking/network-policies/) `[EXAM ALLOWED]`
 - **Gateway API Specification (CKA Allowed)**: [Gateway API Documentation](https://gateway-api.sigs.k8s.io/) `[EXAM ALLOWED]`
 
 ### In-Exam Search Keywords
@@ -85,7 +78,7 @@ primitives and modern architectural patterns:
 - `"service nodeport"`
 - `"service headless"`
 - `"ingress path"`
-- `"network policy default deny"`
+- `"httproute"`
 - `"dns for services and pods"`
 
 ### Terminal Fast Lookups (`kubectl explain`)
@@ -95,8 +88,6 @@ primitives and modern architectural patterns:
 kubectl explain service.spec.type
 kubectl explain service.spec.ports
 kubectl explain ingress.spec.rules
-kubectl explain networkpolicy.spec.ingress
-kubectl explain networkpolicy.spec.egress
 kubectl expose deployment <name> --port=80 --target-port=8080 --type=NodePort --dry-run=client -o yaml
 ```
 
@@ -400,100 +391,65 @@ curl -s -H "Host: {{ cka_lab_networking_gateway_domain | default('httpbin.exampl
 
 ---
 
-### Drill 4: Network Policies with httpbin-go (`04-network-policies/`)
+## 4. Module 4: Kubernetes Network Policies & Hubble Triage
 
-> [!NOTE]
-> **No Extra Helm Installation Required**: NetworkPolicies are enforced natively by Cilium CNI (already active in the
-> cluster). Workload pods (`cka-lab-target-backend` and clients) are created directly by the manifests in this drill.
-
-NetworkPolicies enforce pod-to-pod microsegmentation. Understand the core rules:
-
-1. **Non-Isolated by Default**: If no policy selects a pod, it accepts traffic from all sources.
-2. **Isolation on Selection**: As soon as `spec.podSelector` matches a pod, that pod drops all unwhitelisted traffic for
-   the declared `policyTypes` (`Ingress` / `Egress`).
-3. **Whitelist Model**: NetworkPolicies only grant access; they cannot explicitly deny.
-
-#### Step 1: Provision Namespaces and Workloads
+### Drill 4: Ingress & Egress Network Policies (`04-network-policies/`)
 
 ```bash
 cd {{ cka_lab_networking_dir }}/04-network-policies
+```
+
+#### Step 1: Deploy Namespaces and Baseline Workloads
+
+```bash
 kubectl apply -f cka-lab-namespaces.yaml
 kubectl apply -f cka-lab-backend-workload.yaml
 kubectl apply -f cka-lab-client-workloads.yaml
-
-kubectl rollout status deployment/cka-lab-target-backend -n {{ cka_lab_networking_backend_namespace | default('cka-lab-net-backend') }} --timeout=60s
-kubectl wait --for=condition=Ready pod/cka-lab-client-authorized -n {{ cka_lab_networking_client_namespace | default('cka-lab-net-client') }} --timeout=60s
-kubectl wait --for=condition=Ready pod/cka-lab-client-unauthorized -n {{ cka_lab_networking_client_namespace | default('cka-lab-net-client') }} --timeout=60s
 ```
 
-#### Step 2: Test Baseline Connectivity (Expect Success)
-
-Prior to applying any policy, both client pods can reach the backend service:
+Verify initial unrestricted connectivity:
 
 ```bash
-BACKEND_URL="http://cka-lab-target-backend-svc.{{ cka_lab_networking_backend_namespace | default('cka-lab-net-backend') }}.svc.cluster.local:80"
-
-kubectl exec -n {{ cka_lab_networking_client_namespace | default('cka-lab-net-client') }} cka-lab-client-authorized -- wget -qO- -T 3 "${BACKEND_URL}"
-kubectl exec -n {{ cka_lab_networking_client_namespace | default('cka-lab-net-client') }} cka-lab-client-unauthorized -- wget -qO- -T 3 "${BACKEND_URL}"
+kubectl exec -n {{ cka_lab_networking_client_namespace | default('cka-lab-net-client') }} cka-lab-client-authorized -- \
+  wget -qO- -T 3 http://cka-lab-target-backend-svc.{{ cka_lab_networking_backend_namespace | default('cka-lab-net-backend') }}.svc.cluster.local:80
 ```
 
-#### Step 3: Apply Default Deny Ingress Policy
+#### Step 2: Apply Default-Deny Ingress
 
 ```bash
-cat cka-lab-default-deny-ingress.yaml
 kubectl apply -f cka-lab-default-deny-ingress.yaml
 ```
 
-The empty `podSelector: {}` isolates **all pods** in namespace `{{ cka_lab_networking_backend_namespace |
-default('cka-lab-net-backend') }}`. Verify that connections now time out:
+Now all inbound traffic to backend pods is dropped at the eBPF layer.
+
+#### Step 3: Observe Drops with Cilium Hubble
+
+In a separate terminal or background session, trace drops in real time:
 
 ```bash
-kubectl exec -n {{ cka_lab_networking_client_namespace | default('cka-lab-net-client') }} cka-lab-client-authorized -- wget -qO- -T 2 "${BACKEND_URL}" || echo "Connection dropped by default-deny!"
+hubble observe --namespace {{ cka_lab_networking_backend_namespace | default('cka-lab-net-backend') }} --verdict DROPPED -f
 ```
 
-#### Step 4: Whitelist Authorized Clients via `namespaceSelector` & `podSelector`
+Attempting the `wget` connection will produce live `Policy denied (INGRESS)` events in Hubble.
+
+#### Step 4: Allow Authorized Client & Egress DNS
 
 ```bash
-cat cka-lab-allow-client-to-backend.yaml
 kubectl apply -f cka-lab-allow-client-to-backend.yaml
-```
-
-Inspect the `from:` block:
-
-```yaml
-ingress:
-  - from:
-      - namespaceSelector:
-          matchLabels:
-            kubernetes.io/metadata.name: {{ cka_lab_networking_client_namespace | default('cka-lab-net-client') }}
-        podSelector:
-          matchLabels:
-            access: authorized
-```
-
-Placing `namespaceSelector` and `podSelector` together in the **same list item** creates a logical **AND** condition.
-
-#### Step 5: Whitelist CoreDNS Egress (Avoid CKA Exam Trap)
-
-When restricting egress traffic, you **must** allow traffic to CoreDNS (UDP/TCP port 53), otherwise all DNS lookups will
-fail:
-
-```bash
-cat cka-lab-egress-dns-policy.yaml
 kubectl apply -f cka-lab-egress-dns-policy.yaml
 ```
 
-#### Step 6: Verify Selective Enforcement
+Authorized client (`access: authorized`) succeeds, while unauthorized client (`access: unauthorized`) is blocked.
+
+#### Step 5: Killer.sh Q24 Egress Database Restriction
+
+Apply fine-grained egress rules permitting traffic only to specific database ports:
 
 ```bash
-# 1. Authorized client succeeds
-kubectl exec -n {{ cka_lab_networking_client_namespace | default('cka-lab-net-client') }} cka-lab-client-authorized -- wget -qO- -T 3 "${BACKEND_URL}"
-
-# 2. Unauthorized client is blocked
-kubectl exec -n {{ cka_lab_networking_client_namespace | default('cka-lab-net-client') }} cka-lab-client-unauthorized -- wget -qO- -T 2 "${BACKEND_URL}" || echo "Unauthorized client blocked!"
+kubectl apply -f cka-lab-egress-database.yaml
 ```
 
-#### Step 7: Run Automated Verification for Module 4
+#### Step 6: Run Automated Verification for Module 4
 
 ```bash
 ./test-network-policies.sh
@@ -501,264 +457,9 @@ kubectl exec -n {{ cka_lab_networking_client_namespace | default('cka-lab-net-cl
 
 ---
 
-### Drill 5: Progressive Microsegmentation & Hubble Inspection (`05-advanced-network-policies/`)
+## 5. Automated Validation
 
-Master complex pod-to-pod microsegmentation by isolating the `default` namespace with strict default-deny and
-progressively whitelisting CoreDNS, public DNS resolvers, and L7 HTTP traffic routed through NGINX Gateway Fabric.
-Troubleshoot live traffic and packet drops using the Cilium `hubble` CLI.
-
-#### Step 1: Deploy Workloads & Baseline Reachability
-
-```bash
-cd {{ cka_lab_networking_dir }}/05-advanced-network-policies
-kubectl apply -f 01-workloads.yaml
-kubectl rollout status deployment/netpol-test-client -n {{ cka_lab_networking_namespace | default('default') }} --timeout=60s
-
-# Verify initial open connectivity before applying policies
-kubectl exec -it deploy/netpol-test-client -n {{ cka_lab_networking_namespace | default('default') }} -- curl -s http://httpbingo/get
-```
-
-#### Step 2: Progressive Policy Enforcement
-
-```bash
-# 1. Enforce strict ingress & egress isolation (drops all traffic)
-kubectl apply -f 02-default-deny-all.yaml
-
-# 2. Whitelist cluster CoreDNS on port 53 (restores in-cluster resolution)
-kubectl apply -f 03-allow-kube-dns.yaml
-
-# 3. Whitelist external public DNS resolvers (1.1.1.1, 8.8.8.8) via ipBlock
-kubectl apply -f 04-allow-external-dns.yaml
-
-# 4. Whitelist Gateway API ingress to httpbingo and client egress to gateway proxy
-kubectl apply -f 05-allow-gateway-httpbin.yaml
-```
-
-> [!NOTE]
-> **Cross-Namespace Gateway Architecture**:
-> By deploying the `Gateway` in infrastructure namespace `{{ cka_lab_helm_ngf_namespace | default('nginx-gateway') }}`,
-> the data plane proxy operates outside the locked-down tenant namespace `default`. The policies in `default`
-> whitelist only ingress from `nginx-gateway` to backend `httpbingo:8080` and egress from client to `nginx-gateway:80`.
-> Direct client-to-backend traffic (`http://httpbingo/get`) remains blocked by `default-deny-all`, enforcing that all
-> consumer requests route through the Gateway proxy.
-
-#### Step 3: Validate Enforcement In-Cluster & Externally
-
-**1. Validate from within the namespace (`netpol-test-client`):**
-
-```bash
-# A. Direct East-West access to backend is BLOCKED by microsegmentation (expect timeout):
-kubectl exec deploy/netpol-test-client -n {{ cka_lab_networking_namespace | default('default') }} -- \
-  curl -s -m 3 http://httpbingo/get || echo "Direct curl blocked by policy as expected!"
-
-# B. Egress through Gateway proxy in nginx-gateway SUCCEEDS:
-kubectl exec deploy/netpol-test-client -n {{ cka_lab_networking_namespace | default('default') }} -- \
-  curl -s -m 5 -H "Host: {{ cka_lab_networking_gateway_domain | default('httpbin.example.local') }}" \
-  "http://cka-lab-gateway-nginx.{{ cka_lab_helm_ngf_namespace | default('nginx-gateway') }}/get"
-```
-
-**2. Validate from outside Kubernetes (host edge probe via NodePort 30080):**
-
-```bash
-NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
-curl -s -m 5 "http://{{ cka_lab_networking_gateway_domain | default('httpbin.example.local') }}:{{ cka_lab_helm_ngf_http_port | default(30080) }}/headers" \
-  --resolve "{{ cka_lab_networking_gateway_domain | default('httpbin.example.local') }}:{{ cka_lab_helm_ngf_http_port | default(30080) }}:${NODE_IP}"
-```
-
-#### Step 4: Cross-Namespace Policy Declarations Under Default-Deny
-
-When strict `default-deny-all` (`policyTypes: [Ingress, Egress]`) isolates a namespace, cross-namespace communication
-requires explicit rules on **both sides** of the network path if both namespaces enforce isolation:
-
-1. **Ingress Rule (Destination Pod)**: Must explicitly allow inbound traffic from the source namespace via
-   `spec.ingress[].from[].namespaceSelector`.
-2. **Egress Rule (Source Pod)**: Must explicitly allow outbound traffic to the destination namespace via
-   `spec.egress[].to[].namespaceSelector`.
-
-##### Pattern 1: Infrastructure to Tenant Ingress & Egress (`05-allow-gateway-httpbin.yaml`)
-
-In our Gateway API drill, the proxy runs in `{{ cka_lab_helm_ngf_namespace | default('nginx-gateway') }}` while
-workloads reside in `{{ cka_lab_networking_namespace | default('default') }}`. The two policies below restore access
-selectively through the proxy without exposing backend pods directly:
-
-```yaml
-# 1. Allow Ingress on backend 'httpbingo' only from the gateway proxy namespace on port 8080:
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: allow-gateway-to-httpbingo
-  namespace: {{ cka_lab_networking_namespace | default('default') }}
-spec:
-  podSelector:
-    matchLabels:
-      app.kubernetes.io/name: httpbingo
-  policyTypes:
-    - Ingress
-  ingress:
-    - from:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: {{ cka_lab_helm_ngf_namespace | default('nginx-gateway') }}
-      ports:
-        - protocol: TCP
-          port: 8080
----
-# 2. Allow Egress on client 'netpol-test-client' only to the gateway proxy namespace on port 80:
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: allow-client-to-gateway
-  namespace: {{ cka_lab_networking_namespace | default('default') }}
-spec:
-  podSelector:
-    matchLabels:
-      app: netpol-client
-  policyTypes:
-    - Egress
-  egress:
-    - to:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: {{ cka_lab_helm_ngf_namespace | default('nginx-gateway') }}
-      ports:
-        - protocol: TCP
-          port: 80
-```
-
-##### Pattern 2: Multi-Tenant Pod-to-Pod Isolation (Logical AND with `podSelector`)
-
-To restrict traffic to a specific pod inside another namespace (e.g., only `frontend` pods in
-`{{ cka_lab_networking_tenant_a | default('tenant-a') }}` connecting to `database` pods in
-`{{ cka_lab_networking_tenant_b | default('tenant-b') }}` on port `5432`), deploy the pre-packaged manifests:
-
-1. **Deploy Isolated Workloads & Strict Default-Deny (`06-cross-tenant-workloads.yaml`)**:
-
-```bash
-kubectl apply -f 06-cross-tenant-workloads.yaml
-```
-
-This provisions namespaces `{{ cka_lab_networking_tenant_a | default('tenant-a') }}` and
-`{{ cka_lab_networking_tenant_b | default('tenant-b') }}`, a `secure-db` workload listening on port 5432 fronted by
-ClusterIP service `db-service`, an authorized `frontend-app` (`role: frontend`), an unauthorized `analytics-worker`
-(`role: analytics`), and strict `default-deny-all` in both namespaces.
-
-Verify baseline isolation (both pods are dropped by policy):
-
-```bash
-# Both attempts time out / drop under default-deny:
-kubectl exec deploy/frontend-app -n {{ cka_lab_networking_tenant_a | default('tenant-a') }} -- \
-  curl -s -m 3 "http://db-service.{{ cka_lab_networking_tenant_b | default('tenant-b') }}:5432" || echo "Frontend blocked!"
-kubectl exec deploy/analytics-worker -n {{ cka_lab_networking_tenant_a | default('tenant-a') }} -- \
-  curl -s -m 3 "http://db-service.{{ cka_lab_networking_tenant_b | default('tenant-b') }}:5432" || echo "Analytics blocked!"
-```
-
-2. **Apply Selective Cross-Namespace Policies (`07-allow-cross-tenant.yaml`)**:
-
-```bash
-kubectl apply -f 07-allow-cross-tenant.yaml
-```
-
-Inspect the policy definitions combining `namespaceSelector` and `podSelector`:
-
-```yaml
-# Destination namespace ({{ cka_lab_networking_tenant_b | default('tenant-b') }}): Ingress rule
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: allow-frontend-to-db
-  namespace: {{ cka_lab_networking_tenant_b | default('tenant-b') }}
-spec:
-  podSelector:
-    matchLabels:
-      role: database
-  policyTypes:
-    - Ingress
-  ingress:
-    - from:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: {{ cka_lab_networking_tenant_a | default('tenant-a') }}
-          podSelector:
-            matchLabels:
-              role: frontend
-      ports:
-        - protocol: TCP
-          port: 5432
----
-# Source namespace ({{ cka_lab_networking_tenant_a | default('tenant-a') }}): Egress rule (required under default-deny)
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: allow-db-egress
-  namespace: {{ cka_lab_networking_tenant_a | default('tenant-a') }}
-spec:
-  podSelector:
-    matchLabels:
-      role: frontend
-  policyTypes:
-    - Egress
-  egress:
-    - to:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: {{ cka_lab_networking_tenant_b | default('tenant-b') }}
-          podSelector:
-            matchLabels:
-              role: database
-      ports:
-        - protocol: TCP
-          port: 5432
-```
-
-3. **Verify Selective Authorization**:
-
-```bash
-# 1. Authorized frontend succeeds:
-kubectl exec deploy/frontend-app -n {{ cka_lab_networking_tenant_a | default('tenant-a') }} -- \
-  curl -s -m 5 "http://db-service.{{ cka_lab_networking_tenant_b | default('tenant-b') }}:5432"
-
-# 2. Unauthorized analytics pod remains blocked (podSelector enforcement):
-kubectl exec deploy/analytics-worker -n {{ cka_lab_networking_tenant_a | default('tenant-a') }} -- \
-  curl -s -m 3 "http://db-service.{{ cka_lab_networking_tenant_b | default('tenant-b') }}:5432" || echo "Analytics blocked!"
-```
-
-4. **Run Automated Drill Verification**:
-
-```bash
-./test-cross-tenant.sh
-```
-
-> [!IMPORTANT]
-> **CKA Exam Pitfall: Logical AND vs. Logical OR**:
->
-> - **Logical AND**: Placing `namespaceSelector` and `podSelector` in the **same list item** (as shown above) means:
->   *traffic must come from pods matching the label INSIDE the selected namespace*.
-> - **Logical OR**: Placing them as **separate list items** (with separate leading dashes `-`) creates an OR
->   condition: *traffic from ANY pod in the namespace OR from matching pods in the SAME local namespace*.
-
-#### Step 5: Troubleshoot with Hubble CLI
-
-```bash
-# Port-forward Hubble relay if not active
-cilium hubble port-forward &
-
-# Watch dropped packets live in default namespace
-hubble observe --namespace {{ cka_lab_networking_namespace | default('default') }} --verdict DROPPED -f
-```
-
-Consult [hubble-troubleshooting.md](file://hubble-troubleshooting.md) for advanced filtering examples.
-
-#### Step 6: Run Automated Matrix Testing for Module 5
-
-```bash
-./test-advanced-netpol.sh
-```
-
----
-
-## 4. Automated Validation
-
-Execute the automated end-to-end verification script:
+Execute the automated end-to-end verification script for Services, Ingress, Gateway API, and NetworkPolicies:
 
 ```bash
 {{ cka_lab_networking_dir }}/test-networking-drills.sh

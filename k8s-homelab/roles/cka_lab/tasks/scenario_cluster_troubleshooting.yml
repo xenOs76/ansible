@@ -16,6 +16,12 @@
     - "{{ cka_lab_cluster_troubleshooting_dir }}/06-service-endpoints-recovery"
     - "{{ cka_lab_cluster_troubleshooting_dir }}/07-worker-static-pods"
     - "{{ cka_lab_cluster_troubleshooting_dir }}/08-containerd-diagnostics"
+    - "{{ cka_lab_cluster_troubleshooting_dir }}/09-cni-recovery"
+    - "{{ cka_lab_cluster_troubleshooting_dir }}/10-rbac-recovery"
+    - "{{ cka_lab_cluster_troubleshooting_dir }}/11-storage-recovery"
+    - "{{ cka_lab_cluster_troubleshooting_dir }}/12-scheduling-recovery"
+    - "{{ cka_lab_cluster_troubleshooting_dir }}/13-cluster-recon"
+    - "{{ cka_lab_cluster_troubleshooting_dir }}/14-pki-certs"
   tags:
     - cka_lab
     - cluster_troubleshooting
@@ -23,6 +29,12 @@
     - drain
     - static_pods
     - kubelet
+    - cni
+    - rbac_recovery
+    - storage
+    - scheduling
+    - recon
+    - pki_certs
 
 - name: Render CKA cluster troubleshooting drill manifests and guides
   ansible.builtin.template:
@@ -37,11 +49,19 @@
     - {src: "cluster_troubleshooting_01_drain_cordon.sh.j2", dest: "01-node-maintenance/drain-cordon-drill.sh", mode: "0755"}
     - {src: "cluster_troubleshooting_02_break_scheduler.sh.j2", dest: "02-static-pod-recovery/break-scheduler.sh", mode: "0755"}
     - {src: "cluster_troubleshooting_02_fix_scheduler.sh.j2", dest: "02-static-pod-recovery/fix-scheduler.sh", mode: "0755"}
+    - {src: "cluster_troubleshooting_02_break_controller_manager.sh.j2", dest: "02-static-pod-recovery/break-controller-manager.sh", mode: "0755"}
+    - {src: "cluster_troubleshooting_02_fix_controller_manager.sh.j2", dest: "02-static-pod-recovery/fix-controller-manager.sh", mode: "0755"}
     - {src: "cluster_troubleshooting_02_break_apiserver.sh.j2", dest: "02-static-pod-recovery/break-apiserver.sh", mode: "0755"}
     - {src: "cluster_troubleshooting_02_fix_apiserver.sh.j2", dest: "02-static-pod-recovery/fix-apiserver.sh", mode: "0755"}
+    - {src: "cluster_troubleshooting_02_canary_deployment.yaml.j2", dest: "02-static-pod-recovery/canary-deployment.yaml", mode: "0644"}
+    - {src: "cluster_troubleshooting_02_canary_controller.yaml.j2", dest: "02-static-pod-recovery/canary-controller-deployment.yaml", mode: "0644"}
+    - {src: "cluster_troubleshooting_02_test_static_pod.sh.j2", dest: "02-static-pod-recovery/test-static-pod-recovery.sh", mode: "0755"}
     - {src: "cluster_troubleshooting_02_guide.md.j2", dest: "02-static-pod-recovery/README.md", mode: "0644"}
     - {src: "cluster_troubleshooting_03_break_kubelet.sh.j2", dest: "03-kubelet-diagnostics/break-kubelet.sh", mode: "0755"}
     - {src: "cluster_troubleshooting_03_fix_kubelet.sh.j2", dest: "03-kubelet-diagnostics/fix-kubelet.sh", mode: "0755"}
+    - {src: "cluster_troubleshooting_03_break_kubelet_cert.sh.j2", dest: "03-kubelet-diagnostics/break-kubelet-cert.sh", mode: "0755"}
+    - {src: "cluster_troubleshooting_03_fix_kubelet_cert.sh.j2", dest: "03-kubelet-diagnostics/fix-kubelet-cert.sh", mode: "0755"}
+    - {src: "cluster_troubleshooting_03_test_kubelet_cert.sh.j2", dest: "03-kubelet-diagnostics/test-kubelet-cert.sh", mode: "0755"}
     - {src: "cluster_troubleshooting_03_guide.md.j2", dest: "03-kubelet-diagnostics/README.md", mode: "0644"}
     - {src: "cluster_troubleshooting_04_test_metrics.sh.j2", dest: "04-metrics-monitoring/test-metrics-top.sh", mode: "0755"}
     - {src: "cluster_troubleshooting_05_guide.md.j2", dest: "05-coredns-recovery/README.md", mode: "0644"}
@@ -53,12 +73,47 @@
     - {src: "cluster_troubleshooting_06_setup_broken.sh.j2", dest: "06-service-endpoints-recovery/setup-broken-service.sh", mode: "0755"}
     - {src: "cluster_troubleshooting_06_fix_service.sh.j2", dest: "06-service-endpoints-recovery/fix-service.sh", mode: "0755"}
     - {src: "cluster_troubleshooting_06_test_service.sh.j2", dest: "06-service-endpoints-recovery/test-service-endpoints.sh", mode: "0755"}
+    - {src: "cluster_troubleshooting_06_ingress_setup.sh.j2", dest: "06-service-endpoints-recovery/setup-broken-ingress.sh", mode: "0755"}
+    - {src: "cluster_troubleshooting_06_ingress_fix.sh.j2", dest: "06-service-endpoints-recovery/fix-ingress.sh", mode: "0755"}
+    - {src: "cluster_troubleshooting_06_ingress_test.sh.j2", dest: "06-service-endpoints-recovery/test-ingress-routing.sh", mode: "0755"}
     - {src: "cluster_troubleshooting_07_guide.md.j2", dest: "07-worker-static-pods/README.md", mode: "0644"}
     - {src: "cluster_troubleshooting_07_static_web.yaml.j2", dest: "07-worker-static-pods/static-web.yaml", mode: "0644"}
     - {src: "cluster_troubleshooting_07_setup_worker_pod.sh.j2", dest: "07-worker-static-pods/setup-worker-static-pod.sh", mode: "0755"}
     - {src: "cluster_troubleshooting_07_test_worker_pod.sh.j2", dest: "07-worker-static-pods/test-worker-static-pod.sh", mode: "0755"}
+    - {src: "cluster_troubleshooting_07_expose_static_pod.sh.j2", dest: "07-worker-static-pods/expose-static-pod.sh", mode: "0755"}
     - {src: "cluster_troubleshooting_08_guide.md.j2", dest: "08-containerd-diagnostics/README.md", mode: "0644"}
     - {src: "cluster_troubleshooting_08_test_crictl.sh.j2", dest: "08-containerd-diagnostics/test-crictl.sh", mode: "0755"}
+    - {src: "cluster_troubleshooting_09_cni_readme.md.j2", dest: "09-cni-recovery/README.md", mode: "0644"}
+    - {src: "cluster_troubleshooting_09_cni_break.sh.j2", dest: "09-cni-recovery/break-cni.sh", mode: "0755"}
+    - {src: "cluster_troubleshooting_09_cni_fix.sh.j2", dest: "09-cni-recovery/fix-cni.sh", mode: "0755"}
+    - {src: "cluster_troubleshooting_09_cni_probe.yaml.j2", dest: "09-cni-recovery/cni-probe-pod.yaml", mode: "0644"}
+    - {src: "cluster_troubleshooting_09_cni_test.sh.j2", dest: "09-cni-recovery/test-cni-recovery.sh", mode: "0755"}
+    - {src: "cluster_troubleshooting_10_rbac_readme.md.j2", dest: "10-rbac-recovery/README.md", mode: "0644"}
+    - {src: "cluster_troubleshooting_10_rbac_setup.yaml.j2", dest: "10-rbac-recovery/01-rbac-setup.yaml", mode: "0644"}
+    - {src: "cluster_troubleshooting_10_rbac_probe.yaml.j2", dest: "10-rbac-recovery/02-probe-pod.yaml", mode: "0644"}
+    - {src: "cluster_troubleshooting_10_rbac_fix.yaml.j2", dest: "10-rbac-recovery/03-fixed-binding.yaml", mode: "0644"}
+    - {src: "cluster_troubleshooting_10_rbac_test.sh.j2", dest: "10-rbac-recovery/test-rbac-recovery.sh", mode: "0755"}
+    - {src: "cluster_troubleshooting_11_storage_readme.md.j2", dest: "11-storage-recovery/README.md", mode: "0644"}
+    - {src: "cluster_troubleshooting_11_pv_pvc_mismatch.yaml.j2", dest: "11-storage-recovery/01-pv-pvc-mismatch.yaml", mode: "0644"}
+    - {src: "cluster_troubleshooting_11_fixed_pvc.yaml.j2", dest: "11-storage-recovery/02-fixed-pvc.yaml", mode: "0644"}
+    - {src: "cluster_troubleshooting_11_hostpath_pod.yaml.j2", dest: "11-storage-recovery/03-hostpath-perm-pod.yaml", mode: "0644"}
+    - {src: "cluster_troubleshooting_11_fixed_hostpath_pod.yaml.j2", dest: "11-storage-recovery/04-fixed-hostpath-pod.yaml", mode: "0644"}
+    - {src: "cluster_troubleshooting_11_setup.sh.j2", dest: "11-storage-recovery/setup-broken-storage.sh", mode: "0755"}
+    - {src: "cluster_troubleshooting_11_fix.sh.j2", dest: "11-storage-recovery/fix-storage.sh", mode: "0755"}
+    - {src: "cluster_troubleshooting_11_test.sh.j2", dest: "11-storage-recovery/test-storage-recovery.sh", mode: "0755"}
+    - {src: "cluster_troubleshooting_12_scheduling_readme.md.j2", dest: "12-scheduling-recovery/README.md", mode: "0644"}
+    - {src: "cluster_troubleshooting_12_tainted_workload.yaml.j2", dest: "12-scheduling-recovery/01-tainted-workload.yaml", mode: "0644"}
+    - {src: "cluster_troubleshooting_12_fixed_workload.yaml.j2", dest: "12-scheduling-recovery/02-fixed-workload.yaml", mode: "0644"}
+    - {src: "cluster_troubleshooting_12_setup.sh.j2", dest: "12-scheduling-recovery/setup-broken-scheduling.sh", mode: "0755"}
+    - {src: "cluster_troubleshooting_12_fix.sh.j2", dest: "12-scheduling-recovery/fix-scheduling.sh", mode: "0755"}
+    - {src: "cluster_troubleshooting_12_test.sh.j2", dest: "12-scheduling-recovery/test-scheduling-recovery.sh", mode: "0755"}
+    - {src: "cluster_troubleshooting_13_recon_readme.md.j2", dest: "13-cluster-recon/README.md", mode: "0644"}
+    - {src: "cluster_troubleshooting_13_recon_script.sh.j2", dest: "13-cluster-recon/cluster-recon.sh", mode: "0755"}
+    - {src: "cluster_troubleshooting_13_recon_test.sh.j2", dest: "13-cluster-recon/test-cluster-recon.sh", mode: "0755"}
+    - {src: "cluster_troubleshooting_14_pki_readme.md.j2", dest: "14-pki-certs/README.md", mode: "0644"}
+    - {src: "cluster_troubleshooting_14_check_certs.sh.j2", dest: "14-pki-certs/check-certs.sh", mode: "0755"}
+    - {src: "cluster_troubleshooting_14_renew_cert.sh.j2", dest: "14-pki-certs/renew-apiserver-cert.sh", mode: "0755"}
+    - {src: "cluster_troubleshooting_14_test_pki.sh.j2", dest: "14-pki-certs/test-pki-certs.sh", mode: "0755"}
   loop_control:
     label: "cluster_troubleshooting/{{ item.dest }}"
   tags:
@@ -68,3 +123,9 @@
     - drain
     - static_pods
     - kubelet
+    - cni
+    - rbac_recovery
+    - storage
+    - scheduling
+    - recon
+    - pki_certs

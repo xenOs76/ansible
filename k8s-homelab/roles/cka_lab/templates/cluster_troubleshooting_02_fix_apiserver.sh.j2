@@ -1,31 +1,44 @@
 #!/usr/bin/env bash
-# ====================================================================
-# [CKA LAB] Static Pod Diagnostics Drill: Fix Kube-Apiserver
-# Restores the original static pod manifest and verifies API health.
-# ====================================================================
+# ==============================================================================
+# fix-apiserver.sh: Restores Kube-Apiserver Static Pod Manifest & Verifies Health
+# Managed by Ansible (roles/cka_lab)
+# ==============================================================================
 set -euo pipefail
 
 MANIFEST="/etc/kubernetes/manifests/kube-apiserver.yaml"
-BACKUP="/etc/kubernetes/manifests/kube-apiserver.yaml.bak"
+BACKUP="/etc/kubernetes/kube-apiserver.yaml.bak"
+LEGACY_BACKUP="/etc/kubernetes/manifests/kube-apiserver.yaml.bak"
 
 if [ "$(id -u)" -ne 0 ]; then
   echo "Error: This script modifies static pod manifests and must be run as root (use sudo)." >&2
   exit 1
 fi
 
-if [ -f "${BACKUP}" ]; then
-  echo "==> Restoring ${MANIFEST} from ${BACKUP}..."
-  cp -f "${BACKUP}" "${MANIFEST}"
-  rm -f "${BACKUP}"
-else
-  echo "==> Backup not found, fixing known invalid parameter in-place..."
-  sed -i 's|--etcd-cafile=/etc/kubernetes/pki/etcd/ca-broken.crt|--etcd-cafile=/etc/kubernetes/pki/etcd/ca.crt|g' "${MANIFEST}"
+if [ ! -f "${BACKUP}" ] && [ -f "${LEGACY_BACKUP}" ]; then
+  BACKUP="${LEGACY_BACKUP}"
 fi
+
+if [ -f "${BACKUP}" ]; then
+  echo "==> Restoring ${MANIFEST} from backup ${BACKUP}..."
+  cp -f "${BACKUP}" "${MANIFEST}"
+  rm -f "${BACKUP}" "${LEGACY_BACKUP}"
+else
+  echo "==> Backup not found, fixing known invalid parameters in-place..."
+  sed -i 's|--authorisation-mode=|--authorization-mode=|g' "${MANIFEST}"
+  sed -i 's|--etcd-cafile=/etc/kubernetes/pki/etcd/ca-broken.crt|--etcd-cafile=/etc/kubernetes/pki/etcd/ca.crt|g' "${MANIFEST}"
+  sed -i '/^corrupted_unmarshal_scalar:/d' "${MANIFEST}"
+fi
+
+# Ensure no stray backup files remain inside manifests directory
+rm -f /etc/kubernetes/manifests/*.bak 2>/dev/null || true
+
+# Force container restart
+crictl ps --name kube-apiserver -q 2>/dev/null | xargs -r crictl stop >/dev/null 2>&1 || true
 
 echo "==> Awaiting kube-apiserver restart and recovery..."
 for i in $(seq 1 30); do
   if kubectl get nodes --request-timeout=2s >/dev/null 2>&1; then
-    echo "==> [SUCCESS] Kube-Apiserver is healthy and responding to queries!"
+    echo "==> [SUCCESS] Kube-Apiserver is healthy and responding to queries after ${i}s!"
     kubectl get nodes
     exit 0
   fi
@@ -33,5 +46,5 @@ for i in $(seq 1 30); do
   sleep 3
 done
 
-echo "==> [WARNING] Kube-Apiserver did not recover within 90s. Inspect logs with: sudo crictl ps -a" >&2
+echo "==> [ERROR] Kube-Apiserver did not recover within 90s. Inspect logs with: sudo crictl ps -a" >&2
 exit 1

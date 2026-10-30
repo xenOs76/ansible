@@ -1,6 +1,7 @@
 # Kubelet & Worker Node Diagnostics Guide
 
-Worker node failures and `NotReady` states in the CKA exam typically stem from kubelet service failure, container runtime issues, or invalid configuration parameters.
+Worker node failures and `NotReady` states in the CKA exam typically stem from kubelet service failure, client
+certificate authentication problems in `kubelet.conf`, or container runtime configuration drift.
 
 ---
 
@@ -49,46 +50,105 @@ sudo journalctl -u containerd -e --no-pager
 
 ---
 
-## 2. Interactive Break-Fix Drill
+## 2. Interactive Break-Fix Drills
 
-### Step 1: Break the Kubelet Configuration
+### Drill A: Kubelet Configuration & Runtime Diagnostics (`break-kubelet.sh`)
+
+In Kubernetes v1.34+, `KubeletCgroupDriverFromCRI` is GA, meaning kubelet automatically derives its cgroup driver
+from the container runtime (containerd) and ignores the `cgroupDriver` parameter in `config.yaml`. Authentic
+configuration failures in modern Kubernetes include unparseable YAML syntax in `config.yaml`, invalid container
+runtime endpoints in `kubeadm-flags.env`, or invalid configuration file paths in the systemd drop-in unit.
+
+#### Step 1: Inject Failure Scenario
 
 ```bash
+# Default scenario 1 (unparseable YAML syntax in /var/lib/kubelet/config.yaml):
 sudo ./break-kubelet.sh
+
+# Scenario 2 (invalid CRI socket in /var/lib/kubelet/kubeadm-flags.env):
+sudo ./break-kubelet.sh --scenario=cri
+
+# Scenario 3 (broken --config path in /etc/systemd/system/kubelet.service.d/10-kubeadm.conf):
+sudo ./break-kubelet.sh --scenario=systemd
+
+# Target remote worker node:
+./break-kubelet.sh --node=kube-worker-1 --scenario=cri
 ```
 
-### Step 2: Investigate Failure Symptoms
-
-Check service status and journal logs to locate the error:
+#### Step 2: Investigate Failure Symptoms
 
 ```bash
+ssh kube-worker-1
 sudo systemctl status kubelet
-sudo journalctl -u kubelet -e --no-pager | grep -i "failed to run kubelet"
+sudo journalctl -u kubelet -e --no-pager | grep -iE "failed to load|validate CRI|stat.*config|unmarshaling"
 ```
 
-### Step 3: Restore Healthy State
+#### Step 3: Restore Healthy State
 
 ```bash
+# Fix local node:
 sudo ./fix-kubelet.sh
+
+# Or fix remote worker node:
+./fix-kubelet.sh --node=kube-worker-1
+```
+
+---
+
+### Drill B: Client Certificate Failure in `kubelet.conf`
+
+#### Step 1: Corrupt Client Certificate Path
+
+```bash
+./break-kubelet-cert.sh --node=kube-worker-1
+```
+
+#### Step 2: Investigate TLS Authentication Error
+
+```bash
+ssh kube-worker-1
+sudo journalctl -u kubelet -e --no-pager | grep -iE "certificate|x509|tls"
+sudo grep -i client-certificate /etc/kubernetes/kubelet.conf
+```
+
+#### Step 3: Restore Certificate and Verify Ready Status
+
+```bash
+./fix-kubelet-cert.sh --node=kube-worker-1
+kubectl get nodes
+```
+
+#### Step 4: Automated Verification
+
+```bash
+./test-kubelet-cert.sh kube-worker-1
 ```
 
 ---
 
 ## 3. Common Root Causes & Solutions
 
-- **Wrong Configuration File**:
-Kubelet configuration lives at `/var/lib/kubelet/config.yaml`. Syntax errors (e.g. invalid YAML indentation or wrong cgroup driver) will prevent kubelet from starting.
+- **Unparseable Kubelet Configuration**:
+  Kubelet configuration lives at `/var/lib/kubelet/config.yaml`. Syntax errors (e.g. invalid YAML indentation or
+  unparseable keys) cause the Go JSON/YAML unmarshaler to fail immediately, preventing kubelet from initializing.
+  Note that in Kubernetes v1.34+, setting `cgroupDriver` in `config.yaml` is ignored in favor of CRI discovery.
 
-- **Expired or Invalid Certificates**:
-Check kubelet client certificate in `/var/lib/kubelet/pki/kubelet-client-current.pem`:
+- **Corrupted Container Runtime Endpoint**:
+  Kubeadm passes runtime flags via `/var/lib/kubelet/kubeadm-flags.env`. If `--container-runtime-endpoint` points
+  to a missing or invalid socket path (e.g. `unix:///run/containerd/containerd-broken.sock`), kubelet fails its CRI
+  validation check on startup and crashes with exit code 1.
 
-```bash
-openssl x509 -in /var/lib/kubelet/pki/kubelet-client-current.pem -text -noout | grep -A 2 "Validity"
-```
+- **Systemd Drop-in Path Drift**:
+  Kubelet drop-in configuration lives at `/etc/systemd/system/kubelet.service.d/10-kubeadm.conf`. If the `--config`
+  flag points to a missing file path, kubelet terminates immediately with a file not found error.
+
+- **Corrupted or Moved Client Certificate**:
+  Kubelet references its client certificate in `/etc/kubernetes/kubelet.conf`. If the file is moved, permissions are
+  wrong, or it points to a non-existent path, the node fails to authenticate and enters `NotReady`. Check validity with:
+
+  ```bash
+  openssl x509 -in /var/lib/kubelet/pki/kubelet-client-current.pem -text -noout | grep -A 2 "Validity"
+  ```
 
 - **Swap Enabled**:
-By default, kubelet fails to start if swap is enabled on the node. Disable with:
-
-```bash
-sudo swapoff -a
-```
+  By default, kubelet fails to start if swap is enabled on the node. Disable with `sudo swapoff -a`.

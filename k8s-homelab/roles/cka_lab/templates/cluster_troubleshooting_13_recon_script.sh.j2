@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# cluster-recon.sh: Automated Cluster Reconnaissance & Network Topology Inspection
+# ==============================================================================
+set -euo pipefail
+
+REPORT_FILE="${1:-}"
+
+generate_recon() {
+    echo "===================================================================="
+    echo "  [CKA RECON] Cluster Architecture & Network Topology Report        "
+    echo "===================================================================="
+
+    echo "1. Node Topology Summary:"
+    CP_COUNT=$(kubectl get nodes -l node-role.kubernetes.io/control-plane --no-headers 2>/dev/null | wc -l || echo "0")
+    WORKER_COUNT=$(kubectl get nodes -l '!node-role.kubernetes.io/control-plane' --no-headers 2>/dev/null | wc -l || echo "0")
+    echo "  Control Plane Nodes: ${CP_COUNT}"
+    echo "  Worker Nodes:        ${WORKER_COUNT}"
+
+    echo ""
+    echo "2. Node Pod CIDRs:"
+    kubectl get nodes -o custom-columns=NODE:.metadata.name,POD_CIDR:.spec.podCIDR,STATUS:.status.conditions[-1].type
+
+    echo ""
+    echo "3. Service Cluster IP Range (Service CIDR):"
+    if [[ -f /etc/kubernetes/manifests/kube-apiserver.yaml ]]; then
+        SVC_CIDR=$(grep -E -- "--service-cluster-ip-range=" /etc/kubernetes/manifests/kube-apiserver.yaml | cut -d= -f2 || echo "Unknown")
+        echo "  Service CIDR (from /etc/kubernetes/manifests/kube-apiserver.yaml): ${SVC_CIDR}"
+    else
+        echo "  (Static manifest /etc/kubernetes/manifests/kube-apiserver.yaml not present on this host)"
+    fi
+
+    echo ""
+    echo "4. CNI Network Plugin Configurations (/etc/cni/net.d/):"
+    if [[ -d /etc/cni/net.d ]]; then
+        find /etc/cni/net.d/ -maxdepth 2 -type f -exec ls -lh {} + 2>/dev/null || echo "  No files found"
+    else
+        echo "  /etc/cni/net.d/ directory not found"
+    fi
+
+    echo ""
+    echo "5. Static Pod Suffix Convention:"
+    echo "  Static pods append the hostname suffix: -<node-name>"
+    echo "  Example on this node: kube-apiserver-$(hostname)"
+
+    echo ""
+    echo "6. API Resources Taxonomy:"
+    NAMESPACED_COUNT=$(kubectl api-resources --namespaced=true --no-headers 2>/dev/null | wc -l || echo "0")
+    CLUSTER_SCOPED_COUNT=$(kubectl api-resources --namespaced=false --no-headers 2>/dev/null | wc -l || echo "0")
+    echo "  Namespaced Resource Kinds:     ${NAMESPACED_COUNT}"
+    echo "  Cluster-Scoped Resource Kinds: ${CLUSTER_SCOPED_COUNT}"
+
+    echo "===================================================================="
+}
+
+if [[ -n "${REPORT_FILE}" ]]; then
+    mkdir -p "$(dirname "${REPORT_FILE}")"
+    generate_recon | tee "${REPORT_FILE}"
+    echo "Reconnaissance report saved to: ${REPORT_FILE}"
+else
+    generate_recon
+fi

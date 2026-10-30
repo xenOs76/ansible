@@ -9,10 +9,28 @@
     - ha
     - ha_control_plane
 
-- name: Deploy CKA Training Lab Scenarios
+- name: Prepare CKA Inter-Node Resolution
+  hosts: k8s_cluster
+  become: true
+  tasks:
+    - name: Ensure all Kubernetes cluster nodes are in /etc/hosts for CKA training
+      ansible.builtin.lineinfile:
+        path: /etc/hosts
+        regexp: '^.*(\s+){{ item }}(\s*)$'
+        line: "{{ hostvars[item]['node_ip'] | default(hostvars[item]['ansible_host']) }} {{ item }}"
+        state: present
+      loop: "{{ groups['k8s_cluster'] }}"
+      when: groups['k8s_cluster'] is defined
+  tags:
+    - cka_lab
+    - training
+    - cka_ssh
+
+- name: Deploy CKA Training Lab Scenarios and Tooling
   hosts: control_plane[0]
   become: true
   roles:
+    - role: control_plane_tools
     - role: cka_lab
   tags:
     - cka_lab

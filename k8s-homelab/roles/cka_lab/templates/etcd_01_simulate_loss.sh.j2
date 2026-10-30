@@ -44,8 +44,8 @@ sudo ETCDCTL_API=3 etcdctl snapshot restore "${SNAPSHOT_FILE}" --data-dir="${RES
 sudo chown -R root:root "${RESTORE_DIR}"
 
 echo "[5/6] Updating etcd static pod manifest hostPath..."
-# Safely replace hostPath in etcd.yaml using sed
-sudo cp "${MANIFEST}" "${MANIFEST}.bak"
+# Safely replace hostPath in etcd.yaml using sed (backup outside manifests)
+sudo cp "${MANIFEST}" "/etc/kubernetes/etcd.yaml.bak"
 sudo sed -i "s|path: /var/lib/etcd.*|path: ${RESTORE_DIR}|g" "${MANIFEST}"
 
 echo "Waiting for etcd static pod to restart..."
@@ -70,7 +70,7 @@ done
 
 # Cleanup drill manifest modification and namespace
 echo "Restoring original etcd static pod configuration..."
-sudo mv "${MANIFEST}.bak" "${MANIFEST}"
+sudo mv "/etc/kubernetes/etcd.yaml.bak" "${MANIFEST}"
 kubectl delete namespace "${DRILL_NS}" --ignore-not-found=true
 
 if [[ ${RESTORED} -eq 1 ]]; then

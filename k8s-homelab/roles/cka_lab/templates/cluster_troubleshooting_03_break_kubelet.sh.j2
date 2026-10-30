@@ -1,42 +1,190 @@
 #!/usr/bin/env bash
-# ====================================================================
-# [CKA LAB] Kubelet Diagnostics Drill: Break Kubelet Service
-# Injects invalid configuration into /var/lib/kubelet/config.yaml.
-# ====================================================================
+# ==============================================================================
+# break-kubelet.sh: Simulates Kubelet Failure Across Configuration & CRI Layers
+# Managed by Ansible (roles/cka_lab)
+# Supports local node execution or remote worker targeting (--node=kube-worker-1)
+# Scenarios: config (default, syntax error), cri (broken CRI socket), systemd (bad path)
+# ==============================================================================
 set -euo pipefail
 
-CONFIG="/var/lib/kubelet/config.yaml"
-BACKUP="/var/lib/kubelet/config.yaml.bak"
+TARGET_NODE="local"
+SCENARIO="config"
 
-if [ "$(id -u)" -ne 0 ]; then
-  echo "Error: This script modifies system service configs and must be run as root (use sudo)." >&2
-  exit 1
-fi
+for arg in "$@"; do
+  case "${arg}" in
+    --node=*)
+      TARGET_NODE="${arg#*=}"
+      ;;
+    --scenario=*)
+      SCENARIO="${arg#*=}"
+      ;;
+    local|kube-*|worker*|control-plane*)
+      TARGET_NODE="${arg}"
+      ;;
+    config|syntax|cri|systemd|1|2|3)
+      SCENARIO="${arg}"
+      ;;
+    -h|--help)
+      echo "Usage: $0 [--node=<node>] [--scenario=<config|cri|systemd>]"
+      exit 0
+      ;;
+    *)
+      echo "Error: Unknown option '${arg}'." >&2
+      echo "Usage: $0 [--node=<node>] [--scenario=<config|cri|systemd>]" >&2
+      exit 1
+      ;;
+  esac
+done
 
-if [ ! -f "${CONFIG}" ]; then
-  echo "Error: Config file ${CONFIG} not found." >&2
-  exit 1
-fi
+break_local_kubelet() {
+  local scenario="${1}"
+  local CONFIG="/var/lib/kubelet/config.yaml"
+  local CONFIG_BAK="/var/lib/kubelet/config.yaml.bak"
+  local FLAGS="/var/lib/kubelet/kubeadm-flags.env"
+  local FLAGS_BAK="/var/lib/kubelet/kubeadm-flags.env.bak"
+  local SYSTEMD_CONF="/etc/systemd/system/kubelet.service.d/10-kubeadm.conf"
+  local SYSTEMD_CONF_BAK="/etc/systemd/system/kubelet.service.d/10-kubeadm.conf.bak"
 
-echo "==> Backing up ${CONFIG} to ${BACKUP}..."
-cp -f "${CONFIG}" "${BACKUP}"
+  if [ "$(id -u)" -ne 0 ]; then
+    echo "Error: Modifying system service configs requires root (use sudo)." >&2
+    exit 1
+  fi
 
-echo "==> Injecting invalid cgroupDriver configuration into ${CONFIG}..."
-# Injects an invalid cgroup driver value that causes kubelet initialization failure
-if grep -q "cgroupDriver:" "${CONFIG}"; then
-  sed -i 's|cgroupDriver:.*|cgroupDriver: invalidDriverName|g' "${CONFIG}"
+  case "${scenario}" in
+    1|config|syntax)
+      if [ ! -f "${CONFIG}" ]; then
+        echo "Error: Config file ${CONFIG} not found." >&2
+        exit 1
+      fi
+      if [ ! -f "${CONFIG_BAK}" ]; then
+        echo "==> Backing up ${CONFIG} to ${CONFIG_BAK}..."
+        cp -f "${CONFIG}" "${CONFIG_BAK}"
+      fi
+      echo "==> Injecting unparseable YAML syntax into ${CONFIG}..."
+      sed -i '1i\corrupted_unmarshal_syntax: [' "${CONFIG}"
+      ;;
+    2|cri)
+      if [ ! -f "${FLAGS}" ]; then
+        echo "Error: Kubeadm flags file ${FLAGS} not found." >&2
+        exit 1
+      fi
+      if [ ! -f "${FLAGS_BAK}" ]; then
+        echo "==> Backing up ${FLAGS} to ${FLAGS_BAK}..."
+        cp -f "${FLAGS}" "${FLAGS_BAK}"
+      fi
+      echo "==> Corrupting container runtime endpoint in ${FLAGS}..."
+      sed -i 's|unix:///run/containerd/containerd.sock|unix:///run/containerd/containerd-broken.sock|g' "${FLAGS}"
+      ;;
+    3|systemd)
+      if [ ! -f "${SYSTEMD_CONF}" ]; then
+        echo "Error: Systemd drop-in ${SYSTEMD_CONF} not found." >&2
+        exit 1
+      fi
+      if [ ! -f "${SYSTEMD_CONF_BAK}" ]; then
+        echo "==> Backing up ${SYSTEMD_CONF} to ${SYSTEMD_CONF_BAK}..."
+        cp -f "${SYSTEMD_CONF}" "${SYSTEMD_CONF_BAK}"
+      fi
+      echo "==> Corrupting config path in ${SYSTEMD_CONF}..."
+      sed -i 's|--config=/var/lib/kubelet/config.yaml|--config=/var/lib/kubelet/config-broken.yaml|g' "${SYSTEMD_CONF}"
+      systemctl daemon-reload
+      ;;
+    *)
+      echo "Error: Unknown scenario '${scenario}'. Supported: config, cri, systemd" >&2
+      exit 1
+      ;;
+  esac
+
+  echo "==> Restarting kubelet systemd service..."
+  systemctl restart kubelet || true
+  sleep 2
+
+  echo "==> Checking local kubelet status:"
+  if systemctl is-active --quiet kubelet; then
+    echo "==> [ERROR] Kubelet service is unexpectedly still active!" >&2
+    exit 1
+  else
+    local STATE
+    STATE="$(systemctl is-active kubelet 2>/dev/null || true)"
+    echo "==> [EXPECTED] Kubelet service failed to start (systemd state: ${STATE})."
+  fi
+}
+
+break_remote_kubelet() {
+  local target="${1}"
+  local scenario="${2}"
+  local target_host="${target}"
+
+  if ! getent hosts "${target}" >/dev/null 2>&1; then
+    local k8s_ip
+    k8s_ip="$(kubectl get node "${target}" -o jsonpath='{.status.addresses[?(@.type=="InternalIP")].address}' 2>/dev/null || true)"
+    if [ -n "${k8s_ip}" ]; then
+      echo "==> [NOTICE] '${target}' resolved via Kubernetes Node API to ${k8s_ip}"
+      target_host="${k8s_ip}"
+    fi
+  fi
+
+  echo "==> Applying failure scenario '${scenario}' on remote node: ${target} (${target_host})..."
+  ssh -o StrictHostKeyChecking=no "${target_host}" "sudo bash -c '
+    CONFIG=\"/var/lib/kubelet/config.yaml\"
+    CONFIG_BAK=\"/var/lib/kubelet/config.yaml.bak\"
+    FLAGS=\"/var/lib/kubelet/kubeadm-flags.env\"
+    FLAGS_BAK=\"/var/lib/kubelet/kubeadm-flags.env.bak\"
+    SYSTEMD_CONF=\"/etc/systemd/system/kubelet.service.d/10-kubeadm.conf\"
+    SYSTEMD_CONF_BAK=\"/etc/systemd/system/kubelet.service.d/10-kubeadm.conf.bak\"
+
+    case \"${scenario}\" in
+      1|config|syntax)
+        [ ! -f \"\${CONFIG_BAK}\" ] && cp -f \"\${CONFIG}\" \"\${CONFIG_BAK}\"
+        sed -i \"1i\\\\corrupted_unmarshal_syntax: [\" \"\${CONFIG}\"
+        ;;
+      2|cri)
+        [ ! -f \"\${FLAGS_BAK}\" ] && cp -f \"\${FLAGS}\" \"\${FLAGS_BAK}\"
+        sed -i \"s|unix:///run/containerd/containerd.sock|unix:///run/containerd/containerd-broken.sock|g\" \"\${FLAGS}\"
+        ;;
+      3|systemd)
+        [ ! -f \"\${SYSTEMD_CONF_BAK}\" ] && cp -f \"\${SYSTEMD_CONF}\" \"\${SYSTEMD_CONF_BAK}\"
+        sed -i \"s|--config=/var/lib/kubelet/config.yaml|--config=/var/lib/kubelet/config-broken.yaml|g\" \"\${SYSTEMD_CONF}\"
+        systemctl daemon-reload
+        ;;
+      *)
+        echo \"Unknown scenario ${scenario}\" >&2
+        exit 1
+        ;;
+    esac
+
+    systemctl restart kubelet || true
+    sleep 2
+    if systemctl is-active --quiet kubelet; then
+      echo \"==> [ERROR] Kubelet is unexpectedly still active on \$(hostname)!\" >&2
+      exit 1
+    else
+      echo \"==> [EXPECTED] Kubelet service failed on \$(hostname) (state: \$(systemctl is-active kubelet || true)).\"
+    fi
+  '"
+  echo "==> Modification applied on ${target}."
+  echo "==> Check node status (transitions to NotReady after node-lease timeout ~40s):"
+  echo "    kubectl get nodes"
+}
+
+if [ "${TARGET_NODE}" = "local" ] || [ "${TARGET_NODE}" = "$(hostname)" ]; then
+  echo "===================================================================="
+  echo "  [CKA LAB] Simulating Kubelet Failure on Local Host ($(hostname))  "
+  echo "  Scenario: ${SCENARIO}                                             "
+  echo "===================================================================="
+  break_local_kubelet "${SCENARIO}"
 else
-  echo "cgroupDriver: invalidDriverName" >> "${CONFIG}"
+  echo "===================================================================="
+  echo "  [CKA LAB] Simulating Kubelet Failure on Remote Node: ${TARGET_NODE}"
+  echo "  Scenario: ${SCENARIO}                                             "
+  echo "===================================================================="
+  break_remote_kubelet "${TARGET_NODE}" "${SCENARIO}"
 fi
 
-echo "==> Restarting kubelet systemd service..."
-systemctl restart kubelet || true
-
-echo "==> Checking kubelet status:"
-systemctl is-active kubelet || echo "==> [EXPECTED] Kubelet service failed to start."
 echo ""
-echo "==> Exercise Tasks:"
-echo "    1. Inspect status: sudo systemctl status kubelet"
-echo "    2. Inspect journal logs: sudo journalctl -u kubelet -e --no-pager"
-echo "    3. Identify the error in ${CONFIG}"
-echo "    4. Restore healthy state: sudo ./fix-kubelet.sh"
+echo "--- Troubleshooting Checklist ---"
+echo "1. If remote worker: ssh ${TARGET_NODE}"
+echo "2. Inspect status: sudo systemctl status kubelet"
+echo "3. Inspect journal logs: sudo journalctl -u kubelet -e --no-pager"
+echo "4. Restore healthy state: sudo ./fix-kubelet.sh --node=${TARGET_NODE}"
+echo "===================================================================="
+

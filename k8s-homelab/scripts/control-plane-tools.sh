@@ -2,7 +2,7 @@
 # ==============================================================================
 # Script: control-plane-tools.sh
 # Purpose: Install essential Kubernetes administration and operations CLI tools
-#          (Helm v3, k9s, etcdctl, etcdutl, and glow) on the control plane node.
+#          (Helm v3, k9s, etcdctl, etcdutl, glow, krew, and kubectl-cyclonus) on the control plane node.
 #
 # Context:
 #   Executed inside the 'kube-control-plane' VM with superuser privileges
@@ -12,14 +12,20 @@
 # Usage:
 #   sudo /vagrant/scripts/control-plane-tools.sh
 #   # Or with custom versions:
-#   sudo K9S_VERSION="v0.51.0" ETCD_VERSION="v3.5.16" /vagrant/scripts/control-plane-tools.sh
+#   sudo K9S_VERSION="v0.51.0" ETCD_VERSION="v3.5.16" KREW_VERSION="v0.5.0" /vagrant/scripts/control-plane-tools.sh
 #
 # Environment Variables:
-#   K9S_VERSION  - Target release tag of k9s to install from GitHub releases.
-#                  Default: v0.51.0
-#   ETCD_VERSION - Target release tag of etcd tools (etcdctl, etcdutl) from
-#                  official GitHub releases.
-#                  Default: v3.5.16
+#   K9S_VERSION      - Target release tag of k9s to install from GitHub releases.
+#                      Default: v0.51.0
+#   ETCD_VERSION     - Target release tag of etcd tools (etcdctl, etcdutl) from
+#                      official GitHub releases.
+#                      Default: v3.5.16
+#   GLOW_VERSION     - Target release tag of glow markdown reader.
+#                      Default: 2.1.1
+#   KREW_VERSION     - Target release tag of krew plugin manager from GitHub releases.
+#                      Default: v0.5.0
+#   CYCLONUS_VERSION - Target release tag of kubectl-cyclonus network policy tool.
+#                      Default: v0.2.1
 #
 # Key Subsystems Installed:
 #   1. Helm v3:
@@ -40,21 +46,30 @@
 #   4. glow Markdown CLI reader:
 #      - Downloads and installs official architecture-specific .deb package.
 #      - Configures 'alias glow="glow -s tokyo-night -w 150"' in /etc/profile.d/glow.sh and user .bashrc.
+#   5. krew kubectl plugin manager:
+#      - Downloads and installs official architecture-specific binary to /usr/local/bin/kubectl-krew.
+#      - Configures PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH" in /etc/profile.d/krew.sh and user .bashrc.
+#   6. kubectl-cyclonus NetworkPolicy analyzer:
+#      - Downloads and installs official architecture-specific binary to /usr/local/bin/kubectl-cyclonus.
 #
 # Manual Verification:
 #   helm version --short
 #   k9s version --short
 #   etcdctl version
 #   etcdutl version
+#   glow --version
+#   kubectl-krew version
+#   kubectl cyclonus -h
 #
 # Troubleshooting:
 #   - If Helm key verification fails: Check curl connectivity to packages.buildkite.com.
 #   - If k9s download fails: Verify GitHub access or inspect /tmp/k9s_linux_*.deb.
 #   - If etcd tools download fails: Verify GitHub access or release tag existence.
+#   - If krew or cyclonus download fails: Verify GitHub access or release tag existence.
 # ==============================================================================
 set -euo pipefail
 
-echo "=== Installing Control Plane Tools (Helm, k9s, etcdctl, etcdutl, glow) ==="
+echo "=== Installing Control Plane Tools (Helm, k9s, etcdctl, etcdutl, glow, krew, cyclonus) ==="
 
 # ------------------------------------------------------------------------------
 # 1. Install Helm via official APT repository with GPG fingerprint verification
@@ -300,6 +315,72 @@ if [ -f /root/.bashrc ]; then
   else
     echo 'alias glow="glow -s tokyo-night -w 150"' >> /root/.bashrc
   fi
+fi
+
+# ------------------------------------------------------------------------------
+# 5. Install krew kubectl plugin manager via official release archive
+# ------------------------------------------------------------------------------
+KREW_VERSION="${KREW_VERSION:-v0.5.0}"
+NORMALIZED_KREW_TARGET="${KREW_VERSION#v}"
+INSTALLED_KREW_VERSION=""
+if command -v kubectl-krew >/dev/null 2>&1; then
+  INSTALLED_KREW_VERSION=$(kubectl-krew version 2>/dev/null | awk '$1 == "GitTag" {print $2}' | sed 's/^v//')
+fi
+
+if [ "$INSTALLED_KREW_VERSION" != "$NORMALIZED_KREW_TARGET" ]; then
+  ARCH=$(dpkg --print-architecture)
+  echo "Installing krew (${KREW_VERSION}) via official release archive..."
+  TMP_KREW_DIR=$(mktemp -d)
+  curl -fsSL "https://github.com/kubernetes-sigs/krew/releases/download/${KREW_VERSION}/krew-linux_${ARCH}.tar.gz" -o "${TMP_KREW_DIR}/krew.tar.gz"
+  tar -zxvf "${TMP_KREW_DIR}/krew.tar.gz" -C "${TMP_KREW_DIR}"
+  install -m 0755 "${TMP_KREW_DIR}/krew-linux_${ARCH}" /usr/local/bin/kubectl-krew
+  ln -sf /usr/local/bin/kubectl-krew /usr/local/bin/krew
+  rm -rf "${TMP_KREW_DIR}"
+else
+  echo "krew is already installed."
+fi
+
+# Configure krew PATH environment profile
+cat <<'EOF' > /etc/profile.d/krew.sh
+export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
+EOF
+chmod 0644 /etc/profile.d/krew.sh
+
+if [ -f /home/vagrant/.bashrc ]; then
+  if ! grep -q '\.krew/bin' /home/vagrant/.bashrc; then
+    # shellcheck disable=SC2016
+    echo 'export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"' >> /home/vagrant/.bashrc
+  fi
+fi
+
+if [ -f /root/.bashrc ]; then
+  if ! grep -q '\.krew/bin' /root/.bashrc; then
+    # shellcheck disable=SC2016
+    echo 'export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"' >> /root/.bashrc
+  fi
+fi
+
+# ------------------------------------------------------------------------------
+# 6. Install kubectl-cyclonus NetworkPolicy analysis tool via official release archive
+# ------------------------------------------------------------------------------
+CYCLONUS_VERSION="${CYCLONUS_VERSION:-v0.2.1}"
+INSTALLED_CYCLONUS_VERSION=""
+if [ -f /etc/kubectl-cyclonus-version ]; then
+  INSTALLED_CYCLONUS_VERSION=$(cat /etc/kubectl-cyclonus-version)
+fi
+
+if [ "$INSTALLED_CYCLONUS_VERSION" != "$CYCLONUS_VERSION" ] || ! command -v kubectl-cyclonus >/dev/null 2>&1; then
+  ARCH=$(dpkg --print-architecture)
+  echo "Installing kubectl-cyclonus (${CYCLONUS_VERSION}) via official release archive..."
+  TMP_CYCLONUS_DIR=$(mktemp -d)
+  curl -fsSL "https://github.com/mattfenwick/kubectl-cyclonus/releases/download/${CYCLONUS_VERSION}/kubectl-cyclonus_linux_${ARCH}.tar.gz" -o "${TMP_CYCLONUS_DIR}/cyclonus.tar.gz"
+  tar -zxvf "${TMP_CYCLONUS_DIR}/cyclonus.tar.gz" -C "${TMP_CYCLONUS_DIR}"
+  install -m 0755 "${TMP_CYCLONUS_DIR}/kubectl-cyclonus" /usr/local/bin/kubectl-cyclonus
+  echo "${CYCLONUS_VERSION}" > /etc/kubectl-cyclonus-version
+  chmod 0644 /etc/kubectl-cyclonus-version
+  rm -rf "${TMP_CYCLONUS_DIR}"
+else
+  echo "kubectl-cyclonus is already installed."
 fi
 
 echo "=== Control Plane Tools Installed Successfully ==="

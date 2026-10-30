@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# test-network-policies.sh: Master Automated Test Suite for CKS Network Policies
+# Modules: Basic Isolation, Progressive Lockdown, Multi-Tenant, Cyclonus Audit
+# ==============================================================================
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CLIENT_NS="{{ cks_lab_netpol_client_namespace | default('cks-net-client') }}"
+BACKEND_NS="{{ cks_lab_netpol_backend_namespace | default('cks-net-backend') }}"
+TENANT_A="{{ cks_lab_netpol_tenant_a | default('cks-tenant-a') }}"
+TENANT_B="{{ cks_lab_netpol_tenant_b | default('cks-tenant-b') }}"
+DEFAULT_NS="{{ cks_lab_netpol_namespace | default('default') }}"
+
+echo "===================================================================="
+echo "  [CKS LAB] Running Master NetworkPolicy Verification Suite         "
+echo "===================================================================="
+
+cleanup() {
+  echo ""
+  echo "==> Cleaning up CKS NetworkPolicy test resources..."
+  kubectl delete namespace "${CLIENT_NS}" "${BACKEND_NS}" "${TENANT_A}" "${TENANT_B}" --ignore-not-found=true --now >/dev/null 2>&1 || true
+  kubectl delete netpol --all -n "${DEFAULT_NS}" --ignore-not-found=true --now >/dev/null 2>&1 || true
+  kubectl delete deployment netpol-test-client internal-api -n "${DEFAULT_NS}" --ignore-not-found=true --now >/dev/null 2>&1 || true
+  kubectl delete service internal-api -n "${DEFAULT_NS}" --ignore-not-found=true --now >/dev/null 2>&1 || true
+}
+trap cleanup EXIT
+
+# Clean up before running drills
+cleanup
+
+# ------------------------------------------------------------------------------
+# Drill 1: Basic Pod Microsegmentation
+# ------------------------------------------------------------------------------
+echo "--------------------------------------------------------------------"
+echo "  [1/4] Drill 1: Basic Pod Microsegmentation & Ingress Isolation    "
+echo "--------------------------------------------------------------------"
+"${SCRIPT_DIR}/01-basic-isolation/test-basic-isolation.sh"
+
+# ------------------------------------------------------------------------------
+# Drill 2: Progressive Zero-Trust Lockdown & Hubble
+# ------------------------------------------------------------------------------
+echo "--------------------------------------------------------------------"
+echo "  [2/4] Drill 2: Progressive Microsegmentation & Zero-Trust Lockdown"
+echo "--------------------------------------------------------------------"
+"${SCRIPT_DIR}/02-progressive-microsegmentation/test-progressive-netpol.sh"
+
+# ------------------------------------------------------------------------------
+# Drill 3: Multi-Tenant Cross-Namespace Isolation (Logical AND)
+# ------------------------------------------------------------------------------
+echo "--------------------------------------------------------------------"
+echo "  [3/4] Drill 3: Multi-Tenant Pod Isolation (Logical AND)           "
+echo "--------------------------------------------------------------------"
+"${SCRIPT_DIR}/03-multi-tenant-isolation/test-multi-tenant.sh"
+
+# ------------------------------------------------------------------------------
+# Drill 4: Static Policy Analysis with kubectl-cyclonus
+# ------------------------------------------------------------------------------
+echo "--------------------------------------------------------------------"
+echo "  [4/4] Drill 4: Static Policy Auditing with kubectl-cyclonus       "
+echo "--------------------------------------------------------------------"
+"${SCRIPT_DIR}/04-policy-analysis-cyclonus/run-cyclonus-analysis.sh"
+
+echo "===================================================================="
+echo "  [SUCCESS] All CKS NetworkPolicy drills verified successfully!     "
+echo "===================================================================="

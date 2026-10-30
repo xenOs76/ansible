@@ -1,0 +1,77 @@
+# Pod Health Probes with Inter-Service Dependencies
+
+Hands-on training drill demonstrating how `readinessProbe` gates traffic routing until an upstream dependency is
+healthy.
+
+## Official Exam References & Quick Lookups
+
+### Permitted Exam Documentation
+
+- **Configure Liveness, Readiness and Startup Probes**: [Probes](https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/) `[EXAM ALLOWED]`
+- **Pod Lifecycle**: [Pod Lifecycle](https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/) `[EXAM ALLOWED]`
+
+### In-Exam Search Keywords
+
+- `"configure liveness readiness startup probes"`
+- `"readiness probe"`
+- `"exec probe"`
+
+### Terminal Fast Lookups (`kubectl`)
+
+```bash
+kubectl describe pod <pod-name>
+kubectl get pods -o wide
+kubectl get endpoints <service-name>
+```
+
+---
+
+## Architectural Concept
+
+A `readinessProbe` controls whether a container can receive incoming network traffic from Kubernetes Services:
+
+1. **Failure State**: When the probe fails, the container stays `Running`, but `READY` reflects `0/1`. Kubernetes
+   removes the pod's IP from any associated `Endpoints` or `EndpointSlice` objects.
+2. **Success State**: When the probe succeeds, the container transitions to `1/1 Ready`, and its IP is added to the
+   service backend pool.
+
+---
+
+## Practice Drill Workflow
+
+### Step 1: Deploy Dependent Frontend Pod
+
+Deploy `frontend-processor`, which probes `http://order-service:80`:
+
+```bash
+kubectl apply -f 02-dependent-frontend.yaml
+```
+
+Observe that the pod runs but fails its readiness probe (`READY 0/1`):
+
+```bash
+kubectl get pod frontend-processor
+kubectl describe pod frontend-processor | grep -A 5 Readiness
+```
+
+### Step 2: Deploy Upstream Service
+
+Deploy the backend deployment and ClusterIP service:
+
+```bash
+kubectl apply -f 01-upstream-backend.yaml
+```
+
+### Step 3: Observe Readiness Transition
+
+Watch `frontend-processor` transition to `1/1 Ready` once the probe receives an HTTP 200 response:
+
+```bash
+kubectl get pod frontend-processor -w
+```
+
+### Step 4: Run Automated Verification
+
+```bash
+./test-readiness-dependency.sh
+```

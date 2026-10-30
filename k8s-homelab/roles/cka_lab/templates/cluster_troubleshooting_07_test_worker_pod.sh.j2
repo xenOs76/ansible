@@ -4,6 +4,7 @@ set -euo pipefail
 # Verify worker static pod presence and status
 WORKER_NODE="${1:-kube-worker-1}"
 POD_NAME="static-worker-web-${WORKER_NODE}"
+SVC_NAME="static-worker-web-svc"
 
 echo "=== Verifying Worker Static Pod: ${POD_NAME} ==="
 
@@ -11,6 +12,14 @@ if kubectl get pod "${POD_NAME}" >/dev/null 2>&1; then
     PHASE=$(kubectl get pod "${POD_NAME}" -o jsonpath='{.status.phase}')
     echo "Found mirror pod in status: ${PHASE}"
     if [[ "${PHASE}" == "Running" || "${PHASE}" == "Pending" ]]; then
+        if kubectl get svc "${SVC_NAME}" >/dev/null 2>&1; then
+            ENDPOINTS=$(kubectl get endpoints "${SVC_NAME}" -o jsonpath='{.subsets[*].addresses[*].ip}' 2>/dev/null || true)
+            echo "Service ${SVC_NAME} endpoints: ${ENDPOINTS:-<none>}"
+            if [[ -z "${ENDPOINTS}" ]]; then
+                echo "FAIL: Service ${SVC_NAME} has no endpoints."
+                exit 1
+            fi
+        fi
         echo "=== Worker Static Pod Verification PASSED ==="
         exit 0
     fi

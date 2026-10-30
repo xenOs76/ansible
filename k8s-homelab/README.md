@@ -42,8 +42,7 @@ Deployed to `/home/vagrant/cka/` on `kube-control-plane` (`make preprod-cka-lab`
 
 - **Workloads & Pods**: Advanced scheduling (taints, tolerations, affinity), sidecar containers, jobs, cronjobs, and
   ephemeral debug containers.
-- **Networking**: ClusterIP, NodePort, Ingress prefix routing, Gateway API (`HTTPRoute`), and multi-tier
-  NetworkPolicies.
+- **Networking**: ClusterIP, NodePort, Ingress prefix routing, and Gateway API (`HTTPRoute`).
 - **Storage Drills**: Static PV/PVC mounts across NFS, Ceph RBD, and iSCSI raw block devices.
 - **Cluster Maintenance**: Safe drain/cordon, etcd backup/restore drills (`etcdctl`/`etcdutl` v3.5.16), and rolling
   cluster upgrades.
@@ -54,6 +53,8 @@ Deployed to `/home/vagrant/cka/` on `kube-control-plane` (`make preprod-cka-lab`
 
 Deployed to `/home/vagrant/cks/` on `kube-control-plane` (`make preprod-cks-lab`):
 
+- **Pod-to-Pod Security & NetworkPolicies**: Zero-trust default-deny isolation, cross-tenant logical AND policies,
+  CoreDNS/external egress filtering, Cilium Hubble eBPF drop tracing, and `kubectl-cyclonus` policy analysis.
 - **Security Toolchain**: Pinned binaries with dual `amd64`/`arm64` support (`kube-bench`, `trivy`, `hadolint`,
   `kubesec`, `cosign`, `falco`).
 - **AppArmor Kernel Hardening**: Multi-node profile distribution and kernel enforcement (`k8s-deny-write`,
@@ -150,7 +151,7 @@ k8s-homelab/
 │   ├── kubernetes_packages/      # pkgs.k8s.io repository and pinned k8s binaries
 │   ├── control_plane/            # kubeadm init, TLS SANs, shell preferences, credentials
 │   ├── worker/                   # kubeadm join token registration
-│   ├── control_plane_tools/      # Helm, k9s (Nord theme), glow, etcdctl/etcdutl
+│   ├── control_plane_tools/      # Helm, k9s, glow, etcdctl, krew, kubectl-cyclonus
 │   ├── cilium/                   # Cilium CLI installation & eBPF CNI deployment
 │   ├── caddy/                    # Ingress proxy with PowerDNS DNS-01 ACME TLS
 │   ├── rook_ceph/                # Rook-Ceph operator & CephBlockPool storage

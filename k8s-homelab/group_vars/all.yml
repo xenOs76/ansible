@@ -49,12 +49,14 @@ os76_apt_packages:
   - kubectl-netdrill
   - https-wrench
 
-# Control plane bootstrap tooling (Helm, k9s, etcdctl, etcdutl)
+# Control plane bootstrap tooling (Helm, k9s, etcdctl, etcdutl, glow, krew, cyclonus)
 k9s_version: "v0.51.0"
 k9s_skin: "nord"
 helm_apt_repo: "deb [signed-by=/etc/apt/keyrings/helm.gpg] https://packages.buildkite.com/helm-linux/helm-debian/any/ any main"
 helm_apt_key_url: "https://packages.buildkite.com/helm-linux/helm-debian/gpgkey"
 helm_apt_key_fingerprint: "DDF78C3E6EBB2D2CC223C95C62BA89D07698DBC6"  # gitleaks:allow
+krew_version: "v0.5.0"
+cyclonus_version: "v0.2.1"
 
 # Caddy ingress reverse proxy and DNS-01 ACME
 caddy_version: "v2.11.7"
@@ -111,7 +113,7 @@ caddy_build_dir: "/var/cache/caddy-build"
 storage_nfs_provider: "kernel"
 
 # Rook-Ceph storage orchestrator configuration (RBD block, CephFS filesystem, and CephNFS)
-rook_ceph_enabled: true
+rook_ceph_enabled: false
 rook_ceph_version: "v1.15.5"
 rook_ceph_helm_repo: "https://charts.rook.io/release"
 rook_ceph_namespace: "rook-ceph"

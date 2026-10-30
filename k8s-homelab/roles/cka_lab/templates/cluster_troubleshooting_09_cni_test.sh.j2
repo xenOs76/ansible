@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# test-cni-recovery.sh: Automated Self-Test for CNI Recovery Drill
+# Managed by Ansible (roles/cka_lab)
+# ==============================================================================
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TARGET_NODE="${1:-{{ cka_lab_target_worker_node | default('kube-worker-1') }}}"
+
+cleanup() {
+  echo "==> Ensuring clean cluster state on test exit..."
+  "${SCRIPT_DIR}/fix-cni.sh" --node="${TARGET_NODE}" >/dev/null 2>&1 || true
+  kubectl delete pod cni-probe-pod -n default --ignore-not-found=true --timeout=15s >/dev/null 2>&1 || true
+}
+trap cleanup EXIT
+
+echo "===================================================================="
+echo "  [TEST] CNI Plugin Recovery Drill Automated Verification           "
+echo "  Target Node: ${TARGET_NODE}                                       "
+echo "===================================================================="
+
+# 1. Baseline verification
+echo "==> [1/3] Verifying baseline node state..."
+if ! kubectl get node "${TARGET_NODE}" --no-headers 2>/dev/null | grep -wq "Ready"; then
+  echo "Error: Target node ${TARGET_NODE} is not Ready." >&2
+  exit 1
+fi
+echo "    OK: ${TARGET_NODE} is Ready."
+
+# 2. Inject failure
+echo "==> [2/3] Executing break-cni.sh..."
+"${SCRIPT_DIR}/break-cni.sh" --node="${TARGET_NODE}" >/dev/null
+sleep 4
+PHASE="$(kubectl get pod cni-probe-pod -n default -o jsonpath='{.status.phase}' 2>/dev/null || echo "Unknown")"
+echo "    Probe pod phase while CNI missing: ${PHASE}"
+
+# 3. Restore and verify
+echo "==> [3/3] Executing fix-cni.sh..."
+"${SCRIPT_DIR}/fix-cni.sh" --node="${TARGET_NODE}" >/dev/null
+echo "    OK: Probe pod recovered and CNI restored."
+
+echo "===================================================================="
+echo "  [SUCCESS] CNI Plugin Recovery drill passed!                       "
+echo "===================================================================="

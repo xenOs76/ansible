@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Renew API server certificate on control plane and verify renewal
+TARGET_CERT="${1:-apiserver}"
+
+echo "=== Renewing Certificate: ${TARGET_CERT} via kubeadm ==="
+
+echo "[1/3] Current expiration for ${TARGET_CERT}:"
+sudo kubeadm certs check-expiration | grep -E "(CERTIFICATE AUTHORITY|${TARGET_CERT})" || true
+
+echo "[2/3] Executing renewal for ${TARGET_CERT}..."
+sudo kubeadm certs renew "${TARGET_CERT}"
+
+echo "[3/3] Post-renewal expiration check:"
+sudo kubeadm certs check-expiration | grep -E "(CERTIFICATE AUTHORITY|${TARGET_CERT})" || true
+
+echo "NOTE: When renewing control plane component certificates, static pods reload certificates"
+echo "automatically when their manifest files or secrets change. In kubeadm clusters, if a restart"
+echo "is needed, restart the container via crictl or move the manifest out and back into"
+echo "/etc/kubernetes/manifests/."
+echo "=== Certificate Renewal Completed ==="

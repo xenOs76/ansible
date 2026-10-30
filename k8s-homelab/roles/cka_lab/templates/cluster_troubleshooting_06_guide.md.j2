@@ -49,6 +49,15 @@ kubectl get pods --show-labels
 
 Verify that `spec.ports[*].targetPort` matches the container's listening port.
 
+### Step 4: Check Ingress Backend Routing
+
+Verify that `spec.rules[*].http.paths[*].backend.service.port.number` matches `spec.ports[*].port` on the Service:
+
+```bash
+kubectl describe ingress <ingress-name>
+kubectl get ingress <ingress-name> -o yaml
+```
+
 ---
 
 ## Practice Scripts
@@ -56,3 +65,6 @@ Verify that `spec.ports[*].targetPort` matches the container's listening port.
 - `setup-broken-service.sh`: Deploys backend pods and an unreachable service with label selector and port mismatch.
 - `fix-service.sh`: Corrects the selector and targetPort.
 - `test-service-endpoints.sh`: Verifies endpoint population and end-to-end curl response.
+- `setup-broken-ingress.sh`: Deploys an Ingress targeting port 8080 when the backend Service listens on port 80.
+- `fix-ingress.sh`: Patches the Ingress backend service port to 80.
+- `test-ingress-routing.sh`: Validates Ingress port alignment and optional L7 proxy routing.

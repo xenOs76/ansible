@@ -1,0 +1,32 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: cks-lab-client-egress-policy
+  namespace: {{ cks_lab_netpol_client_namespace | default('cks-net-client') }}
+  labels:
+    app.kubernetes.io/name: cks-lab-client-egress-policy
+    app.kubernetes.io/part-of: cks-lab
+    cks.practice/scenario: network-policies
+spec:
+  podSelector:
+    matchLabels:
+      app: cks-lab-client
+  policyTypes:
+    - Egress
+  egress:
+    # Allow DNS resolution to all namespaces (CoreDNS in kube-system)
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Allow traffic to backend namespace
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ cks_lab_netpol_backend_namespace | default('cks-net-backend') }}
+      ports:
+        - protocol: TCP
+          port: 80

@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# test-cluster-recon.sh: Automated Verification for Cluster Reconnaissance Drill
+# ==============================================================================
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TEMP_REPORT="/tmp/cka-recon-report.txt"
+
+echo "=== Testing Cluster Reconnaissance Drill ==="
+
+echo "1. Running cluster reconnaissance report generator..."
+"${SCRIPT_DIR}/cluster-recon.sh" "${TEMP_REPORT}"
+
+echo "2. Asserting report contents..."
+if ! grep -q "Control Plane Nodes:" "${TEMP_REPORT}"; then
+    echo "ERROR: Report missing Control Plane Nodes count!"
+    exit 1
+fi
+
+if ! grep -q "Namespaced Resource Kinds:" "${TEMP_REPORT}"; then
+    echo "ERROR: Report missing Namespaced Resource Kinds count!"
+    exit 1
+fi
+
+echo "3. Cleaning up temporary report..."
+rm -f "${TEMP_REPORT}"
+
+echo "=== Cluster Reconnaissance Drill PASSED! ==="

@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# setup-broken-ingress.sh: Injects L7 Ingress Backend Port Mismatch
+# ==============================================================================
+set -euo pipefail
+
+echo "=== Setting up Broken Ingress Scenario ==="
+
+kubectl apply -f - << 'EOF'
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cka-ingress-backend
+  namespace: default
+  labels:
+    app.kubernetes.io/part-of: cka-lab
+    app: ingress-backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: ingress-backend
+  template:
+    metadata:
+      labels:
+        app: ingress-backend
+    spec:
+      containers:
+        - name: web
+          image: nginx:alpine
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cka-ingress-svc
+  namespace: default
+  labels:
+    app.kubernetes.io/part-of: cka-lab
+spec:
+  type: ClusterIP
+  selector:
+    app: ingress-backend
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: cka-broken-ingress
+  namespace: default
+  labels:
+    app.kubernetes.io/part-of: cka-lab
+  annotations:
+    ingress.class: nginx
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: ingress-triage.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: cka-ingress-svc
+                # Deliberate mismatch: Service listens on 80, but Ingress routes to 8080
+                port:
+                  number: 8080
+EOF
+
+echo "Broken Ingress resource created with port 8080 (Service is on port 80)."
+echo ""
+echo "Diagnostic Commands:"
+echo "  kubectl describe ingress cka-broken-ingress -n default"
+echo "  kubectl get svc cka-ingress-svc -n default"
+echo "Fix with: fix-ingress.sh"

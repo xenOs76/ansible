@@ -39,6 +39,14 @@
     - cka_lab
     - directories
 
+- name: Execute CKA Lab Scenario - Inter-Node DNS & Passwordless SSH (inter_node_ssh)
+  ansible.builtin.include_tasks: scenario_inter_node_ssh.yml
+  when: cka_lab_scenario_inter_node_ssh_enabled | bool
+  tags:
+    - cka_lab
+    - inter_node_ssh
+    - cka_ssh
+
 - name: Execute CKA Lab Scenario - Cluster Installation & Bootstrapping (cluster_installation)
   ansible.builtin.include_tasks: scenario_cluster_installation.yml
   when: cka_lab_scenario_cluster_installation_enabled | bool
@@ -100,7 +108,7 @@
     - pods
     - workloads
 
-- name: Execute CKA Lab Scenario - Services, Ingress, Gateway API & Network Policies (networking)
+- name: Execute CKA Lab Scenario - Services, Ingress & Gateway API (networking)
   ansible.builtin.include_tasks: scenario_networking.yml
   when: cka_lab_scenario_networking_enabled | bool
   tags:
@@ -109,7 +117,6 @@
     - services
     - ingress
     - gateway
-    - networkpolicy
 
 - name: Execute CKA Lab Scenario - Advanced Scheduling & Capacity (scheduling)
   ansible.builtin.include_tasks: scenario_scheduling.yml

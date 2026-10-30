@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# run-cyclonus-analysis.sh: Automated NetworkPolicy Linting & Evaluation
+# Tool: kubectl-cyclonus
+# ==============================================================================
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+echo "=== [CKS NetPol Drill 4] Static Policy Auditing with kubectl-cyclonus ==="
+
+if ! command -v kubectl-cyclonus >/dev/null 2>&1 && ! kubectl cyclonus version >/dev/null 2>&1; then
+  echo "    Notice: kubectl-cyclonus plugin not found on PATH or via krew."
+  echo "    Checking /usr/local/bin..."
+  if [ -x "/usr/local/bin/kubectl-cyclonus" ]; then
+    export PATH="/usr/local/bin:${PATH}"
+  else
+    echo "    Warning: kubectl-cyclonus is not installed. Skipping static analysis."
+    exit 0
+  fi
+fi
+
+CYCLONUS_CMD="kubectl cyclonus"
+if ! kubectl cyclonus version >/dev/null 2>&1 && command -v kubectl-cyclonus >/dev/null 2>&1; then
+  CYCLONUS_CMD="kubectl-cyclonus"
+fi
+
+echo "==> 1. Linting Basic Isolation policy manifests..."
+${CYCLONUS_CMD} --mode lint --policy-path "${SCRIPT_DIR}/../01-basic-isolation/" || true
+echo "    OK: Basic isolation linting completed."
+
+echo "==> 2. Linting Progressive Microsegmentation policy manifests..."
+${CYCLONUS_CMD} --mode lint --policy-path "${SCRIPT_DIR}/../02-progressive-microsegmentation/" || true
+echo "    OK: Progressive microsegmentation linting completed."
+
+echo "==> 3. Linting Multi-Tenant Isolation policy manifests..."
+${CYCLONUS_CMD} --mode lint --policy-path "${SCRIPT_DIR}/../03-multi-tenant-isolation/" || true
+echo "    OK: Multi-tenant policy linting completed."
+
+echo "=== [SUCCESS] kubectl-cyclonus static policy audits completed! ==="

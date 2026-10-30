@@ -1,0 +1,48 @@
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-api-ingress
+  namespace: {{ cks_lab_netpol_namespace | default('default') }}
+  labels:
+    app.kubernetes.io/name: allow-api-ingress
+    app.kubernetes.io/part-of: cks-lab
+    cks.practice/scenario: network-policies
+spec:
+  podSelector:
+    matchLabels:
+      app: internal-api
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: netpol-client
+      ports:
+        - protocol: TCP
+          port: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-client-to-api
+  namespace: {{ cks_lab_netpol_namespace | default('default') }}
+  labels:
+    app.kubernetes.io/name: allow-client-to-api
+    app.kubernetes.io/part-of: cks-lab
+    cks.practice/scenario: network-policies
+spec:
+  podSelector:
+    matchLabels:
+      app: netpol-client
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: internal-api
+      ports:
+        - protocol: TCP
+          port: 8080

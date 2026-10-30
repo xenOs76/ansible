@@ -1,0 +1,26 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: cks-lab-allow-authorized-clients
+  namespace: {{ cks_lab_netpol_backend_namespace | default('cks-net-backend') }}
+  labels:
+    app.kubernetes.io/name: cks-lab-allow-authorized-clients
+    app.kubernetes.io/part-of: cks-lab
+    cks.practice/scenario: network-policies
+spec:
+  podSelector:
+    matchLabels:
+      app: cks-lab-backend
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ cks_lab_netpol_client_namespace | default('cks-net-client') }}
+          podSelector:
+            matchLabels:
+              access: authorized
+      ports:
+        - protocol: TCP
+          port: 80

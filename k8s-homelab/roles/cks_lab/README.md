@@ -97,6 +97,14 @@ Specialist (CKS) Study Guide* and the Linux Foundation / CNCF CKS Curriculum.
 - **Objective**: Install Falco with local rule overrides (`/etc/falco/falco_rules.local.yaml`). Execute attack
   simulation script to trigger and verify alerts.
 
+### Scenario 11: Pod-to-Pod Security & Network Policies (`netpol`)
+
+- **Domain**: Minimize Microservice Vulnerabilities (20%) & Cluster Setup (10%).
+- **Objective**: Implement pod-to-pod microsegmentation, zero-trust default-deny architectures, cross-tenant logical
+  AND isolation, egress restrictions (DNS port 53, cloud metadata endpoint `169.254.169.254/32` protection via
+  `ipBlock.except`), live eBPF drop analysis via Cilium Hubble, and static policy auditing via `kubectl-cyclonus`.
+- **Workspace**: `/home/vagrant/cks/network-policies/`.
+
 ---
 
 ## 3. Quick Reference & Commands
@@ -109,6 +117,7 @@ make preprod-cks-lab
 
 # Run only specific scenario via tags
 ./scripts/run-playbook.sh playbooks/cks_lab.yml -t tools
+./scripts/run-playbook.sh playbooks/cks_lab.yml -t netpol
 ./scripts/run-playbook.sh playbooks/cks_lab.yml -t audit_logs
 ./scripts/run-playbook.sh playbooks/cks_lab.yml -t etcd_enc
 ```

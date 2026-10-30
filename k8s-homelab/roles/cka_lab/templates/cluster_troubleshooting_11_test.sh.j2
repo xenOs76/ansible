@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# test-storage-recovery.sh: Automated Verification for Storage Triage
+# ==============================================================================
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+echo "=== Testing Storage & Volume Break-Fix Scenario ==="
+
+echo "1. Injecting storage failure mode..."
+"${SCRIPT_DIR}/setup-broken-storage.sh"
+
+echo "2. Asserting initial broken states..."
+INITIAL_PVC_STATUS="$(kubectl get pvc cka-mismatched-pvc -n default -o jsonpath='{.status.phase}' 2>/dev/null || echo "")"
+if [[ "${INITIAL_PVC_STATUS}" != "Pending" ]]; then
+    echo "WARNING: Expected PVC to be 'Pending', found '${INITIAL_PVC_STATUS}'"
+fi
+
+echo "3. Applying remediation..."
+"${SCRIPT_DIR}/fix-storage.sh"
+
+echo "4. Validating healed storage state..."
+FINAL_PVC_STATUS="$(kubectl get pvc cka-mismatched-pvc -n default -o jsonpath='{.status.phase}' 2>/dev/null || echo "")"
+if [[ "${FINAL_PVC_STATUS}" != "Bound" ]]; then
+    echo "ERROR: PVC failed to bind! Status: '${FINAL_PVC_STATUS}'"
+    kubectl describe pvc cka-mismatched-pvc -n default
+    exit 1
+fi
+echo "  [PASS] PVC cka-mismatched-pvc is successfully Bound to cka-manual-pv"
+
+FINAL_POD_STATUS="$(kubectl get pod cka-hostpath-app -n default -o jsonpath='{.status.phase}' 2>/dev/null || echo "")"
+if [[ "${FINAL_POD_STATUS}" != "Running" ]]; then
+    echo "ERROR: Pod cka-hostpath-app is not Running! Status: '${FINAL_POD_STATUS}'"
+    kubectl logs cka-hostpath-app -n default
+    exit 1
+fi
+echo "  [PASS] Pod cka-hostpath-app is Running"
+
+# Verify log write succeeded inside the container
+LOG_CONTENT="$(kubectl exec cka-hostpath-app -n default -- cat /data/app.log 2>/dev/null || echo "")"
+if [[ -z "${LOG_CONTENT}" ]]; then
+    echo "ERROR: /data/app.log is empty or missing inside container!"
+    exit 1
+fi
+echo "  [PASS] Successfully verified container write to /data/app.log"
+
+echo "5. Cleaning up storage drill resources..."
+kubectl delete pod cka-hostpath-app -n default --ignore-not-found=true --wait=false >/dev/null 2>&1
+kubectl delete pvc cka-mismatched-pvc -n default --ignore-not-found=true --wait=false >/dev/null 2>&1
+kubectl delete pv cka-manual-pv --ignore-not-found=true --wait=false >/dev/null 2>&1
+
+echo "=== Storage & Volume Triage PASSED! ==="

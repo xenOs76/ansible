@@ -1,0 +1,70 @@
+# Hubble CLI Troubleshooting & eBPF Flow Inspection Guide
+
+This guide covers real-time network flow analysis, policy verification, and packet drop inspection using the Cilium
+`hubble` CLI on the control plane node.
+
+---
+
+## 1. Prerequisites & Status Verification
+
+Ensure Cilium Hubble relay and port-forwarding are active on `kube-control-plane`:
+
+```bash
+# Verify Cilium cluster health and Hubble status
+cilium status --wait
+
+# Start Hubble port-forward in background if not already running
+cilium hubble port-forward &
+
+# Verify local Hubble connectivity
+hubble status
+```
+
+---
+
+## 2. Tracing NetworkPolicy Drops in Real Time
+
+When troubleshooting NetworkPolicies, use `--verdict DROPPED` to capture packets rejected by Linux kernel eBPF map
+rules:
+
+```bash
+# Watch dropped packets live across the default namespace
+hubble observe --namespace {{ cks_lab_netpol_namespace | default('default') }} --verdict DROPPED -f
+
+# Filter drops specifically originating from the test client pod
+hubble observe --pod {{ cks_lab_netpol_namespace | default('default') }}/netpol-test-client --verdict DROPPED
+
+# Filter drops targeting the internal-api backend pod
+hubble observe --pod {{ cks_lab_netpol_namespace | default('default') }}/internal-api --verdict DROPPED
+```
+
+### Common Drop Reasons in Hubble Output
+
+- `Policy denied (INGRESS)`: Inbound traffic rejected by a default-deny policy or missing ingress whitelist rule.
+- `Policy denied (EGRESS)`: Outbound request rejected by missing CoreDNS (UDP 53) or missing egress whitelist rules.
+
+---
+
+## 3. Monitoring DNS Queries and Resolutions
+
+To debug DNS issues when pods cannot resolve in-cluster or external hostnames:
+
+```bash
+# Observe DNS resolution flows live in the scenario namespace
+hubble observe --namespace {{ cks_lab_netpol_namespace | default('default') }} --protocol dns -f
+
+# Monitor CoreDNS traffic specifically in kube-system
+hubble observe --namespace kube-system --protocol dns -f
+```
+
+---
+
+## 4. Inspecting Microservice Traffic Flows
+
+```bash
+# Trace HTTP requests and response codes across namespaces
+hubble observe --namespace {{ cks_lab_netpol_namespace | default('default') }} --protocol http -f
+
+# Compact one-line flow format for high-throughput troubleshooting
+hubble observe --namespace {{ cks_lab_netpol_namespace | default('default') }} -o compact
+```

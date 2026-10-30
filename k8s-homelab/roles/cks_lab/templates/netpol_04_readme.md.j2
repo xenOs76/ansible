@@ -1,0 +1,53 @@
+# Static NetworkPolicy Auditing & Matrix Evaluation with `kubectl-cyclonus`
+
+This drill provides automated policy analysis, semantic linting, and reachability matrix visualization using
+`kubectl-cyclonus`.
+
+---
+
+## 1. Overview & Capabilities
+
+`cyclonus` is a specialized Kubernetes NetworkPolicy analysis engine installed on `kube-control-plane` as a kubectl
+plugin (`kubectl krew list`). In CKS exam and production security audits, it enables:
+
+1. **Semantic Linting**: Identifies redundant rules, unreferenced selectors, and invalid port/protocol combinations
+   before applying manifests to production clusters.
+2. **Policy Explanation**: Deconstructs complex combinations of `namespaceSelector`, `podSelector`, and `ipBlock`
+   into plain-text ingress and egress allow lists.
+3. **Reachability Matrix Generation**: Probes or simulates traffic between all pod combinations across namespaces to
+   verify zero-trust boundaries mathematically.
+
+---
+
+## 2. Command Reference
+
+### Linting Manifest Files
+
+```bash
+# Lint policy files for structural or semantic flaws
+kubectl cyclonus --mode lint --policy-path ../01-basic-isolation/
+kubectl cyclonus --mode lint --policy-path ../02-progressive-microsegmentation/
+kubectl cyclonus --mode lint --policy-path ../03-multi-tenant-isolation/
+```
+
+### Explaining In-Cluster Policies
+
+```bash
+# Analyze and explain policies currently active in the default namespace
+kubectl cyclonus --mode explain -n {{ cks_lab_netpol_namespace | default('default') }}
+
+# Analyze cross-tenant policies across both namespaces
+kubectl cyclonus --mode explain \
+  -n {{ cks_lab_netpol_tenant_a | default('cks-tenant-a') }} \
+  -n {{ cks_lab_netpol_tenant_b | default('cks-tenant-b') }}
+```
+
+---
+
+## 3. Automated Verification
+
+Execute the automated non-interactive analysis script:
+
+```bash
+./run-cyclonus-analysis.sh
+```

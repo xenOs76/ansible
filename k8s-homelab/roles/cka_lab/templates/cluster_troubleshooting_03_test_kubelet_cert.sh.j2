@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# test-kubelet-cert.sh: Automated Verification for Kubelet Certificate Drill
+# Managed by Ansible (roles/cka_lab)
+# ==============================================================================
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TARGET_NODE="${1:-kube-worker-1}"
+
+cleanup() {
+  echo "==> Ensuring clean node state on exit..."
+  "${SCRIPT_DIR}/fix-kubelet-cert.sh" --node="${TARGET_NODE}" >/dev/null 2>&1 || true
+}
+trap cleanup EXIT
+
+echo "===================================================================="
+echo "  [TEST] Kubelet Certificate Recovery Automated Verification        "
+echo "  Target Node: ${TARGET_NODE}                                       "
+echo "===================================================================="
+
+# 1. Baseline check
+echo "==> [1/3] Verifying baseline node state..."
+if ! kubectl get node "${TARGET_NODE}" --no-headers 2>/dev/null | grep -wq "Ready"; then
+  echo "Error: Target node ${TARGET_NODE} is not currently Ready." >&2
+  exit 1
+fi
+echo "    OK: ${TARGET_NODE} is Ready."
+
+# 2. Inject failure
+echo "==> [2/3] Simulating broken client certificate on ${TARGET_NODE}..."
+"${SCRIPT_DIR}/break-kubelet-cert.sh" --node="${TARGET_NODE}" >/dev/null
+echo "    OK: Certificate corruption applied."
+
+# 3. Restore and verify
+echo "==> [3/3] Restoring certificate and verifying recovery..."
+"${SCRIPT_DIR}/fix-kubelet-cert.sh" --node="${TARGET_NODE}" >/dev/null
+echo "    OK: ${TARGET_NODE} successfully recovered to Ready."
+
+echo "===================================================================="
+echo "  [SUCCESS] Kubelet Certificate Recovery test passed!               "
+echo "===================================================================="

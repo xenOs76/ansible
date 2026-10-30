@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# fix-controller-manager.sh: Restores Controller Manager Static Pod Manifest
+# Managed by Ansible (roles/cka_lab)
+# ==============================================================================
+set -euo pipefail
+
+MANIFEST="/etc/kubernetes/manifests/kube-controller-manager.yaml"
+BACKUP="/etc/kubernetes/kube-controller-manager.yaml.bak"
+LEGACY_BACKUP="/etc/kubernetes/manifests/kube-controller-manager.yaml.bak"
+
+if [ "$(id -u)" -ne 0 ]; then
+  echo "Error: This script modifies static pod manifests and must be run as root (use sudo)." >&2
+  exit 1
+fi
+
+if [ ! -f "${BACKUP}" ] && [ -f "${LEGACY_BACKUP}" ]; then
+  BACKUP="${LEGACY_BACKUP}"
+fi
+
+# Detect KUBECONFIG if not set
+if [ -z "${KUBECONFIG:-}" ] && [ -f /etc/kubernetes/admin.conf ]; then
+  export KUBECONFIG=/etc/kubernetes/admin.conf
+fi
+
+echo "===================================================================="
+echo "  [CKA LAB] Restoring Control Plane Static Pod (kube-controller-mgr)"
+echo "===================================================================="
+
+if [ -f "${BACKUP}" ]; then
+  echo "==> Restoring ${MANIFEST} from backup ${BACKUP}..."
+  cp -f "${BACKUP}" "${MANIFEST}"
+  rm -f "${BACKUP}" "${LEGACY_BACKUP}"
+else
+  echo "==> Backup not found, fixing known invalid parameters in-place..."
+  sed -i 's|controller-manager-broken.conf|controller-manager.conf|g' "${MANIFEST}"
+  sed -i 's|missing-cm.conf|controller-manager.conf|g' "${MANIFEST}"
+  sed -i '/^corrupted_unmarshal_syntax:/d' "${MANIFEST}"
+fi
+
+# Ensure no stray backup files remain inside manifests directory
+rm -f /etc/kubernetes/manifests/*.bak 2>/dev/null || true
+
+# Force container restart
+crictl ps --name kube-controller-manager -q 2>/dev/null | xargs -r crictl stop >/dev/null 2>&1 || true
+
+echo "==> Awaiting kube-controller-manager restart and recovery..."
+for i in $(seq 1 30); do
+  if kubectl get pod -n kube-system -l component=kube-controller-manager --no-headers 2>/dev/null | grep -q "Running"; then
+    echo "==> [SUCCESS] Kube-Controller-Manager is Running and healthy after ${i}s!"
+    kubectl get pod -n kube-system -l component=kube-controller-manager
+    # Clean up canary deployment if present
+    kubectl delete deployment cka-controller-probe -n default --ignore-not-found=true --timeout=15s >/dev/null 2>&1 || true
+    exit 0
+  fi
+  echo "    Attempt ${i}/30: Waiting for kube-controller-manager to become Ready..."
+  sleep 3
+done
+
+echo "==> [ERROR] Kube-Controller-Manager did not recover within 90s. Inspect logs with: sudo crictl ps -a" >&2
+exit 1
