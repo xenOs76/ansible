@@ -1,0 +1,36 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: topology-spread-hard
+  namespace: default
+  labels:
+    app: topology-spread-hard
+    cka-drill: scheduling-topology-spread
+spec:
+  replicas: 4
+  selector:
+    matchLabels:
+      app: topology-spread-hard
+  template:
+    metadata:
+      labels:
+        app: topology-spread-hard
+    spec:
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app: topology-spread-hard
+      containers:
+        - name: pause-workload
+          image: registry.k8s.io/pause:3.9
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 50m
+              memory: 32Mi

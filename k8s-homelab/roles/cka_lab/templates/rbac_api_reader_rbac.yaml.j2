@@ -1,0 +1,41 @@
+---
+# ==============================================================================
+# In-Pod API Server Interrogation: Namespace & RBAC Permissions
+# ==============================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ cka_lab_api_access_namespace | default('finance-secure') }}
+  labels:
+    app.kubernetes.io/part-of: cka-lab
+    environment: secure-drills
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: api-explorer
+  namespace: {{ cka_lab_api_access_namespace | default('finance-secure') }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: secret-config-reader
+  namespace: {{ cka_lab_api_access_namespace | default('finance-secure') }}
+rules:
+  - apiGroups: [""]
+    resources: ["secrets", "configmaps"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: api-explorer-binding
+  namespace: {{ cka_lab_api_access_namespace | default('finance-secure') }}
+subjects:
+  - kind: ServiceAccount
+    name: api-explorer
+    namespace: {{ cka_lab_api_access_namespace | default('finance-secure') }}
+roleRef:
+  kind: Role
+  name: secret-config-reader
+  apiGroup: rbac.authorization.k8s.io

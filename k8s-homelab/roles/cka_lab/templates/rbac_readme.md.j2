@@ -17,10 +17,17 @@ Follows the exercise pattern from [bmuschko/cka-crash-course
 │   ├── csr-template.yaml          # Reference CSR manifest template
 │   ├── verify-manual-user.sh      # Automated validation test suite
 │   └── cleanup-manual-user.sh     # Teardown and reset script
-└── serviceaccounts/               # ServiceAccount RBAC & bounded token drill
- ├── README.md                  # ServiceAccount RBAC walkthrough
- ├── sa-rbac-drill.yaml         # ServiceAccount, Role & RoleBinding manifest
- └── test-sa-rbac.sh            # Token creation and impersonation test
+├── serviceaccounts/               # ServiceAccount RBAC & bounded token drill
+│   ├── README.md                  # ServiceAccount RBAC walkthrough
+│   ├── sa-rbac-drill.yaml         # ServiceAccount, Role & RoleBinding manifest
+│   └── test-sa-rbac.sh            # Token creation and impersonation test
+└── 03-api-access/                 # In-pod API interrogation & path navigation drill
+    ├── README.md                  # Detailed guide & API path taxonomy
+    ├── 01-rbac.yaml               # Namespace, ServiceAccount, Role & RoleBinding
+    ├── 02-sample-data.yaml        # db-credentials Secret & app-settings ConfigMap
+    ├── 03-inspector-pod.yaml      # Curl inspector pod
+    ├── exec-inspector.sh          # Interactive shell helper
+    └── test-api-access.sh         # Automated API test suite
 ```
 
 ---
@@ -32,6 +39,7 @@ Follows the exercise pattern from [bmuschko/cka-crash-course
 - **RBAC Authorization**: [Using RBAC Authorization](https://kubernetes.io/docs/reference/access-authn-authz/rbac/) `[EXAM ALLOWED]`
 - **CertificateSigningRequests**: [Certificate Signing Requests](https://kubernetes.io/docs/reference/access-authn-authz/certificate-signing-requests/#normal-user) `[EXAM ALLOWED]`
 - **Service Accounts Management**: [Managing Service Accounts](https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/) `[EXAM ALLOWED]`
+- **Accessing API from Pod**: [Accessing the API from a Pod](https://kubernetes.io/docs/tasks/run-application/access-api-from-pod/) `[EXAM ALLOWED]`
 
 ### In-Exam Search Keywords
 >
@@ -40,6 +48,7 @@ Follows the exercise pattern from [bmuschko/cka-crash-course
 - `"using rbac authorization"`
 - `"certificate signing request"`
 - `"service account token"`
+- `"accessing the api from a pod"`
 
 ### Terminal Fast Lookups (`kubectl`)
 
@@ -204,4 +213,24 @@ Practice managing non-human workloads:
 ```bash
 cd {{ cka_lab_rbac_dir }}/serviceaccounts
 ./test-sa-rbac.sh
+```
+
+---
+
+### Step 7: In-Pod API Server Interrogation & Resource Navigation (`03-api-access/`)
+
+Practice querying kube-apiserver from inside a pod using mounted ServiceAccount credentials, navigating API resource
+paths (`/api/v1/namespaces/{ns}/secrets`), and decoding extracted payloads:
+
+```bash
+cd {{ cka_lab_rbac_dir }}/03-api-access
+
+# Inspect detailed API guide and path taxonomy
+cat README.md
+
+# Run the automated verification test
+./test-api-access.sh
+
+# Or start an interactive debugging session inside the inspector pod
+./exec-inspector.sh
 ```

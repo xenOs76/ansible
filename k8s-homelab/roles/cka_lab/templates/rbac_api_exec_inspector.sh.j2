@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# Helper script to exec into the in-pod API inspector or execute quick API calls
+# ==============================================================================
+set -euo pipefail
+
+NAMESPACE="{{ cka_lab_api_access_namespace | default('finance-secure') }}"
+POD_NAME="api-inspector"
+
+if ! kubectl get pod "${POD_NAME}" -n "${NAMESPACE}" >/dev/null 2>&1; then
+    echo "Error: Pod '${POD_NAME}' in namespace '${NAMESPACE}' is not running."
+    echo "Apply manifests first: kubectl apply -f 01-rbac.yaml -f 02-sample-data.yaml -f 03-inspector-pod.yaml"
+    exit 1
+fi
+
+echo "===================================================================="
+echo " Executing interactive shell inside '${POD_NAME}' (${NAMESPACE})"
+echo "===================================================================="
+# shellcheck disable=SC2016
+echo "Quick command inside the pod:"
+# shellcheck disable=SC2016
+echo '  TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)'
+echo '  CACERT=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt'
+# shellcheck disable=SC2016
+echo '  curl --cacert "${CACERT}" -H "Authorization: Bearer ${TOKEN}" https://kubernetes.default.svc/api/v1/namespaces/'"${NAMESPACE}"'/secrets'
+echo "===================================================================="
+
+kubectl exec -it "${POD_NAME}" -n "${NAMESPACE}" -- sh

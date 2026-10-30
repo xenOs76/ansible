@@ -5,15 +5,27 @@ kind: Kustomization
 namespace: {{ cka_lab_configmaps_default_namespace }}
 
 namePrefix: prod-
+nameSuffix: -v1
+
+commonAnnotations:
+  team: sre-core
+  contact: sre@os76.xyz
+  app.kubernetes.io/managed-by: kustomize
 
 labels:
   - includeSelectors: true
     pairs:
       environment: production
       cka.practice/layer: overlay
+      app.kubernetes.io/part-of: web-suite
 
 resources:
   - ../../base
+
+images:
+  - name: registry.k8s.io/e2e-test-images/agnhost
+    newName: registry.k8s.io/e2e-test-images/agnhost
+    newTag: "2.43"
 
 configMapGenerator:
   - name: webapp-config
@@ -21,11 +33,29 @@ configMapGenerator:
     literals:
       - APP_ENV=production
       - APP_MSG=Production High-Availability Service
-      - FEATURE_ANALYTICS=true
       - CACHE_ENABLED=true
+
+secretGenerator:
+  - name: webapp-secret
+    behavior: merge
+    envs:
+      - prod-secrets.env
+    type: Opaque
 
 generatorOptions:
   disableNameSuffixHash: true
 
 patches:
-  - path: replica-patch.yaml
+  - path: patches/patch-replicas-ha.yaml
+  - target:
+      kind: Deployment
+      name: webapp-deployment
+    path: patches/patch-sidecar-add.yaml
+  - target:
+      kind: Deployment
+      name: webapp-deployment
+    path: patches/patch-env-add.yaml
+  - target:
+      kind: Deployment
+      labelSelector: "app.kubernetes.io/part-of=web-suite"
+    path: patches/patch-security-context.yaml

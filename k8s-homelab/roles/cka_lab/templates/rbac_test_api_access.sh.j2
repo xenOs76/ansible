@@ -1,0 +1,135 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# CKA Exam Practice Drill: In-Pod API Server Interrogation Test Suite
+# Validates querying kube-apiserver from a pod, token authentication, and RBAC.
+# ==============================================================================
+# shellcheck disable=SC2016
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export KUBECONFIG="${HOME}/.kube/config"
+
+NAMESPACE="{{ cka_lab_api_access_namespace | default('finance-secure') }}"
+POD_NAME="api-inspector"
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+pass() { echo -e "${GREEN}[PASS]${NC} $*"; }
+fail() { echo -e "${RED}[FAIL]${NC} $*"; exit 1; }
+info() { echo -e "${BLUE}[INFO]${NC} $*"; }
+
+cleanup() {
+    info "Cleaning up in-pod API drill resources..."
+    kubectl delete namespace "${NAMESPACE}" --ignore-not-found=true --timeout=30s 2>/dev/null || true
+}
+trap cleanup EXIT
+
+echo "===================================================================="
+echo " Starting In-Pod API Server Interrogation Automated Validation"
+echo "===================================================================="
+
+cleanup
+
+# ----------------------------------------------------------------------
+# Step 1: Deploy RBAC, Secrets, and Inspector Pod
+# ----------------------------------------------------------------------
+info "Applying RBAC, sample data, and inspector pod manifests..."
+kubectl apply -f "${SCRIPT_DIR}/01-rbac.yaml"
+kubectl apply -f "${SCRIPT_DIR}/02-sample-data.yaml"
+kubectl apply -f "${SCRIPT_DIR}/03-inspector-pod.yaml"
+
+info "Waiting for pod '${POD_NAME}' in namespace '${NAMESPACE}' to be Ready..."
+kubectl wait --for=condition=Ready "pod/${POD_NAME}" -n "${NAMESPACE}" --timeout=90s
+
+# ----------------------------------------------------------------------
+# Step 2: Query Authorized Secret via Kubernetes API
+# ----------------------------------------------------------------------
+info "Drill 1: Querying authorized secret /api/v1/namespaces/${NAMESPACE}/secrets/db-credentials from pod..."
+HTTP_CODE=$(kubectl exec "${POD_NAME}" -n "${NAMESPACE}" -- sh -c '
+    TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
+    CACERT=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+    curl -s -o /tmp/secret.json -w "%{http_code}" \
+        --cacert "${CACERT}" \
+        -H "Authorization: Bearer ${TOKEN}" \
+        "https://kubernetes.default.svc/api/v1/namespaces/'"${NAMESPACE}"'/secrets/db-credentials"
+')
+
+if [ "${HTTP_CODE}" -eq 200 ]; then
+    pass "Successfully queried secret endpoint (HTTP 200)"
+else
+    fail "Expected HTTP 200 querying secret, received: ${HTTP_CODE}"
+fi
+
+# Verify secret payload decoding
+DB_URL_B64=$(kubectl exec "${POD_NAME}" -n "${NAMESPACE}" -- sh -c '
+    grep -o "\"database.url\": *\"[^\"]*\"" /tmp/secret.json | cut -d "\"" -f4
+')
+DB_URL_DECODED=$(echo "${DB_URL_B64}" | base64 -d)
+info "Decoded secret database.url: ${DB_URL_DECODED}"
+
+if [[ "${DB_URL_DECODED}" == *"postgres://db.priv.os76.xyz"* ]]; then
+    pass "Successfully extracted and decoded Secret payload from API JSON response"
+else
+    fail "Secret decoding mismatch: ${DB_URL_DECODED}"
+fi
+
+# ----------------------------------------------------------------------
+# Step 3: Query Authorized ConfigMap via Kubernetes API
+# ----------------------------------------------------------------------
+info "Drill 2: Querying authorized configmap /api/v1/namespaces/${NAMESPACE}/configmaps/app-settings from pod..."
+HTTP_CODE_CM=$(kubectl exec "${POD_NAME}" -n "${NAMESPACE}" -- sh -c '
+    TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
+    CACERT=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+    curl -s -o /tmp/cm.json -w "%{http_code}" \
+        --cacert "${CACERT}" \
+        -H "Authorization: Bearer ${TOKEN}" \
+        "https://kubernetes.default.svc/api/v1/namespaces/'"${NAMESPACE}"'/configmaps/app-settings"
+')
+
+if [ "${HTTP_CODE_CM}" -eq 200 ]; then
+    pass "Successfully queried configmap endpoint (HTTP 200)"
+else
+    fail "Expected HTTP 200 querying configmap, received: ${HTTP_CODE_CM}"
+fi
+
+# ----------------------------------------------------------------------
+# Step 4: Verify RBAC Denials (403 Forbidden)
+# ----------------------------------------------------------------------
+info "Drill 3: Verifying RBAC denial on unauthorized resource (pods in ${NAMESPACE})..."
+HTTP_CODE_PODS=$(kubectl exec "${POD_NAME}" -n "${NAMESPACE}" -- sh -c '
+    TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
+    CACERT=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+    curl -s -o /dev/null -w "%{http_code}" \
+        --cacert "${CACERT}" \
+        -H "Authorization: Bearer ${TOKEN}" \
+        "https://kubernetes.default.svc/api/v1/namespaces/'"${NAMESPACE}"'/pods"
+')
+
+if [ "${HTTP_CODE_PODS}" -eq 403 ]; then
+    pass "Access to pods correctly denied by RBAC (HTTP 403 Forbidden)"
+else
+    fail "Expected HTTP 403 Forbidden on pods endpoint, received: ${HTTP_CODE_PODS}"
+fi
+
+info "Drill 4: Verifying RBAC denial on cross-namespace resource (secrets in default)..."
+HTTP_CODE_CROSS=$(kubectl exec "${POD_NAME}" -n "${NAMESPACE}" -- sh -c '
+    TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
+    CACERT=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+    curl -s -o /dev/null -w "%{http_code}" \
+        --cacert "${CACERT}" \
+        -H "Authorization: Bearer ${TOKEN}" \
+        "https://kubernetes.default.svc/api/v1/namespaces/default/secrets"
+')
+
+if [ "${HTTP_CODE_CROSS}" -eq 403 ]; then
+    pass "Cross-namespace access to default secrets correctly denied (HTTP 403 Forbidden)"
+else
+    fail "Expected HTTP 403 Forbidden on cross-namespace query, received: ${HTTP_CODE_CROSS}"
+fi
+
+echo "===================================================================="
+echo -e "${GREEN}All In-Pod API Interrogation drills validated successfully!${NC}"
+echo "===================================================================="

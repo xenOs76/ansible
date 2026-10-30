@@ -6,6 +6,10 @@ namespace: {{ cka_lab_configmaps_dev_namespace }}
 
 namePrefix: dev-
 
+commonAnnotations:
+  team: frontend-dev
+  contact: dev@os76.xyz
+
 labels:
   - includeSelectors: true
     pairs:
@@ -19,11 +23,17 @@ configMapGenerator:
   - name: webapp-config
     behavior: merge
     literals:
-      - APP_ENV=development
       - APP_MSG=Development Sandbox Environment
-      - FEATURE_DEBUG_BAR=true
     files:
       - dev-settings.properties
+    envs:
+      - dev-app.env
+
+secretGenerator:
+  - name: webapp-secret
+    behavior: merge
+    envs:
+      - dev-secrets.env
 
 generatorOptions:
   disableNameSuffixHash: true
@@ -32,7 +42,8 @@ patches:
   - target:
       kind: Deployment
       name: webapp-deployment
-    patch: |-
-      - op: replace
-        path: /spec/template/spec/containers/0/resources/requests/memory
-        value: 32Mi
+    path: patches/patch-memory-replace.yaml
+  - target:
+      kind: Deployment
+      name: webapp-deployment
+    path: patches/patch-remove-probe.yaml

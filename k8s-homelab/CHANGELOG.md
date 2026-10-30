@@ -10,6 +10,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **CKA Training Lab - Advanced Kustomize Directives & Patching (`roles/cka_lab`, `~/cka/09-kustomize/`)**:
+  Expanded Kustomize practice scenarios covering `secretGenerator` from key-value `.env` files, `commonAnnotations`,
+  `nameSuffix`, and image transformers (`images:` with tag and digest overrides). Added exhaustive JSON 6902 RFC 6902
+  patches (`replace` memory, `remove` probe, `add` sidecars, `add` environment variables, and label-targeted patches)
+  alongside strategic merge patching, backed by an automated verification test suite and comprehensive options guide.
+- **CKA Training Lab - Pod Topology Spread Constraints (`roles/cka_lab`, `~/cka/10-scheduling/06-topology-spread/`)**:
+  Provisioned hands-on scenarios for fine-grained failure domain distribution using `topologySpreadConstraints`. Covers
+  `maxSkew` calculations, `whenUnsatisfiable` policies (`DoNotSchedule` hard enforcement vs `ScheduleAnyway` soft
+  balancing), and `matchLabelKeys: ["pod-template-hash"]` for rolling updates, complete with automated multi-node
+  validation.
+- **CKA Training Lab - In-Pod API Server Interrogation (`roles/cka_lab`, `~/cka/03-rbac/03-api-access/`)**:
+  Implemented in-pod API interrogation drills using projected ServiceAccount tokens and CA certificates
+  (`/var/run/secrets/kubernetes.io/serviceaccount/`). Covers core vs named API taxonomy (`/api/v1` vs `/apis`), namespace
+  resource querying (`/api/v1/namespaces/{ns}/secrets`), base64 payload extraction, RBAC boundary enforcement (HTTP 403
+  Forbidden), interactive inspection tooling, and `kubectl proxy` workflows.
 - **CKA Training Lab - Inter-Node DNS Resolution & Passwordless SSH (`playbooks/cka_lab.yml`, `roles/cka_lab`)**:
   Automated cluster-wide `/etc/hosts` population across `k8s_cluster` and distributed a dedicated Ed25519 lab SSH
   keypair from `control_plane[0]` to all worker nodes (`~/.ssh/authorized_keys` and `~/.ssh/config`) exclusively for

@@ -21,9 +21,20 @@ spec:
           args: ["netexec", "--http-port=8080"]
           ports:
             - containerPort: 8080
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          env:
+            - name: INITIALIZED_AT
+              value: "startup"
           envFrom:
             - configMapRef:
                 name: webapp-config
+            - secretRef:
+                name: webapp-secret
           resources:
             requests:
               cpu: 50m

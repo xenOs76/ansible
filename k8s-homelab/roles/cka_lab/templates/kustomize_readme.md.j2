@@ -1,189 +1,263 @@
-# Kustomize Practice Guide: ConfigMaps & Overlays (CKA / CKAD)
+# Kustomize Practice Guide: Directives, Generators & Advanced Patching (CKA / CKAD)
 
-This directory contains a complete, self-contained Kustomize lab designed for hands-on practice with Kubernetes
-declarative configuration customization, overlays, and `configMapGenerator`.
+This directory contains a self-contained Kustomize lab designed for hands-on practice with Kubernetes declarative
+configuration management, environment overlays, resource generators, image transformers, and advanced patch taxonomy.
 
-Kustomize is natively integrated into `kubectl` (`kubectl kustomize` and `kubectl apply -k`). It allows you to customize
-raw, template-free YAML files for multiple environments without altering original base manifests.
+Kustomize is natively integrated into `kubectl` (`kubectl kustomize` and `kubectl apply -k`). It allows you to
+customize raw, template-free YAML files for multiple environments without altering original baseline manifests.
+
+---
 
 ## Official Exam References & Quick Lookups
 
 ### Permitted Exam Documentation
 
 - [Declarative Management Using Kustomize](https://kubernetes.io/docs/tasks/manage-kubernetes-objects/kustomization/) `[EXAM ALLOWED]`
+- [Kustomize Patches Reference](https://kubectl.docs.kubernetes.io/references/kustomize/kustomization/patches/) `[EXAM ALLOWED]`
 - [ConfigMaps](https://kubernetes.io/docs/concepts/configuration/configmap/) `[EXAM ALLOWED]`
-- [Configure a Pod to Use a ConfigMap](https://kubernetes.io/docs/tasks/configure-pod-container/configure-pod-configmap/) `[EXAM ALLOWED]`
+- [Secrets](https://kubernetes.io/docs/concepts/configuration/secret/) `[EXAM ALLOWED]`
 
 ### In-Exam Search Keywords
 
 - `"kustomize"`
 - `"declarative management using kustomize"`
 - `"configmapgenerator"`
+- `"secretgenerator"`
+- `"patches strategic merge"`
+- `"patchesjson6902"`
 
 ### Terminal Fast Lookups (kubectl explain / CLI)
 
-- `kubectl kustomize --help`
-- `kubectl apply -k --help`
-- `kubectl explain configmap`
+```bash
+kubectl kustomize --help
+kubectl apply -k --help
+kubectl explain deployment.spec.template.spec.containers
+```
 
 ---
 
-## 1. Directory Structure
+## 1. Directory Structure & Pathing Architecture
+
+A clean, modular directory structure isolates base configurations, environment overlays, and reusable patch files:
 
 ```text
-/home/vagrant/cka/kustomize/
-├── README.md                          # This practice guide
-├── base/                              # Common baseline resources
-│   ├── kustomization.yaml             # Base resource list
+/home/vagrant/cka/09-kustomize/
+├── README.md                          # Master guide explaining all options and directives
+├── test-kustomize.sh                  # Non-interactive automated test validation harness
+├── base/
+│   ├── kustomization.yaml             # Baseline resources declaration
 │   ├── configmap.yaml                 # Baseline application configuration
-│   ├── deployment.yaml                # Workload referencing webapp-config
+│   ├── secret.yaml                    # Baseline secret manifest
+│   ├── deployment.yaml                # Workload referencing webapp-config and webapp-secret
 │   └── service.yaml                   # ClusterIP service exposing webapp
 └── overlays/
     ├── development/                   # Development environment customizations
-    │   ├── kustomization.yaml         # Dev overlay (merges config, adds namePrefix)
-    │   └── dev-settings.properties    # File input for configMapGenerator
+    │   ├── kustomization.yaml         # Dev overlay: prefix, annotations, dev generators, JSON patches
+    │   ├── dev-settings.properties    # File input for configMapGenerator
+    │   ├── dev-app.env                # Key=value env-file source for configMapGenerator
+    │   ├── dev-secrets.env            # Sensitive env-file source for secretGenerator
+    │   └── patches/                   # Dedicated modular patches folder
+    │       ├── patch-memory-replace.yaml # JSON 6902 replace: scales memory request to 32Mi
+    │       └── patch-remove-probe.yaml   # JSON 6902 remove: strips livenessProbe for fast dev boot
     └── production/                    # Production environment customizations
-        ├── kustomization.yaml         # Prod overlay (sets namespace, adds replicas)
-        └── replica-patch.yaml         # Strategic merge patch for HA & resources
+        ├── kustomization.yaml         # Prod overlay: suffix, images transformer, strategic merge
+        ├── prod-secrets.env           # Sensitive env-file source for secretGenerator
+        └── patches/                   # Dedicated modular patches folder
+            ├── patch-replicas-ha.yaml # Strategic merge patch: sets 3 replicas & tight limits
+            ├── patch-sidecar-add.yaml # JSON 6902 add: injects log-shipper sidecar container (/-)
+            ├── patch-env-add.yaml     # JSON 6902 add: appends DB_TIMEOUT env variable (/-)
+            └── patch-security-context.yaml # Wildcard patch targeting Deployments via labelSelector
 ```
 
 ---
 
-## 2. Core Kustomize Concepts Illustrated
+## 2. Comprehensive Kustomize Options Reference
 
-| Concept | File / Directive | Purpose |
+The following table summarizes all core options and directives demonstrated across this lab:
+
+| Directive | Type | Purpose & Behavior |
 | :--- | :--- | :--- |
-| **Base Resources** | `base/kustomization.yaml` | Declares raw YAML files (`resources: [...]`) shared across environments. |
-| **Namespace Override** | `overlays/*/kustomization.yaml` | Sets `namespace: development` or `namespace: default` on all generated objects. |
-| **Name Prefix** | `namePrefix: dev-` / `prod-` | Prefixes names of all resources to avoid collision across teams or stages. |
-| **Labels Transformer** | `labels: [{ includeSelectors: true, pairs: { ... } }]` | Injects metadata labels into all resources and pod template selectors (replaces deprecated `commonLabels`). |
-| **configMapGenerator** | `configMapGenerator: [...]` | Generates ConfigMaps from literals, key-value files, or merges with existing base configs. |
-| **Merge Behavior** | `behavior: merge` | Overwrites existing keys and appends new keys into the base ConfigMap. |
-| **Hash Suffix Control** | `disableNameSuffixHash: true` | Disables random content-hash suffix (e.g. `webapp-config-4k58m279b9`) for predictable drill names. |
-| **Strategic Merge Patch** | `patches: [path: ...]` | Overlays changes (e.g. replica count, resources) directly into targeted resources. |
-| **JSON 6902 Patch** | `patch: [- op: replace, ...]` | Precise JSON patch for specific attribute modification. |
+| `resources:` | `[]string` | Resolves paths to baseline manifests (`deployment.yaml`) or base folders (`../../base`). |
+| `namespace:` | `string` | Sets the target namespace across all manifests in the overlay. |
+| `namePrefix:` | `string` | Prepends a prefix (e.g., `dev-`) to all resource names to prevent naming collisions. |
+| `nameSuffix:` | `string` | Appends a suffix (e.g., `-v1`) to all resource names (useful for blue-green releases). |
+| `commonAnnotations:` | `map[string]string` | Injects metadata annotations (`contact`, `team`) across all resources in the overlay. |
+| `labels:` (v5) | `[]Label` | Injects labels. Setting `includeSelectors: true` synchronizes deployment matchLabels. |
+| `configMapGenerator:` | `[]ConfigMapArgs` | Generates ConfigMaps from literals, key-value files (`files:`), or env-files (`envs:`). |
+| `secretGenerator:` | `[]SecretArgs` | Generates Secrets from literals, files, or env-files (`envs:`) with custom `type:`. |
+| `generatorOptions:` | `GeneratorOptions` | Tuning: `disableNameSuffixHash: true` disables random hash suffixes on generated names. |
+| `images:` | `[]Image` | Dynamically rewrites container image names, tags (`newTag:`), or digests without patches. |
+| `patches:` | `[]Patch` | Unified patching syntax supporting strategic merge files and targeted JSON 6902 rules. |
 
 ---
 
-## 3. How to Use the Examples
+## 3. Deep-Dive: Patching Taxonomy & Mechanics
+
+### A. Strategic Merge Patch (`path: patches/...`)
+
+Strategic merge patches overlay partial Kubernetes manifests onto targeted objects. Kubernetes knows the schema, so
+it replaces scalar values and merges maps automatically.
+
+- **File Reference**: `overlays/production/patches/patch-replicas-ha.yaml`
+- **Application**: Scales `spec.replicas` from 1 to 3 and tunes production CPU/Memory requests and limits.
+
+### B. JSON 6902 Patch: `op: replace`
+
+Modifies an existing field at an explicit JSON pointer path:
+
+```yaml
+- op: replace
+  path: /spec/template/spec/containers/0/resources/requests/memory
+  value: 32Mi
+```
+
+- **Targeting**: Modifies the first container (`containers/0`) memory request to 32Mi for minimal resource consumption.
+
+### C. JSON 6902 Patch: `op: remove`
+
+Deletes a field from the manifest:
+
+```yaml
+- op: remove
+  path: /spec/template/spec/containers/0/livenessProbe
+```
+
+- **Targeting**: Removes the baseline `livenessProbe` so development containers start instantly without restarts.
+
+### D. JSON 6902 Patch: `op: add` with Array Appending (`/-`)
+
+Appends a new element to an array without needing to know the current array length:
+
+```yaml
+- op: add
+  path: /spec/template/spec/containers/-
+  value:
+    name: log-shipper
+    image: registry.k8s.io/e2e-test-images/agnhost:2.40
+    args: ["netexec", "--http-port=8081"]
+```
+
+- **Path Syntax**: The `-` character in `/containers/-` instructs Kustomize to append the new container to the end
+  of the `containers` array, injecting an auxiliary sidecar without touching existing container definitions.
+- **Environment Variable Appending**: Similarly, `/env/-` appends new environment keys:
+
+  ```yaml
+  - op: add
+    path: /spec/template/spec/containers/0/env/-
+    value:
+      name: DB_TIMEOUT
+      value: "30s"
+  ```
+
+### E. Wildcard & LabelSelector Targeting
+
+Instead of hardcoding a resource `name:`, patches can target all resources of a specific `kind` matching a selector:
+
+```yaml
+patches:
+  - target:
+      kind: Deployment
+      labelSelector: "app.kubernetes.io/part-of=web-suite"
+    path: patches/patch-security-context.yaml
+```
+
+- **Behavior**: Injects `securityContext.runAsNonRoot: true` and `runAsUser: 10001` into every deployment in the
+  overlay marked with `app.kubernetes.io/part-of=web-suite`.
+
+---
+
+## 4. Resource Generators & Image Transformation
+
+### A. `configMapGenerator` with `envs:` and Merging
+
+The development overlay merges a baseline ConfigMap with an external env-file:
+
+```yaml
+configMapGenerator:
+  - name: webapp-config
+    behavior: merge
+    literals:
+      - APP_MSG=Development Sandbox Environment
+    files:
+      - dev-settings.properties
+    envs:
+      - dev-app.env
+```
+
+- `behavior: merge`: Overrides keys present in the base ConfigMap and appends new keys from literals, files, and envs.
+
+### B. `secretGenerator`
+
+Creates cluster Secrets from sensitive key-value files:
+
+```yaml
+secretGenerator:
+  - name: webapp-secret
+    behavior: merge
+    envs:
+      - prod-secrets.env
+    type: Opaque
+```
+
+- Encapsulates confidential parameters (`DB_PASSWORD`, `VAULT_TOKEN`) cleanly without storing base64 strings in git.
+
+### C. `images:` Transformer
+
+Rewrites container images across environments:
+
+```yaml
+images:
+  - name: registry.k8s.io/e2e-test-images/agnhost
+    newName: registry.k8s.io/e2e-test-images/agnhost
+    newTag: "2.43"
+```
+
+- Any container in the overlay using `agnhost` has its tag rewritten to `2.43` automatically.
+
+---
+
+## 5. Hands-on Execution & Verification
 
 ### Step 1: Inspect the Baseline
 
-View the untransformed base manifests:
+View untransformed baseline manifests:
 
 ```bash
+cd /home/vagrant/cka/09-kustomize
 kubectl kustomize base
 ```
 
-*Expected observation*: Generates `webapp-config`, `webapp-deployment` (1 replica, no prefix, default namespace), and
-`webapp-service`.
-
----
-
-### Step 2: Preview Overlays (Dry-Run / Client-Side)
-
-Before applying to the cluster, preview the output of any overlay using `kubectl kustomize`:
+### Step 2: Preview the Development Overlay
 
 ```bash
-# Preview Development Overlay
 kubectl kustomize overlays/development
+```
 
-# Key items to observe in development:
-# 1. Namespace is set to 'development' on all resources.
-# 2. Names are prefixed: 'dev-webapp-deployment', 'dev-webapp-config', 'dev-webapp-service'.
-# 3. 'webapp-config' contains merged values from base, literals, and dev-settings.properties.
-# 4. Deployment container memory request is patched to 32Mi.
+Key observations:
 
-# Preview Production Overlay
+1. `namePrefix: dev-`: Generates `dev-webapp-deployment`, `dev-webapp-config`, and `dev-webapp-secret`.
+1. `patch-memory-replace`: Memory request is scaled down to `32Mi`.
+1. `patch-remove-probe`: `livenessProbe` is stripped from the container definition.
+1. `envs: dev-app.env`: `DEV_FEATURE_DEBUG` and `DEV_LOG_LEVEL` are injected into `dev-webapp-config`.
+
+### Step 3: Preview the Production Overlay
+
+```bash
 kubectl kustomize overlays/production
-
-# Key items to observe in production:
-# 1. Names are prefixed with 'prod-'.
-# 2. Replicas are scaled from 1 to 3 via replica-patch.yaml.
-# 3. CPU/Memory requests and limits are configured for production load.
-# 4. ConfigMap contains production flags (FEATURE_ANALYTICS=true, CACHE_ENABLED=true).
 ```
 
----
+Key observations:
 
-### Step 3: Compare Overlays Against Base
+1. `namePrefix` & `nameSuffix`: Generates `prod-webapp-deployment-v1`.
+1. `images:`: Image tag is rewritten from `2.40` to `2.43`.
+1. `patch-replicas-ha`: Replicas scaled from 1 to 3.
+1. `patch-sidecar-add`: Two containers (`webapp` and `log-shipper`) exist in `spec.template.spec.containers`.
+1. `patch-security-context`: `runAsNonRoot: true` is injected into the pod spec.
 
-Use standard Unix diffing to visualize exact modifications applied by an overlay:
+### Step 4: Run Automated Verification Suite
+
+Run the non-interactive test runner to validate dry-run rendering and live deployment:
 
 ```bash
-diff -u <(kubectl kustomize base) <(kubectl kustomize overlays/development)
-diff -u <(kubectl kustomize base) <(kubectl kustomize overlays/production)
+./test-kustomize.sh
 ```
-
----
-
-### Step 4: Apply to Kubernetes Cluster
-
-Deploy either overlay using `kubectl apply -k`:
-
-```bash
-# Deploy development overlay
-kubectl apply -k overlays/development
-
-# Verify deployed resources in the development namespace
-kubectl get all,configmap -n development -l environment=development
-
-# Inspect the merged ConfigMap content
-kubectl describe configmap dev-webapp-config -n development
-
-# Test running Pod environment variables injected from ConfigMap
-DEV_POD=$(kubectl get pod -n development -l app.kubernetes.io/name=webapp -o jsonpath='{.items[0].metadata.name}')
-kubectl exec -n development "${DEV_POD}" -- env | grep -E '^(APP_|FEATURE_|DEV_)'
-```
-
----
-
-### Step 5: Test Production Overlay Deployment
-
-```bash
-# Deploy production overlay
-kubectl apply -k overlays/production
-
-# Verify 3 running replicas in default namespace
-kubectl get pods -n default -l environment=production
-
-# Inspect production ConfigMap
-kubectl describe configmap prod-webapp-config -n default
-```
-
----
-
-### Step 6: Cleanup
-
-Delete resources managed by the overlay using `kubectl delete -k`:
-
-```bash
-kubectl delete -k overlays/development
-kubectl delete -k overlays/production
-```
-
----
-
-## 4. Hands-on CKA Exam Practice Drills
-
-### Drill 1: Add a New ConfigMap Key via configMapGenerator
-
-1. Edit `overlays/development/kustomization.yaml`.
-1. Under `configMapGenerator[0].literals`, add `- NEW_FEATURE_ENABLED=true`.
-1. Run `kubectl kustomize overlays/development | grep -A 5 "data:"`.
-1. Verify the new key appears in the generated manifest.
-
-### Drill 2: Modify Resource Limits via Strategic Merge Patch
-
-1. Edit `overlays/production/replica-patch.yaml`.
-1. Change `replicas: 3` to `replicas: 5`.
-1. Increase memory limit to `512Mi`.
-1. Run `kubectl kustomize overlays/production | grep replicas:` to verify.
-
-### Drill 3: Enable Content Hash Suffixes
-
-1. Edit `overlays/development/kustomization.yaml`.
-1. Change `disableNameSuffixHash: true` to `disableNameSuffixHash: false` (or remove the line).
-1. Run `kubectl kustomize overlays/development`.
-1. Notice how `dev-webapp-config-<HASH>` is generated and how `dev-webapp-deployment` automatically updates its
-   `envFrom.configMapRef.name` to match the exact hash!

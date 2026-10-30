@@ -58,6 +58,8 @@ cka_lab_rbac_csr_expiration_seconds: 86400
 cka_lab_rbac_manual_dir: "{{ cka_lab_rbac_dir }}/manual-user"
 cka_lab_rbac_manual_user: "developer"
 cka_lab_rbac_manual_group: "developers"
+cka_lab_rbac_api_dir: "{{ cka_lab_rbac_dir }}/03-api-access"
+cka_lab_api_access_namespace: "finance-secure"
 
 # Scenario: secrets (Kubernetes Secrets Drill)
 # Reference: https://kubernetes.io/docs/concepts/configuration/secret/

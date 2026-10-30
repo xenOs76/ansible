@@ -1,0 +1,131 @@
+# Section 06: Pod Topology Spread Constraints (CKA)
+
+Practice even pod distribution across nodes and failure domains using `topologySpreadConstraints` to build resilient,
+highly available Kubernetes workloads.
+
+---
+
+## Official Exam References & Permitted Documentation
+
+- [Pod Topology Spread Constraints](https://kubernetes.io/docs/concepts/scheduling-eviction/topology-spread-constraints/) `[EXAM ALLOWED]`
+- [Assigning Pods to Nodes](https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/) `[EXAM ALLOWED]`
+
+### In-Exam Search Keywords
+
+- `"topology spread constraints"`
+- `"maxSkew"`
+- `"whenUnsatisfiable"`
+- `"matchLabelKeys"`
+
+### Terminal Fast Lookups
+
+```bash
+kubectl explain pod.spec.topologySpreadConstraints
+kubectl explain pod.spec.topologySpreadConstraints.matchLabelKeys
+kubectl explain pod.spec.topologySpreadConstraints.whenUnsatisfiable
+```
+
+---
+
+## 1. Core Mechanics & Mathematical Principles
+
+### The Skew Formula
+
+Kubernetes calculates topology skew using the formula:
+
+$$\text{Skew} = \text{Count}(\text{Target Topology}) - \text{Min}(\text{Count across all eligible topologies})$$
+
+- **`maxSkew`**: The maximum allowed difference in pod count between any two topology domains.
+- If `maxSkew: 1`, and `kube-worker-1` has 2 pods while `kube-worker-2` has 1 pod, the skew is $2 - 1 = 1$ (allowed).
+  Placing another pod on `kube-worker-1` would make the skew $3 - 1 = 2$, violating `maxSkew: 1`.
+
+### Key Configuration Directives
+
+| Field | Allowed Values | Purpose & Behavior |
+| :--- | :--- | :--- |
+| `topologyKey` | `kubernetes.io/hostname`, `topology.kubernetes.io/zone` | Defines domain boundaries for pod balancing. |
+| `maxSkew` | Positive integer (e.g., `1`, `2`) | Degree to which pods may be unevenly distributed. |
+| `whenUnsatisfiable` | `DoNotSchedule` or `ScheduleAnyway` | Action when placing a pod would exceed `maxSkew`. |
+| `labelSelector` | Standard label selector | Finds matching pods that count toward skew calculation. |
+| `matchLabelKeys` | `[]string` (e.g., `["pod-template-hash"]`) | Isolates pods during rolling updates (v1.27+ GA). |
+| `nodeAffinityPolicy` | `Honor` or `Ignore` | Determines whether node affinity affects topology domains. |
+| `nodeTaintsPolicy` | `Honor` or `Ignore` | Ignores tainted nodes from the minimum pod count baseline. |
+
+---
+
+## 2. Walkthrough Exercises
+
+### Exercise A: Hard Balancing (`whenUnsatisfiable: DoNotSchedule`)
+
+Deploy a 4-replica workload with hard skew enforcement:
+
+```bash
+cd {{ cka_lab_scheduling_dir }}/06-topology-spread
+kubectl apply -f topology-spread-hard.yaml
+
+# Verify exact 2-2 balance across worker nodes:
+kubectl get pods -l app=topology-spread-hard -o wide
+```
+
+### Exercise B: Simulating Skew Violation
+
+Cordon one of the worker nodes and scale up:
+
+```bash
+# 1. Prevent new pods from landing on kube-worker-2:
+kubectl cordon kube-worker-2
+
+# 2. Scale deployment to 5 replicas:
+kubectl scale deployment topology-spread-hard --replicas=5
+
+# 3. Observe the 5th pod:
+kubectl get pods -l app=topology-spread-hard
+
+# Notice: The 5th pod remains 'Pending'!
+# Reason: Placing it on kube-worker-1 would result in 3 pods on worker-1 and 2 on worker-2 (skew = 1),
+# but scaling to 6 replicas would violate maxSkew: 1 because worker-2 cannot accept new pods.
+kubectl describe pod -l app=topology-spread-hard | grep -E '(FailedScheduling|0/3 nodes are available)'
+
+# 4. Uncordon the worker node:
+kubectl uncordon kube-worker-2
+```
+
+### Exercise C: Soft Balancing (`whenUnsatisfiable: ScheduleAnyway`)
+
+Deploy with soft enforcement:
+
+```bash
+kubectl apply -f topology-spread-soft.yaml
+
+# Cordon worker-2 again and scale up:
+kubectl cordon kube-worker-2
+kubectl scale deployment topology-spread-soft --replicas=6
+
+# Notice: All pods transition to Running! The scheduler prefers even distribution,
+# but falls back to scheduling remaining pods on kube-worker-1 when worker-2 is unavailable.
+kubectl get pods -l app=topology-spread-soft -o wide
+
+kubectl uncordon kube-worker-2
+```
+
+### Exercise D: Rolling Updates with `matchLabelKeys`
+
+```bash
+kubectl apply -f topology-spread-rolling.yaml
+
+# Trigger a rolling update:
+kubectl set image deployment/topology-spread-rolling pause-workload=registry.k8s.io/pause:3.10
+
+# Observe that pods update smoothly without getting stuck due to old ReplicaSet pods skewing counts.
+kubectl rollout status deployment/topology-spread-rolling
+```
+
+---
+
+## 3. Automated Drill Verification
+
+Run the non-interactive automated test suite:
+
+```bash
+./test-topology-spread.sh
+```

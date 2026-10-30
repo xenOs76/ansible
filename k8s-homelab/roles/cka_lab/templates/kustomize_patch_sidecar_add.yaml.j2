@@ -1,0 +1,10 @@
+- op: add
+  path: /spec/template/spec/containers/-
+  value:
+    name: log-shipper
+    image: registry.k8s.io/e2e-test-images/agnhost:2.40
+    args: ["netexec", "--http-port=8081"]
+    resources:
+      requests:
+        cpu: 10m
+        memory: 16Mi

@@ -1,0 +1,172 @@
+# In-Pod Kubernetes API Server Interrogation & Resource Navigation
+
+Comprehensive hands-on guide for interrogating the Kubernetes API server directly from within a running pod or via
+`kubectl proxy`, navigating core and named API paths, inspecting resource payloads, and decoding secrets.
+
+---
+
+## 1. Overview & Mechanics
+
+Applications and controller agents running inside Kubernetes often need to inspect cluster state or read configuration
+and secrets without relying on an external `kubectl` binary. Kubernetes automatically provisions identities and
+certificates to pods for this purpose.
+
+### In-Pod Credential Projection
+
+Every container that runs in a pod with `automountServiceAccountToken: true` (the default) receives a projected volume
+mounted at `/var/run/secrets/kubernetes.io/serviceaccount/`:
+
+| File Path | Description | Usage in API Requests |
+| --- | --- | --- |
+| `token` | OIDC signed JWT bearer token representing the pod's ServiceAccount identity | `Authorization: Bearer <token>` |
+| `ca.crt` | Public CA certificate of the cluster's kube-apiserver | `curl --cacert /path/to/ca.crt ...` |
+| `namespace` | Text file containing the namespace where the pod was scheduled | Injected into scoped path URL |
+
+### API Server Address Resolution
+
+Inside the pod's network namespace, kube-apiserver can be addressed via:
+
+- **DNS**: `https://kubernetes.default.svc` or `https://kubernetes.default.svc.cluster.local`
+- **Environment Variables**: `https://${KUBERNETES_SERVICE_HOST}:${KUBERNETES_SERVICE_PORT}` (defaults to IP `10.96.0.1` and port `443`)
+
+---
+
+## 2. Kubernetes API Path Architecture
+
+The Kubernetes API is organized hierarchically into core and named API groups.
+
+### API Path Taxonomy
+
+```text
+https://kubernetes.default.svc/
+├── /api                          # Core (legacy) group discovery
+│   └── /v1                       # Core v1 (Pods, Secrets, ConfigMaps, Services, Nodes)
+│       ├── /nodes                # Cluster-scoped resources
+│       ├── /namespaces           # Cluster-scoped namespaces
+│       └── /namespaces/{ns}/     # Namespace-scoped resources
+│           ├── /secrets          # List secrets in namespace
+│           ├── /secrets/{name}   # Get specific secret
+│           ├── /configmaps       # List configmaps in namespace
+│           └── /pods             # List pods in namespace
+└── /apis                         # Named API groups discovery
+    ├── /apps/v1                  # Deployments, StatefulSets, DaemonSets
+    │   └── /namespaces/{ns}/deployments
+    ├── /batch/v1                 # Jobs, CronJobs
+    │   └── /namespaces/{ns}/jobs
+    └── /rbac.authorization.k8s.io/v1  # Roles, ClusterRoles
+        └── /namespaces/{ns}/roles
+```
+
+### URL Mapping Comparison
+
+| Resource Type | API Group & Version | Resource Path Pattern | Example URL |
+| --- | --- | --- | --- |
+| Namespaces | Core (`""`), `v1` | `/api/v1/namespaces` | `/api/v1/namespaces` |
+| Secrets | Core (`""`), `v1` | `/api/v1/namespaces/{ns}/secrets` | `/api/v1/namespaces/finance-secure/secrets` |
+| ConfigMaps | Core (`""`), `v1` | `/api/v1/namespaces/{ns}/configmaps` | `/api/v1/namespaces/finance-secure/configmaps` |
+| Pods | Core (`""`), `v1` | `/api/v1/namespaces/{ns}/pods` | `/api/v1/namespaces/default/pods` |
+| Deployments | `apps`, `v1` | `/apis/apps/v1/namespaces/{ns}/deployments` | `/apis/apps/v1/namespaces/prod/deployments` |
+| Jobs | `batch`, `v1` | `/apis/batch/v1/namespaces/{ns}/jobs` | `/apis/batch/v1/namespaces/prod/jobs` |
+
+---
+
+## 3. Step-by-Step Hands-On Walkthrough
+
+### Step 1: Deploy Namespace, RBAC, Data, and Inspector Pod
+
+```bash
+cd {{ cka_lab_rbac_dir }}/03-api-access
+kubectl apply -f 01-rbac.yaml
+kubectl apply -f 02-sample-data.yaml
+kubectl apply -f 03-inspector-pod.yaml
+
+kubectl wait --for=condition=Ready pod/api-inspector -n {{ cka_lab_api_access_namespace | default('finance-secure') }} --timeout=60s
+```
+
+### Step 2: Query API Server from Within the Inspector Pod
+
+Access the shell of the inspector pod using the helper script or raw `kubectl exec`:
+
+```bash
+kubectl exec -it api-inspector -n {{ cka_lab_api_access_namespace | default('finance-secure') }} -- sh
+```
+
+Inside the pod shell, set up convenient helper variables:
+
+```sh
+APISERVER="https://kubernetes.default.svc"
+SERVICEACCOUNT="/var/run/secrets/kubernetes.io/serviceaccount"
+NAMESPACE=$(cat "${SERVICEACCOUNT}/namespace")
+TOKEN=$(cat "${SERVICEACCOUNT}/token")
+CACERT="${SERVICEACCOUNT}/ca.crt"
+
+# 1. Discover available API endpoints
+curl --cacert "${CACERT}" --header "Authorization: Bearer ${TOKEN}" -X GET "${APISERVER}/api/v1"
+
+# 2. Query target secret
+curl --cacert "${CACERT}" --header "Authorization: Bearer ${TOKEN}" -X GET \
+  "${APISERVER}/api/v1/namespaces/${NAMESPACE}/secrets/db-credentials" > /tmp/secret.json
+
+cat /tmp/secret.json
+```
+
+### Step 3: Extract and Decode Base64 Secrets
+
+Kubernetes API returns secret payloads inside `.data` encoded as base64 strings:
+
+```sh
+# Extract base64 database.url
+grep -o '"database.url": *"[^"]*"' /tmp/secret.json
+
+# Decode directly
+echo "cG9zdGdyZXM6Ly9kYi5wcml2Lm9zNzYueHl6OjU0MzIvZmluYW5jZQ==" | base64 -d
+# Output: postgres://db.priv.os76.xyz:5432/finance
+```
+
+### Step 4: Verify RBAC Boundaries (403 Forbidden)
+
+The `api-explorer` ServiceAccount only has `get` and `list` permissions for `secrets` and `configmaps` in
+`finance-secure`. Querying unauthorized resources returns `HTTP 403 Forbidden`:
+
+```sh
+# Unauthorized resource in same namespace: pods
+curl -s -w "\nHTTP: %{http_code}\n" --cacert "${CACERT}" --header "Authorization: Bearer ${TOKEN}" \
+  "${APISERVER}/api/v1/namespaces/${NAMESPACE}/pods"
+# Response: HTTP 403 Forbidden
+
+# Unauthorized cross-namespace access: default secrets
+curl -s -w "\nHTTP: %{http_code}\n" --cacert "${CACERT}" --header "Authorization: Bearer ${TOKEN}" \
+  "${APISERVER}/api/v1/namespaces/default/secrets"
+# Response: HTTP 403 Forbidden
+
+exit
+```
+
+---
+
+## 4. Alternative Exploration via `kubectl proxy`
+
+Outside of pods, you can explore the exact same API tree from your workstation without passing tokens manually by
+launching a local reverse proxy:
+
+```bash
+# Start proxy in background
+kubectl proxy --port=8001 &
+PROXY_PID=$!
+
+# Explore core API and namespaces directly over HTTP
+curl -s http://localhost:8001/api/v1/namespaces/{{ cka_lab_api_access_namespace | default('finance-secure') }}/secrets/db-credentials | jq .data
+
+# Terminate proxy when finished
+kill "${PROXY_PID}"
+```
+
+---
+
+## 5. Automated Validation
+
+Execute the automated test script to verify token discovery, secret extraction, and RBAC rejection:
+
+```bash
+./test-api-access.sh
+```

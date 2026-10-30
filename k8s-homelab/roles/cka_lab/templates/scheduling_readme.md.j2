@@ -21,6 +21,9 @@ hardware topology, operational isolation policies, and workload priority:
   request/limit injection and boundary enforcement.
 - **Section 5: PriorityClass & Preemption**: Prioritizing mission-critical workloads and configuring preemption policies
   when node compute is contended.
+- **Section 6: Pod Topology Spread Constraints**: Fine-grained distribution across failure domains
+  (`topologyKey: kubernetes.io/hostname`), strict `maxSkew` enforcement, `DoNotSchedule` vs `ScheduleAnyway`, and
+  `matchLabelKeys` for rolling updates.
 
 ### Scenario Directory Structure
 
@@ -46,11 +49,17 @@ hardware topology, operational isolation policies, and workload priority:
 │   ├── cka-lab-limit-range.yaml               # Default injection and min/max boundaries
 │   ├── cka-lab-oversized-pod.yaml             # Oversized Pod violating LimitRange max limit
 │   └── test-quotas.sh                         # Admission rejection verification
-└── 05-priority-preemption/                    # Section 5: PriorityClass & Preemption
-    ├── 01-priority-classes.yaml               # High and low PriorityClass definitions
-    ├── 02-preemption-workloads.yaml           # Workloads with priorityClassName
-    ├── test-preemption.sh                     # Non-interactive preemption test
-    └── README.md                              # Preemption and eviction guide
+├── 05-priority-preemption/                    # Section 5: PriorityClass & Preemption
+│   ├── 01-priority-classes.yaml               # High and low PriorityClass definitions
+│   ├── 02-preemption-workloads.yaml           # Workloads with priorityClassName
+│   ├── test-preemption.sh                     # Non-interactive preemption test
+│   └── README.md                              # Preemption and eviction guide
+└── 06-topology-spread/                        # Section 6: Topology Spread Constraints
+    ├── 01-hard-spread.yaml                    # DoNotSchedule hard skew enforcement
+    ├── 02-soft-spread.yaml                    # ScheduleAnyway best-effort spread
+    ├── 03-rolling-spread.yaml                 # matchLabelKeys rolling update spread
+    ├── test-topology-spread.sh                # Non-interactive spread verification
+    └── README.md                              # In-depth topology spread guide
 ```
 
 ---
@@ -65,6 +74,7 @@ hardware topology, operational isolation policies, and workload priority:
 - **Resource Quotas**: [Resource Quotas](https://kubernetes.io/docs/concepts/policy/resource-quotas/) `[EXAM ALLOWED]`
 - **Limit Ranges**: [Limit Ranges](https://kubernetes.io/docs/concepts/policy/limit-range/) `[EXAM ALLOWED]`
 - **Pod Priority & Preemption**: [Pod Priority and Preemption](https://kubernetes.io/docs/concepts/scheduling-eviction/pod-priority-preemption/) `[EXAM ALLOWED]`
+- **Topology Spread Constraints**: [Pod Topology Spread Constraints](https://kubernetes.io/docs/concepts/scheduling-eviction/topology-spread-constraints/) `[EXAM ALLOWED]`
 
 ### In-Exam Search Keywords
 >
@@ -77,6 +87,7 @@ hardware topology, operational isolation policies, and workload priority:
 - `"resource quota"`
 - `"limit range"`
 - `"priority class"`
+- `"topology spread constraints"`
 
 ### Terminal Fast Lookups (`kubectl explain`)
 
@@ -85,6 +96,7 @@ hardware topology, operational isolation policies, and workload priority:
 kubectl explain pod.spec.tolerations
 kubectl explain pod.spec.affinity.nodeAffinity
 kubectl explain pod.spec.affinity.podAntiAffinity
+kubectl explain pod.spec.topologySpreadConstraints
 kubectl explain quota.spec.hard
 kubectl explain limitrange.spec.limits
 kubectl explain priorityclass
@@ -569,9 +581,65 @@ kubectl delete -f 01-priority-classes.yaml
 
 ---
 
+### Drill 6: Pod Topology Spread Constraints (`06-topology-spread/`)
+
+Distribute pods evenly across nodes or failure domains to guarantee high availability and fault isolation.
+
+#### Core Concepts
+
+- **`topologyKey`**: The node label key defining topology domains (e.g. `kubernetes.io/hostname` or
+  `topology.kubernetes.io/zone`).
+- **`maxSkew`**: Maximum permissible difference in matching pod count between any two topology domains.
+- **`whenUnsatisfiable`**:
+  - `DoNotSchedule` (hard constraint): Demands that kube-scheduler leaves pods in `Pending` state if placement
+    would exceed `maxSkew`.
+  - `ScheduleAnyway` (soft constraint): Gives higher priority to nodes that reduce skew while permitting pods to
+    schedule even if skew cannot be satisfied.
+- **`matchLabelKeys`**: Dynamic label keys (such as `pod-template-hash`) automatically scoped to the rolling deployment
+  revision so terminating pods from older revisions do not distort skew calculations.
+
+#### Step 1: Deploy Hard Spread Workload (DoNotSchedule)
+
+```bash
+cd {{ cka_lab_scheduling_dir }}/06-topology-spread
+kubectl apply -f 01-hard-spread.yaml
+
+kubectl rollout status deployment/web-spread-hard --timeout=60s
+kubectl get pods -l app=web-spread-hard -o wide
+```
+
+Observe that 4 replicas distribute evenly across `kube-worker-1` and `kube-worker-2` (2 replicas on each node).
+
+#### Step 2: Deploy Soft Spread Workload (ScheduleAnyway)
+
+```bash
+kubectl apply -f 02-soft-spread.yaml
+
+kubectl rollout status deployment/web-spread-soft --timeout=60s
+kubectl get pods -l app=web-spread-soft -o wide
+```
+
+#### Step 3: Deploy Rolling Update Workload with matchLabelKeys
+
+```bash
+kubectl apply -f 03-rolling-spread.yaml
+
+kubectl rollout status deployment/web-spread-rolling --timeout=60s
+kubectl get pods -l app=web-spread-rolling -o wide
+```
+
+#### Step 4: Clean Up and Run Drill Verification
+
+```bash
+kubectl delete -f 01-hard-spread.yaml -f 02-soft-spread.yaml -f 03-rolling-spread.yaml
+./test-topology-spread.sh
+```
+
+---
+
 ## 4. Automated Validation
 
-Execute the master non-interactive verification suite to validate all 5 scheduling drills end-to-end:
+Execute the master non-interactive verification suite to validate all 6 scheduling drills end-to-end:
 
 ```bash
 {{ cka_lab_scheduling_dir }}/test-scheduling-drills.sh

@@ -155,6 +155,11 @@ A master navigation guide is generated at `/home/vagrant/cka/README.md` and styl
        (`cleanup-manual-user.sh`).
   1. **ServiceAccount Token & RBAC Scenarios**:
      - Dedicated ServiceAccount RBAC guide at `/home/vagrant/cka/rbac/serviceaccounts/README.md`.
+  1. **In-Pod API Server Interrogation (`03-api-access/`)**:
+     - Hands-on querying of kube-apiserver from within a pod using projected ServiceAccount credentials
+       (`/var/run/secrets/kubernetes.io/serviceaccount/`).
+     - Core and named API path navigation (`/api/v1/namespaces/{ns}/secrets`), base64 payload decoding, and RBAC
+       rejection verification (`test-api-access.sh`).
 
 ### Scenario 2: Sample Secrets across Namespaces (`secrets`)
 
@@ -225,11 +230,12 @@ A master navigation guide is generated at `/home/vagrant/cka/README.md` and styl
        `nginx-dev.conf`.
     3. `dev-system-config`: Development immutable ConfigMap (`immutable: true`) defining sandbox baseline endpoints.
   - **Kustomize Practice Environment**:
-    - `kustomize/base/`: Base deployment, service, and `webapp-config` ConfigMap.
-    - `kustomize/overlays/development/`: ConfigMapGenerator with `behavior: merge`, file sources
-      (`dev-settings.properties`), and resource patch.
-    - `kustomize/overlays/production/`: ConfigMapGenerator with production literals and strategic merge patch for
-      replicas.
+    - `kustomize/base/`: Base deployment, service, `webapp-config` ConfigMap, and `webapp-secret` Secret.
+    - `kustomize/overlays/development/`: `configMapGenerator`, `secretGenerator` from key-value `.env` files,
+      `commonAnnotations`, and JSON 6902 RFC 6902 patches (`replace` memory, `remove` probe).
+    - `kustomize/overlays/production/`: `nameSuffix`, `images` transformer (tag and digest override),
+      `secretGenerator`, strategic merge patching for replicas, JSON 6902 `add` for sidecar containers and env
+      variables, and label-targeted patches.
 - **Artifacts**:
   - Combined manifest: `/home/vagrant/cka/configmaps/sample-configmaps.yaml`
   - Individual ConfigMap files: `/home/vagrant/cka/configmaps/default/` and `/home/vagrant/cka/configmaps/development/`
@@ -455,8 +461,9 @@ A master navigation guide is generated at `/home/vagrant/cka/README.md` and styl
   - [Resource Quotas](https://kubernetes.io/docs/concepts/policy/resource-quotas/) `[EXAM ALLOWED]`
   - [Limit Ranges](https://kubernetes.io/docs/concepts/policy/limit-range/) `[EXAM ALLOWED]`
   - [Pod Priority and Preemption](https://kubernetes.io/docs/concepts/scheduling-eviction/pod-priority-preemption/) `[EXAM ALLOWED]`
+  - [Pod Topology Spread Constraints](https://kubernetes.io/docs/concepts/scheduling-eviction/topology-spread-constraints/) `[EXAM ALLOWED]`
 - **In-Exam Search Keywords**: `"taints and tolerations"`, `"node affinity"`, `"pod anti affinity"`, `"horizontal pod
-  autoscaler"`, `"resource quota"`, `"limit range"`, `"priority class"`
+  autoscaler"`, `"resource quota"`, `"limit range"`, `"priority class"`, `"topology spread constraints"`
 - **Fast Terminal Lookups**:
 
   ```bash
@@ -465,6 +472,7 @@ A master navigation guide is generated at `/home/vagrant/cka/README.md` and styl
   kubectl explain pod.spec.tolerations
   kubectl explain pod.spec.affinity.nodeAffinity
   kubectl explain pod.spec.affinity.podAntiAffinity
+  kubectl explain pod.spec.topologySpreadConstraints
   kubectl explain quota.spec.hard
   kubectl explain limitrange.spec.limits
   ```
@@ -481,6 +489,9 @@ A master navigation guide is generated at `/home/vagrant/cka/README.md` and styl
      limit/request injection via `LimitRange`.
   1. **PriorityClasses & Preemption (`05-priority-preemption/`)**: Priority classes, `preemptionPolicy`, and scheduler
      eviction under resource exhaustion.
+  1. **Pod Topology Spread Constraints (`06-topology-spread/`)**: Fine-grained distribution across failure domains
+     (`topologyKey: kubernetes.io/hostname`), strict `maxSkew` enforcement, `DoNotSchedule` vs `ScheduleAnyway`, and
+     `matchLabelKeys` for rolling updates.
 - **Artifacts**:
   - Scheduling drill directory: `/home/vagrant/cka/scheduling/`
   - Automated test suite: `test-scheduling-drills.sh`

@@ -1,0 +1,25 @@
+---
+# ==============================================================================
+# In-Pod API Server Interrogation: Inspector Pod
+# Uses curl to query the API server with mounted ServiceAccount credentials.
+# ==============================================================================
+apiVersion: v1
+kind: Pod
+metadata:
+  name: api-inspector
+  namespace: {{ cka_lab_api_access_namespace | default('finance-secure') }}
+  labels:
+    app: api-inspector
+spec:
+  serviceAccountName: api-explorer
+  containers:
+    - name: curl
+      image: curlimages/curl:8.5.0
+      command: ["sleep", "3600"]
+      resources:
+        requests:
+          cpu: 50m
+          memory: 64Mi
+        limits:
+          cpu: 200m
+          memory: 128Mi

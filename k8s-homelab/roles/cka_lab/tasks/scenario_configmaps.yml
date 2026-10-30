@@ -16,7 +16,9 @@
     - "{{ cka_lab_configmaps_dir }}/04-immutability-drill"
     - "{{ cka_lab_kustomize_dir }}/base"
     - "{{ cka_lab_kustomize_dir }}/overlays/development"
+    - "{{ cka_lab_kustomize_dir }}/overlays/development/patches"
     - "{{ cka_lab_kustomize_dir }}/overlays/production"
+    - "{{ cka_lab_kustomize_dir }}/overlays/production/patches"
   tags:
     - cka_lab
     - configmaps
@@ -89,17 +91,27 @@
     dest: "{{ cka_lab_kustomize_dir }}/{{ item.dest }}"
     owner: "{{ ansible_user | default('vagrant') }}"
     group: "{{ ansible_user | default('vagrant') }}"
-    mode: "0644"
+    mode: "{{ item.mode | default('0644') }}"
   loop:
-    - {src: "kustomize_readme.md.j2", dest: "README.md"}
-    - {src: "kustomize_base_kustomization.yaml.j2", dest: "base/kustomization.yaml"}
-    - {src: "kustomize_base_configmap.yaml.j2", dest: "base/configmap.yaml"}
-    - {src: "kustomize_base_deployment.yaml.j2", dest: "base/deployment.yaml"}
-    - {src: "kustomize_base_service.yaml.j2", dest: "base/service.yaml"}
-    - {src: "kustomize_overlay_dev_kustomization.yaml.j2", dest: "overlays/development/kustomization.yaml"}
-    - {src: "kustomize_overlay_dev_settings.properties.j2", dest: "overlays/development/dev-settings.properties"}
-    - {src: "kustomize_overlay_prod_kustomization.yaml.j2", dest: "overlays/production/kustomization.yaml"}
-    - {src: "kustomize_overlay_prod_replica_patch.yaml.j2", dest: "overlays/production/replica-patch.yaml"}
+    - {src: "kustomize_readme.md.j2", dest: "README.md", mode: "0644"}
+    - {src: "kustomize_test_drills.sh.j2", dest: "test-kustomize.sh", mode: "0755"}
+    - {src: "kustomize_base_kustomization.yaml.j2", dest: "base/kustomization.yaml", mode: "0644"}
+    - {src: "kustomize_base_configmap.yaml.j2", dest: "base/configmap.yaml", mode: "0644"}
+    - {src: "kustomize_base_secret.yaml.j2", dest: "base/secret.yaml", mode: "0644"}
+    - {src: "kustomize_base_deployment.yaml.j2", dest: "base/deployment.yaml", mode: "0644"}
+    - {src: "kustomize_base_service.yaml.j2", dest: "base/service.yaml", mode: "0644"}
+    - {src: "kustomize_overlay_dev_kustomization.yaml.j2", dest: "overlays/development/kustomization.yaml", mode: "0644"}
+    - {src: "kustomize_overlay_dev_settings.properties.j2", dest: "overlays/development/dev-settings.properties", mode: "0644"}
+    - {src: "kustomize_overlay_dev_app_env.j2", dest: "overlays/development/dev-app.env", mode: "0644"}
+    - {src: "kustomize_overlay_dev_secrets_env.j2", dest: "overlays/development/dev-secrets.env", mode: "0644"}
+    - {src: "kustomize_patch_memory_replace.yaml.j2", dest: "overlays/development/patches/patch-memory-replace.yaml", mode: "0644"}
+    - {src: "kustomize_patch_remove_probe.yaml.j2", dest: "overlays/development/patches/patch-remove-probe.yaml", mode: "0644"}
+    - {src: "kustomize_overlay_prod_kustomization.yaml.j2", dest: "overlays/production/kustomization.yaml", mode: "0644"}
+    - {src: "kustomize_overlay_prod_secrets_env.j2", dest: "overlays/production/prod-secrets.env", mode: "0644"}
+    - {src: "kustomize_patch_replicas_ha.yaml.j2", dest: "overlays/production/patches/patch-replicas-ha.yaml", mode: "0644"}
+    - {src: "kustomize_patch_sidecar_add.yaml.j2", dest: "overlays/production/patches/patch-sidecar-add.yaml", mode: "0644"}
+    - {src: "kustomize_patch_env_add.yaml.j2", dest: "overlays/production/patches/patch-env-add.yaml", mode: "0644"}
+    - {src: "kustomize_patch_security_context.yaml.j2", dest: "overlays/production/patches/patch-security-context.yaml", mode: "0644"}
   loop_control:
     label: "kustomize/{{ item.dest }}"
   tags:

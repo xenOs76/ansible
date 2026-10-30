@@ -13,6 +13,7 @@
     - "{{ cka_lab_scheduling_dir }}/03-hpa-autoscaling"
     - "{{ cka_lab_scheduling_dir }}/04-quotas-limits"
     - "{{ cka_lab_scheduling_dir }}/05-priority-preemption"
+    - "{{ cka_lab_scheduling_dir }}/06-topology-spread"
   tags:
     - cka_lab
     - scheduling
@@ -20,6 +21,7 @@
     - affinity
     - hpa
     - quota
+    - topology_spread
 
 - name: Render CKA scheduling drill manifests and guides
   ansible.builtin.template:
@@ -49,6 +51,11 @@
     - {src: "scheduling_05_priority_classes.yaml.j2", dest: "05-priority-preemption/01-priority-classes.yaml"}
     - {src: "scheduling_05_workloads.yaml.j2", dest: "05-priority-preemption/02-preemption-workloads.yaml"}
     - {src: "scheduling_05_test_preemption.sh.j2", dest: "05-priority-preemption/test-preemption.sh", mode: "0755"}
+    - {src: "scheduling_06_guide.md.j2", dest: "06-topology-spread/README.md", mode: "0644"}
+    - {src: "scheduling_06_topology_spread_hard.yaml.j2", dest: "06-topology-spread/01-hard-spread.yaml"}
+    - {src: "scheduling_06_topology_spread_soft.yaml.j2", dest: "06-topology-spread/02-soft-spread.yaml"}
+    - {src: "scheduling_06_topology_spread_rolling.yaml.j2", dest: "06-topology-spread/03-rolling-spread.yaml"}
+    - {src: "scheduling_06_test_topology_spread.sh.j2", dest: "06-topology-spread/test-topology-spread.sh", mode: "0755"}
   loop_control:
     label: "scheduling/{{ item.dest }}"
   tags:
@@ -58,3 +65,4 @@
     - affinity
     - hpa
     - quota
+    - topology_spread

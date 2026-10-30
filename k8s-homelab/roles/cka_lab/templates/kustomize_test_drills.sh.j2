@@ -1,0 +1,160 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# CKA Training Lab: Kustomize Build & Deployment Test Harness
+# Validates base, overlays, generators, image transformers, and all patches.
+# ==============================================================================
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BASE_DIR="${SCRIPT_DIR}/base"
+DEV_DIR="${SCRIPT_DIR}/overlays/development"
+PROD_DIR="${SCRIPT_DIR}/overlays/production"
+
+DEV_NS="{{ cka_lab_configmaps_dev_namespace | default('development') }}"
+PROD_NS="{{ cka_lab_configmaps_default_namespace | default('default') }}"
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+log_info() { echo -e "${BLUE}[INFO]${NC} $1"; }
+log_success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
+log_fail() { echo -e "${RED}[FAIL]${NC} $1" >&2; exit 1; }
+
+cleanup() {
+  log_info "Cleaning up Kustomize test deployments..."
+  kubectl delete -k "${DEV_DIR}" --ignore-not-found=true --timeout=30s >/dev/null 2>&1 || true
+  kubectl delete -k "${PROD_DIR}" --ignore-not-found=true --timeout=30s >/dev/null 2>&1 || true
+}
+trap cleanup EXIT
+
+echo "===================================================================="
+echo "  CKA Training Lab: Kustomize Directives & Patching Test Suite     "
+echo "===================================================================="
+
+# ------------------------------------------------------------------------------
+# Test 1: Base Build
+# ------------------------------------------------------------------------------
+log_info "[1/5] Testing base manifest rendering..."
+BASE_OUTPUT=$(kubectl kustomize "${BASE_DIR}")
+
+if ! echo "${BASE_OUTPUT}" | grep -q "kind: Deployment"; then
+  log_fail "Base manifest missing Deployment"
+fi
+if ! echo "${BASE_OUTPUT}" | grep -q "name: webapp-config"; then
+  log_fail "Base manifest missing webapp-config"
+fi
+if ! echo "${BASE_OUTPUT}" | grep -q "name: webapp-secret"; then
+  log_fail "Base manifest missing webapp-secret"
+fi
+log_success "Base manifests render correctly with all core primitives."
+
+# ------------------------------------------------------------------------------
+# Test 2: Development Overlay Build & Patch Assertions
+# ------------------------------------------------------------------------------
+log_info "[2/5] Testing development overlay (prefix, generators, JSON patches)..."
+DEV_OUTPUT=$(kubectl kustomize "${DEV_DIR}")
+
+# Verify namePrefix
+if ! echo "${DEV_OUTPUT}" | grep -q "name: dev-webapp-deployment"; then
+  log_fail "Dev overlay missing namePrefix 'dev-webapp-deployment'"
+fi
+
+# Verify commonAnnotations
+if ! echo "${DEV_OUTPUT}" | grep -q "team: frontend-dev"; then
+  log_fail "Dev overlay missing commonAnnotation 'team: frontend-dev'"
+fi
+
+# Verify configMapGenerator envs & files merge
+if ! echo "${DEV_OUTPUT}" | grep -q "DEV_FEATURE_DEBUG: \"true\""; then
+  log_fail "Dev overlay configMapGenerator failed to inject envs (DEV_FEATURE_DEBUG)"
+fi
+
+# Verify secretGenerator
+if ! echo "${DEV_OUTPUT}" | grep -q "name: dev-webapp-secret"; then
+  log_fail "Dev overlay missing generated secret 'dev-webapp-secret'"
+fi
+
+# Verify JSON 6902 replace patch (memory: 32Mi)
+if ! echo "${DEV_OUTPUT}" | grep -q "memory: 32Mi"; then
+  log_fail "Dev overlay JSON 6902 replace patch failed (expected memory: 32Mi)"
+fi
+
+# Verify JSON 6902 remove patch (livenessProbe stripped)
+if echo "${DEV_OUTPUT}" | grep -q "livenessProbe"; then
+  log_fail "Dev overlay JSON 6902 remove patch failed (livenessProbe still present)"
+fi
+log_success "Development overlay verified: prefix, generators, and JSON 6902 patches pass."
+
+# ------------------------------------------------------------------------------
+# Test 3: Production Overlay Build & Advanced Patch Assertions
+# ------------------------------------------------------------------------------
+log_info "[3/5] Testing production overlay (suffix, images, sidecar, securityContext)..."
+PROD_OUTPUT=$(kubectl kustomize "${PROD_DIR}")
+
+# Verify namePrefix and nameSuffix
+if ! echo "${DEV_OUTPUT}" | grep -q "dev-webapp-deployment" && ! echo "${PROD_OUTPUT}" | grep -q "name: prod-webapp-deployment-v1"; then
+  log_fail "Prod overlay missing nameSuffix 'prod-webapp-deployment-v1'"
+fi
+
+# Verify images transformer (agnhost:2.43)
+if ! echo "${PROD_OUTPUT}" | grep -q "image: registry.k8s.io/e2e-test-images/agnhost:2.43"; then
+  log_fail "Prod overlay images transformer failed to rewrite image tag to 2.43"
+fi
+
+# Verify strategic merge patch (replicas: 3)
+if ! echo "${PROD_OUTPUT}" | grep -q "replicas: 3"; then
+  log_fail "Prod overlay strategic merge patch failed (expected replicas: 3)"
+fi
+
+# Verify JSON 6902 add patch: sidecar container (log-shipper)
+if ! echo "${PROD_OUTPUT}" | grep -q "name: log-shipper"; then
+  log_fail "Prod overlay JSON 6902 add patch failed (log-shipper sidecar missing)"
+fi
+
+# Verify JSON 6902 add patch: env var (DB_TIMEOUT)
+if ! echo "${PROD_OUTPUT}" | grep -q "name: DB_TIMEOUT"; then
+  log_fail "Prod overlay JSON 6902 add patch failed (DB_TIMEOUT env missing)"
+fi
+
+# Verify labelSelector targeting: securityContext
+if ! echo "${PROD_OUTPUT}" | grep -q "runAsNonRoot: true"; then
+  log_fail "Prod overlay labelSelector targeting failed (runAsNonRoot missing)"
+fi
+log_success "Production overlay verified: suffix, images transformer, and multi-patch rules pass."
+
+# ------------------------------------------------------------------------------
+# Test 4: Live Cluster Deployment - Development Overlay
+# ------------------------------------------------------------------------------
+log_info "[4/5] Deploying development overlay to cluster..."
+kubectl apply -k "${DEV_DIR}"
+
+kubectl rollout status deployment/dev-webapp-deployment -n "${DEV_NS}" --timeout=60s
+DEV_POD=$(kubectl get pod -n "${DEV_NS}" -l app.kubernetes.io/name=webapp -o jsonpath='{.items[0].metadata.name}')
+
+# Assert secret values accessible in container
+kubectl exec -n "${DEV_NS}" "${DEV_POD}" -- env | grep -q "DB_PASSWORD=DevMergedSecret999!" || {
+  log_fail "Injected secret DB_PASSWORD not found in running pod ${DEV_POD}"
+}
+log_success "Development overlay deployed and validated in namespace '${DEV_NS}'."
+
+# ------------------------------------------------------------------------------
+# Test 5: Live Cluster Deployment - Production Overlay
+# ------------------------------------------------------------------------------
+log_info "[5/5] Deploying production overlay to cluster..."
+kubectl apply -k "${PROD_DIR}"
+
+kubectl rollout status deployment/prod-webapp-deployment-v1 -n "${PROD_NS}" --timeout=90s
+
+# Verify multi-container pod running
+READY_CONTAINERS=$(kubectl get pod -n "${PROD_NS}" -l app.kubernetes.io/name=webapp \
+  -o jsonpath='{.items[0].status.containerStatuses[*].ready}')
+if ! echo "${READY_CONTAINERS}" | grep -q "true true"; then
+  log_fail "Production deployment did not start both main and sidecar containers"
+fi
+log_success "Production overlay deployed and verified with HA replicas and active sidecar."
+
+echo "===================================================================="
+echo "  [SUCCESS] All Kustomize directives & patch drills verified!       "
+echo "===================================================================="

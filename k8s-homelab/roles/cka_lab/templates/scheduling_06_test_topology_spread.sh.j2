@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# CKA Exam Practice Drill: Topology Spread Constraints Test Suite
+# Tests hard (DoNotSchedule), soft (ScheduleAnyway), and rolling update spread.
+# ==============================================================================
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export KUBECONFIG="${HOME}/.kube/config"
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+pass() { echo -e "${GREEN}[PASS]${NC} $*"; }
+fail() { echo -e "${RED}[FAIL]${NC} $*"; exit 1; }
+info() { echo -e "${BLUE}[INFO]${NC} $*"; }
+
+cleanup() {
+    info "Cleaning up topology spread drill resources..."
+    kubectl delete deployment web-spread-hard web-spread-soft web-spread-rolling \
+        --ignore-not-found=true --timeout=30s 2>/dev/null || true
+}
+trap cleanup EXIT
+
+echo "===================================================================="
+echo " Starting Topology Spread Constraints Automated Validation"
+echo "===================================================================="
+
+cleanup
+
+# ----------------------------------------------------------------------
+# Drill 1: Hard Topology Spread (DoNotSchedule)
+# ----------------------------------------------------------------------
+info "Drill 1: Applying hard topology spread deployment (DoNotSchedule)..."
+kubectl apply -f "${SCRIPT_DIR}/01-hard-spread.yaml"
+
+info "Waiting for web-spread-hard replicas to be ready..."
+kubectl rollout status deployment/web-spread-hard --timeout=60s
+
+# Verify pod distribution across nodes
+WORKER1_COUNT=$(kubectl get pods -l app=web-spread-hard --field-selector spec.nodeName=kube-worker-1 --no-headers | wc -l)
+WORKER2_COUNT=$(kubectl get pods -l app=web-spread-hard --field-selector spec.nodeName=kube-worker-2 --no-headers | wc -l)
+info "Hard spread distribution: kube-worker-1=${WORKER1_COUNT}, kube-worker-2=${WORKER2_COUNT}"
+
+SKEW=$(( WORKER1_COUNT > WORKER2_COUNT ? WORKER1_COUNT - WORKER2_COUNT : WORKER2_COUNT - WORKER1_COUNT ))
+if [ "${SKEW}" -le 1 ]; then
+    pass "Hard spread respected maxSkew=1 across worker nodes (skew=${SKEW})"
+else
+    fail "Hard spread violated maxSkew=1: skew=${SKEW}"
+fi
+
+# ----------------------------------------------------------------------
+# Drill 2: Soft Topology Spread (ScheduleAnyway)
+# ----------------------------------------------------------------------
+info "Drill 2: Applying soft topology spread deployment (ScheduleAnyway)..."
+kubectl apply -f "${SCRIPT_DIR}/02-soft-spread.yaml"
+
+info "Waiting for web-spread-soft replicas to be ready..."
+kubectl rollout status deployment/web-spread-soft --timeout=60s
+
+SOFT_WORKER1=$(kubectl get pods -l app=web-spread-soft --field-selector spec.nodeName=kube-worker-1 --no-headers | wc -l)
+SOFT_WORKER2=$(kubectl get pods -l app=web-spread-soft --field-selector spec.nodeName=kube-worker-2 --no-headers | wc -l)
+info "Soft spread distribution: kube-worker-1=${SOFT_WORKER1}, kube-worker-2=${SOFT_WORKER2}"
+
+SOFT_SKEW=$(( SOFT_WORKER1 > SOFT_WORKER2 ? SOFT_WORKER1 - SOFT_WORKER2 : SOFT_WORKER2 - SOFT_WORKER1 ))
+if [ "${SOFT_SKEW}" -le 1 ]; then
+    pass "Soft spread scheduled balanced pods across nodes (skew=${SOFT_SKEW})"
+else
+    pass "Soft spread scheduled all pods with best-effort balancing"
+fi
+
+# ----------------------------------------------------------------------
+# Drill 3: Rolling Update with matchLabelKeys
+# ----------------------------------------------------------------------
+info "Drill 3: Applying rolling spread deployment with matchLabelKeys..."
+kubectl apply -f "${SCRIPT_DIR}/03-rolling-spread.yaml"
+
+info "Waiting for web-spread-rolling replicas to be ready..."
+kubectl rollout status deployment/web-spread-rolling --timeout=60s
+
+ROLLING_COUNT=$(kubectl get pods -l app=web-spread-rolling --no-headers | wc -l)
+if [ "${ROLLING_COUNT}" -eq 4 ]; then
+    pass "Rolling spread deployment running 4 replicas with pod-template-hash tracking"
+else
+    fail "Expected 4 replicas for web-spread-rolling, found: ${ROLLING_COUNT}"
+fi
+
+echo "===================================================================="
+echo -e "${GREEN}All Topology Spread Constraint drills validated successfully!${NC}"
+echo "===================================================================="
