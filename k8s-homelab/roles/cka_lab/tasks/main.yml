@@ -3,13 +3,18 @@
   ansible.builtin.stat:
     path: /etc/kubernetes/admin.conf
   register: cka_lab_admin_conf_stat
+  when: not (cka_lab_docs_only | default(false) | bool)
   tags:
     - always
     - cka_lab
 
 - name: Determine cluster initialization state
   ansible.builtin.set_fact:
-    cka_lab_cluster_initialized: "{{ cka_lab_admin_conf_stat.stat.exists | default(false) }}"
+    cka_lab_cluster_initialized: >-
+      {{
+        false if (cka_lab_docs_only | default(false) | bool)
+        else (cka_lab_admin_conf_stat.stat.exists | default(false))
+      }}
   tags:
     - always
     - cka_lab
@@ -18,9 +23,16 @@
   ansible.builtin.debug:
     msg: >-
       {{
-        'Cluster is online on ' ~ inventory_hostname ~ '. Staging lab files and applying in-cluster practice resources.'
-        if cka_lab_cluster_initialized | bool
-        else 'Cluster is UNINITIALIZED on ' ~ inventory_hostname ~ '. Staging walkthrough guides, manifests, and cluster bootstrap drills in ~/cka.'
+        'Generating offline CKA curriculum and manifests in ' ~ cka_lab_base_dir ~ ' (docs only).'
+        if (cka_lab_docs_only | default(false) | bool)
+        else (
+          'Cluster is online on ' ~ inventory_hostname ~ '. Staging lab files and applying in-cluster practice resources.'
+          if cka_lab_cluster_initialized | bool
+          else (
+            'Cluster is UNINITIALIZED on ' ~ inventory_hostname ~
+            '. Staging walkthrough guides, manifests, and cluster bootstrap drills in ' ~ cka_lab_base_dir ~ '.'
+          )
+        )
       }}
   tags:
     - always
@@ -28,7 +40,9 @@
 
 - name: Execute CKA Lab Scenario - Initial Steps Reminder MOTD (motd)
   ansible.builtin.include_tasks: scenario_motd.yml
-  when: cka_lab_scenario_motd_enabled | bool
+  when:
+    - cka_lab_scenario_motd_enabled | bool
+    - not (cka_lab_docs_only | default(false) | bool)
   tags:
     - cka_lab
     - motd
@@ -41,7 +55,9 @@
 
 - name: Execute CKA Lab Scenario - Inter-Node DNS & Passwordless SSH (inter_node_ssh)
   ansible.builtin.include_tasks: scenario_inter_node_ssh.yml
-  when: cka_lab_scenario_inter_node_ssh_enabled | bool
+  when:
+    - cka_lab_scenario_inter_node_ssh_enabled | bool
+    - not (cka_lab_docs_only | default(false) | bool)
   tags:
     - cka_lab
     - inter_node_ssh

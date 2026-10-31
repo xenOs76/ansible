@@ -75,12 +75,30 @@ kubectl auth can-i --list --as={{ cka_lab_rbac_user | default('vagrant') }} -n d
 When defining a `Role` (namespace-scoped) or `ClusterRole` (cluster-scoped), policy rules accept four primary
 parameters under `rules[]`:
 
-| Parameter | Type | Description & Usage |
-| --- | --- | --- |
-| `apiGroups` | `[]string` | API group containing target resource. Core group is `""` (pods, secrets, configmaps). Named groups omit version (e.g. `"apps"`, `"batch"`, `"rbac.authorization.k8s.io"`). Use `["*"]` for all. |
-| `resources` | `[]string` | Lowercase plural resource names (`pods`, `services`, `deployments`). Supports subresources (`pods/log`, `pods/status`, `deployments/scale`). Use `["*"]` for all. |
-| `verbs` | `[]string` | Required action verbs permitted on the resources (e.g. `get`, `list`, `watch`, `create`, `update`, `patch`, `delete`, `deletecollection`). Use `["*"]` for all. |
-| `resourceNames` | `[]string` | Optional whitelist restricting permissions to specific instance names (e.g. `["my-secret"]`). Valid with `get`, `update`, `patch`, `delete`. |
+- **`apiGroups`** (`[]string` - Required):
+  The API group containing the target resource.
+  - Core group (`v1`): Represented by an empty string `""` (e.g. `pods`, `services`, `secrets`, `configmaps`).
+  - Named groups: Specified by group name omitting the version (e.g. `"apps"` for `deployments`, `"batch"` for `jobs`,
+    `"rbac.authorization.k8s.io"` for `roles`).
+  - Wildcard: Use `["*"]` to match all API groups.
+
+- **`resources`** (`[]string` - Required):
+  Lowercase plural resource names governed by the rule.
+  - Standard resources: `pods`, `services`, `deployments`, `configmaps`, `secrets`, `persistentvolumeclaims`.
+  - Subresources: Appended with a slash to grant fine-grained permissions without opening the parent resource (e.g.
+    `pods/log`, `pods/status`, `pods/exec`, `deployments/scale`).
+  - Wildcard: Use `["*"]` to match all resources in the specified API group.
+
+- **`verbs`** (`[]string` - Required):
+  List of action verbs permitted on the targeted resources.
+  - Common verbs: `get`, `list`, `watch`, `create`, `update`, `patch`, `delete`, `deletecollection`.
+  - Wildcard: Use `["*"]` to grant all operations.
+
+- **`resourceNames`** (`[]string` - Optional):
+  Whitelist restricting the rule to specific individual named instances.
+  - Example: `["app-secret", "db-credentials"]` limits permissions strictly to those individual resources.
+  - Permitted verbs with `resourceNames`: `get`, `update`, `patch`, `delete`.
+  - *Note*: Cannot be used to restrict `create` (object does not exist yet) or `list`/`watch` (collection queries).
 
 #### Permitted Action Verbs
 

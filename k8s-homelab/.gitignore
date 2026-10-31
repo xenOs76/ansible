@@ -8,3 +8,4 @@ kubeadm-init.out
 .ansible/
 .topology
 .oidc-dist/
+cka/
