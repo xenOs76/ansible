@@ -53,13 +53,82 @@ Follows the exercise pattern from [bmuschko/cka-crash-course
 ### Terminal Fast Lookups (`kubectl`)
 
 ```bash
+# Rapid schema, verb, and parameter discovery
+kubectl create role -h                                       # Built-in flag reference, syntax & examples
+kubectl api-resources -o wide                                # List all resources, API groups & supported verbs
+kubectl api-resources -o wide | grep -E "^NAME|pods|secrets" # Fast discovery of verbs and apiGroup for a target
+kubectl explain role.rules                                   # Complete schema definition for policy rules
+
 # Rapid command-line RBAC generation
 kubectl create role pod-reader --verb=get,list,watch --resource=pods --dry-run=client -o yaml
+kubectl create role deploy-admin --verb="*" --resource=deployments.apps --dry-run=client -o yaml
+kubectl create role secret-mgr --verb=get,update --resource=secrets --resource-name=app-secret --dry-run=client -o yaml
 kubectl create rolebinding pod-reader-binding --role=pod-reader --user={{ cka_lab_rbac_user | default('vagrant') }} --dry-run=client -o yaml
+
+# Verification and policy auditing
 kubectl auth can-i create pods --as={{ cka_lab_rbac_user | default('vagrant') }}
-kubectl explain role.rules
-kubectl explain clusterrolebinding.subjects
+kubectl auth can-i --list --as={{ cka_lab_rbac_user | default('vagrant') }} -n default
 ```
+
+### Role Specification Parameters & On-The-Fly Discovery
+
+When defining a `Role` (namespace-scoped) or `ClusterRole` (cluster-scoped), policy rules accept four primary
+parameters under `rules[]`:
+
+| Parameter | Type | Description & Usage |
+| --- | --- | --- |
+| `apiGroups` | `[]string` | API group containing target resource. Core group is `""` (pods, secrets, configmaps). Named groups omit version (e.g. `"apps"`, `"batch"`, `"rbac.authorization.k8s.io"`). Use `["*"]` for all. |
+| `resources` | `[]string` | Lowercase plural resource names (`pods`, `services`, `deployments`). Supports subresources (`pods/log`, `pods/status`, `deployments/scale`). Use `["*"]` for all. |
+| `verbs` | `[]string` | Required action verbs permitted on the resources (e.g. `get`, `list`, `watch`, `create`, `update`, `patch`, `delete`, `deletecollection`). Use `["*"]` for all. |
+| `resourceNames` | `[]string` | Optional whitelist restricting permissions to specific instance names (e.g. `["my-secret"]`). Valid with `get`, `update`, `patch`, `delete`. |
+
+#### Permitted Action Verbs
+
+| Verb | HTTP Method | Action Scope | Notes |
+| --- | --- | --- | --- |
+| `get` | `GET` | Single resource instance | Retrieve a specific object by name |
+| `list` | `GET` | Collection of resources | List all objects in namespace/cluster |
+| `watch` | `GET` (streaming) | Streaming resource updates | Stream changes via WebSocket / chunked HTTP |
+| `create` | `POST` | New resource | Create a new object |
+| `update` | `PUT` | Full resource replacement | Replace entire resource spec |
+| `patch` | `PATCH` | Partial modification | Strategic merge patch, JSON patch, JSON merge patch |
+| `delete` | `DELETE` | Single resource instance | Delete an individual named object |
+| `deletecollection` | `DELETE` | Multiple resource instances | Bulk deletion matching label selectors |
+| `*` | Any | All permitted verbs | Full administrative control over the resource |
+
+#### How to Determine Allowed Verbs & Resources on the Fly
+
+1. **`kubectl create role -h` (Instant CLI Reference & Examples)**:
+   - Run `kubectl create role -h` or `kubectl create clusterrole -h` to view built-in command documentation.
+   - Shows CLI flag syntax (`--verb`, `--resource`, `--resource-name`) and built-in copy-pasteable examples:
+     - Multi-verb: `--verb=get,list,watch --resource=pods`
+     - Group syntax: `--resource=rs.apps` or `--resource=deployments.apps`
+     - Subresource syntax: `--resource=pods,pods/status` or `--resource=pods/log`
+     - Resource instance restriction: `--resource-name=my-pod`
+1. **`kubectl api-resources -o wide` (Canonical API & Verb Matrix)**:
+   - Displays all registered API resources with their `NAME` (plural), `SHORTNAMES`, `APIVERSION` (group/version),
+     `NAMESPACED` scope (`true` for Role, `false` for ClusterRole), `KIND`, and valid `VERBS`.
+   - Filter for a specific resource:
+
+     ```bash
+     kubectl api-resources -o wide | grep -E "^NAME|pods|secrets"
+     ```
+
+   - Discover which resources belong to a specific API group:
+
+     ```bash
+     kubectl api-resources --api-group=apps -o wide
+     ```
+
+   - Discover which resources can be bound in namespace-scoped Roles:
+
+     ```bash
+     kubectl api-resources --namespaced=true -o wide
+     ```
+
+1. **`kubectl explain role.rules` (Schema Documentation)**:
+   - Inspects the official OpenAPI schema for `apiGroups`, `resources`, `resourceNames`, and `verbs` directly in your
+     terminal without internet access.
 
 ---
 
@@ -94,24 +163,116 @@ In the actual CKA exam, helper scripts are not available. Practice executing eve
 cd {{ cka_lab_rbac_dir }}/manual-user
 ```
 
-Follow `manual-user/README.md` to:
+##### 1. Generate Private Key and CSR via OpenSSL
 
-1. Generate private key and CSR with OpenSSL (`openssl genrsa`, `openssl req -new`).
-1. Base64-encode the CSR and submit a Kubernetes `CertificateSigningRequest` (`certificates.k8s.io/v1`).
-1. Approve the CSR (`kubectl certificate approve`) and extract the issued certificate (`kubectl get csr ... -o
-   jsonpath='{.status.certificate}' | base64 -d`).
-1. Register credentials and context in `~/.kube/config` (`kubectl config set-credentials`, `kubectl config
-   set-context`).
-1. Run `./verify-manual-user.sh` to validate the setup.
+Generate a 2048-bit RSA private key and a Certificate Signing Request with Subject `/CN={{ cka_lab_rbac_manual_user |
+default('developer') }}/O={{ cka_lab_rbac_manual_group | default('developers') }}`:
+
+```bash
+# Generate private key
+openssl genrsa -out {{ cka_lab_rbac_manual_user | default('developer') }}.key 2048
+chmod 0600 {{ cka_lab_rbac_manual_user | default('developer') }}.key
+
+# Generate Certificate Signing Request (CSR)
+openssl req -new -key {{ cka_lab_rbac_manual_user | default('developer') }}.key \
+  -out {{ cka_lab_rbac_manual_user | default('developer') }}.csr \
+  -subj "/CN={{ cka_lab_rbac_manual_user | default('developer') }}/O={{ cka_lab_rbac_manual_group | default('developers') }}"
+
+# Verify CSR subject
+openssl req -in {{ cka_lab_rbac_manual_user | default('developer') }}.csr -noout -subject
+```
+
+##### 2. Create and Submit Kubernetes CertificateSigningRequest (CSR)
+
+Encode the CSR file as a single-line base64 string and submit a `CertificateSigningRequest` object:
+
+```bash
+# Encode CSR into a single base64 string
+CSR_BASE64=$(base64 < {{ cka_lab_rbac_manual_user | default('developer') }}.csr | tr -d "\r\n")
+
+# Submit CertificateSigningRequest manifest
+cat <<EOF | kubectl apply -f -
+apiVersion: certificates.k8s.io/v1
+kind: CertificateSigningRequest
+metadata:
+  name: {{ cka_lab_rbac_manual_user | default('developer') }}
+spec:
+  request: ${CSR_BASE64}
+  signerName: kubernetes.io/kube-apiserver-client
+  expirationSeconds: 86400
+  usages:
+  - client auth
+EOF
+
+# Verify CSR is in Pending state
+kubectl get csr {{ cka_lab_rbac_manual_user | default('developer') }}
+```
+
+##### 3. Approve CSR and Extract Signed Client Certificate
+
+Approve the CSR and decode the issued certificate from `.status.certificate`:
+
+```bash
+# Approve the pending CSR
+kubectl certificate approve {{ cka_lab_rbac_manual_user | default('developer') }}
+
+# Confirm condition shows Approved,Issued
+kubectl get csr {{ cka_lab_rbac_manual_user | default('developer') }}
+
+# Extract and base64-decode the signed client certificate
+kubectl get csr {{ cka_lab_rbac_manual_user | default('developer') }} \
+  -o jsonpath='{.status.certificate}' | base64 -d > {{ cka_lab_rbac_manual_user | default('developer') }}.crt
+chmod 0644 {{ cka_lab_rbac_manual_user | default('developer') }}.crt
+
+# Verify certificate Subject and Issuer
+openssl x509 -in {{ cka_lab_rbac_manual_user | default('developer') }}.crt -noout -subject -issuer
+```
+
+##### 4. Register Credentials and Context in `~/.kube/config`
+
+Configure the user credentials and a dedicated context:
+
+```bash
+# Detect cluster name (default: kubernetes)
+CLUSTER_NAME=$(kubectl config view --minify -o jsonpath='{.clusters[0].name}')
+CLUSTER_NAME="${CLUSTER_NAME:-kubernetes}"
+
+# Embed client credentials in ~/.kube/config
+kubectl config set-credentials {{ cka_lab_rbac_manual_user | default('developer') }} \
+  --client-key={{ cka_lab_rbac_manual_user | default('developer') }}.key \
+  --client-certificate={{ cka_lab_rbac_manual_user | default('developer') }}.crt \
+  --embed-certs=true
+
+# Create context mapping cluster and user
+kubectl config set-context {{ cka_lab_rbac_manual_user | default('developer') }}@${CLUSTER_NAME} \
+  --cluster="${CLUSTER_NAME}" \
+  --user={{ cka_lab_rbac_manual_user | default('developer') }}
+
+# Verify context registration
+kubectl config get-contexts
+```
+
+##### 5. Automated Verification
+
+Execute the verification script to confirm all keys, certificates, and contexts match CKA specifications:
+
+```bash
+./verify-manual-user.sh
+```
 
 ---
 
 ### Step 2: Check Default User Permissions
 
-Switch to the newly created context:
+Switch to the newly created context (`{{ cka_lab_rbac_user | default('vagrant') }}` if using Option A, or
+`{{ cka_lab_rbac_manual_user | default('developer') }}@kubernetes` if using Option B):
 
 ```bash
+# Option A:
 kubectl config use-context {{ cka_lab_rbac_user | default('vagrant') }}
+
+# Option B:
+kubectl config use-context {{ cka_lab_rbac_manual_user | default('developer') }}@kubernetes
 ```
 
 Attempt to list pods or create a pod:
