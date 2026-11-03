@@ -193,3 +193,95 @@ spec:
 3. **Quality Gates**:
    - `python3 scripts/check-readme-line-length.py` (strict 120-char line limit).
    - `yamllint`, `shellcheck`, and `ansible-lint`.
+
+---
+
+## 6. Future Upgrade: Halloween Network Upgrade Trick (Option 3)
+
+### Overview & Motivation
+
+The active homelab baseline (Option 2) relies on standard `kube-proxy` (iptables) for ClusterIP service routing while
+Cilium provides pod networking, NetworkPolicies, and native dual Ingress (`31080/31443`) and Gateway API
+(`30080/30443`) controllers.
+
+The **Halloween Network Upgrade Trick (Option 3)** elevates the cluster to full eBPF host routing by setting
+`kubeProxyReplacement=true`. This eliminates `kube-proxy` and its iptables overhead entirely, routing all Kubernetes
+ClusterIPs and NodePorts via high-performance eBPF socket-LB maps.
+
+### Root Cause & Pre-requisite: Direct API Server Discovery
+
+When `kubeProxyReplacement=true` is activated on a cluster initialized without kube-proxy, the kernel has no iptables
+rules to translate `10.96.0.1:443` (`kubernetes.default.svc`) until Cilium is running. If Cilium agent or operator
+attempts to connect to `10.96.0.1:443` during startup or Gateway API CRD discovery, connection fails with:
+`dial tcp 10.96.0.1:443: connect: no route to host`
+leading to operator `CrashLoopBackOff`.
+
+To execute this upgrade safely without deadlocks, `k8sServiceHost` and `k8sServicePort` must point directly to the
+control plane node IP (e.g., `192.168.56.10:6443`), bypassing ClusterIP `10.96.0.1`.
+
+### Execution Method A: In-Place CLI Upgrade
+
+Execute the upgrade in-place on `kube-control-plane` without dropping existing workloads:
+
+```bash
+# 1. Discover the control plane API server IP & port
+API_SERVER_URL=$(kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}' 2>/dev/null || true)
+API_SERVER_IP=$(echo "${API_SERVER_URL}" | sed -E -n 's|https?://([^:/]+).*|\1|p')
+API_SERVER_PORT=$(echo "${API_SERVER_URL}" | sed -E -n 's|https?://[^:]+:([0-9]+).*|\1|p')
+API_SERVER_PORT="${API_SERVER_PORT:-6443}"
+
+if [ -z "${API_SERVER_IP}" ] || [ "${API_SERVER_IP}" = "127.0.0.1" ] || [ "${API_SERVER_IP}" = "localhost" ]; then
+  API_SERVER_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}' 2>/dev/null || true)
+fi
+
+# 2. Upgrade Cilium with full kubeProxyReplacement enabled
+cilium upgrade --reuse-values \
+  --set kubeProxyReplacement=true \
+  --set k8sServiceHost="${API_SERVER_IP}" \
+  --set k8sServicePort="${API_SERVER_PORT}"
+
+# 3. Wait for Cilium and operator rollout
+cilium status --wait
+```
+
+### Execution Method B: Ansible Deployment
+
+The variable plumbing for Option 3 is pre-built into `roles/cilium`. To deploy via Ansible, pass the extra var:
+
+```bash
+cd k8s-homelab
+./scripts/run-playbook.sh -p playbooks/site.yml -t cilium --extra-vars "cilium_kube_proxy_replacement=true"
+```
+
+### Verification & Validation
+
+1. **Verify kubeProxyReplacement status**:
+
+   ```bash
+   cilium status | grep -i "KubeProxyReplacement"
+   # Expected output: KubeProxyReplacement:   True   [Strict]
+   ```
+
+1. **Inspect eBPF service maps**:
+
+   ```bash
+   kubectl exec -n kube-system ds/cilium -- cilium bpf lb list
+   ```
+
+1. **Verify Gateway API & Ingress routing**:
+
+   ```bash
+   kubectl get gatewayclasses
+   kubectl get ingressclasses
+   ./cka/11-networking/test-networking-drills.sh
+   ```
+
+### Rollback Procedure
+
+If needed, revert to standard kube-proxy routing (Option 2):
+
+```bash
+cilium upgrade --reuse-values \
+  --set kubeProxyReplacement=false
+cilium status --wait
+```
