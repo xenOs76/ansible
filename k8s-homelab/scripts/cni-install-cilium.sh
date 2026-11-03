@@ -94,7 +94,6 @@ metadata:
   namespace: kube-system
   labels:
     app.kubernetes.io/part-of: cilium
-    gateway.networking.k8s.io/controller: io.cilium/gateway-controller
 spec:
   service:
     type: NodePort
