@@ -75,7 +75,7 @@ script approach:
 - Placed on VMs as `/home/vagrant/cni-install-cilium.sh` during Vagrant provisioning.
 - Updates the initial `cilium install` command to include:
   - Gateway API CRDs check & installation (`gateways.gateway.networking.k8s.io`).
-  - `--set kubeProxyReplacement=true`
+  - Standard `kube-proxy` service routing (Option 2 baseline, ensuring zero-deadlock cluster bootstrapping).
   - `--set ingressController.enabled=true`
   - `--set ingressController.default=true`
   - `--set ingressController.loadbalancerMode=shared`
@@ -84,6 +84,8 @@ script approach:
   - `--set ingressController.service.secureNodePort=31443`
   - `--set gatewayAPI.enabled=true`
 - Automatically applies the `CiliumGatewayClassConfig` and `GatewayClass` (`cilium-nodeport`).
+- Note: Option 3 ("Halloween Network Upgrade Trick" enabling full `kubeProxyReplacement=true` with explicit
+  `k8sServiceHost`) is preserved as an upcoming roadmap upgrade once the base homelab configuration is finalized.
 
 ### 2. Create New Script `scripts/cni-enable-ingress-gateway.sh` (In-Place Upgrades)
 

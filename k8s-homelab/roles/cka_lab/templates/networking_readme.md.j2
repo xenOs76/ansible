@@ -319,10 +319,16 @@ If practicing in a cluster where Cilium Ingress was not pre-enabled, run:
 ```
 
 > [!NOTE]
-> **Zero Port Collision Architecture**:
-> Cilium's embedded Envoy data-path manages both Ingress and Gateway API simultaneously. Classic Kubernetes Ingresses
-> use NodePort `31080` (HTTP), while Gateway API Gateways use NodePort `30080` (HTTP). Both controllers coexist
-> harmoniously without requiring any `helm uninstall` steps.
+> **Zero Port Collision Architecture & Routing Modes**:
+> - **Dual Ingress & Gateway API (Option 2 - Active Baseline)**:
+>   Cilium's embedded Envoy data-path manages both Ingress and Gateway API simultaneously. Classic Kubernetes Ingresses
+>   use NodePort `31080` (HTTP), while Gateway API Gateways use NodePort `30080` (HTTP). Standard `kube-proxy` handles
+>   ClusterIP routing, ensuring zero-deadlock bootstrapping across all nodes.
+> - **Roadmap Note: Halloween Network Upgrade Trick (Option 3)**:
+>   The advanced full eBPF host routing architecture replaces `kube-proxy` entirely via `kubeProxyReplacement=true`.
+>   Because eBPF socket-LB maps are inactive until Cilium starts, Option 3 mandates explicit API server routing via
+>   `--set k8sServiceHost=<CONTROL_PLANE_IP> --set k8sServicePort=6443` to avoid bootstrap deadlocks (`10.96.0.1:443:`
+>   `connect: no route to host`). We will revisit and activate this upgrade trick once the base homelab is configured.
 
 #### Step 1: Deploy Ingress Backend Services
 

@@ -137,10 +137,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Cilium Hubble CLI Installation Scope (`scripts/cni-install-hubble.sh`)**:
   Restricted script scope to strictly download, verify checksum, and install `/usr/local/bin/hubble` without invoking
   in-cluster mutation commands (`cilium hubble enable`) or triggering status checks.
-- **Cilium kubeProxyReplacement Communication Deadlock (`roles/cilium`, `scripts/`)**:
-  Fixed communication deadlock (`connect: no route to host` on `10.96.0.1:443`) causing Cilium operator
-  `CrashLoopBackOff` during Gateway API CRD discovery and agent startup under `kubeProxyReplacement=true`. Configured
-  explicit `k8sServiceHost` and `k8sServicePort` discovery across Ansible roles, defaults, and deployment scripts.
+- **Cilium Service Routing Mode & Halloween Network Upgrade Trick (`roles/cilium`, `scripts/`)**:
+  Restored standard `kube-proxy` service routing (Option 2) across Cilium Ansible defaults and standalone deployment
+  scripts, ensuring zero-deadlock cluster bootstrapping while maintaining out-of-the-box dual Ingress (`31080/31443`)
+  and Gateway API (`30080/30443`) management. Documented the full eBPF host routing architecture (Option 3:
+  "Halloween Network Upgrade Trick" with `kubeProxyReplacement=true` and `k8sServiceHost`) as a future roadmap item.
 
 - **Kubelet Diagnostics Drill & Modern Failure Injection (`roles/cka_lab`, `03-kubelet-diagnostics/`)**:
   Fixed `break-kubelet.sh` where injecting `cgroupDriver: invalidDriverName` into `/var/lib/kubelet/config.yaml`

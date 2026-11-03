@@ -21,8 +21,8 @@
 #   3. Downloads CLI archive alongside official sha256sum and verifies integrity.
 #   4. Installs 'cilium' binary into /usr/local/bin.
 #   5. Applies Gateway API experimental CRDs (v1.2.1) including TLSRoute.
-#   6. Runs 'cilium install' with kubeProxyReplacement, Ingress (31080/31443),
-#      and Gateway API enabled.
+#   6. Runs 'cilium install' with Ingress (31080/31443) and Gateway API enabled
+#      (standard kube-proxy service routing).
 #   7. Configures 'cilium-nodeport' GatewayClass and CiliumGatewayClassConfig.
 #
 # Manual Verification:
@@ -69,25 +69,8 @@ if command -v kubectl >/dev/null 2>&1; then
 fi
 
 # 4. Deploy Cilium into the Kubernetes cluster
-echo "    Detecting Kubernetes API server endpoint for kubeProxyReplacement..."
-API_SERVER_URL=$(kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}' 2>/dev/null || true)
-API_SERVER_IP=$(echo "${API_SERVER_URL}" | sed -E -n 's|https?://([^:/]+).*|\1|p')
-API_SERVER_PORT=$(echo "${API_SERVER_URL}" | sed -E -n 's|https?://[^:]+:([0-9]+).*|\1|p')
-API_SERVER_PORT="${API_SERVER_PORT:-6443}"
-
-if [ -z "${API_SERVER_IP}" ] || [ "${API_SERVER_IP}" = "127.0.0.1" ] || [ "${API_SERVER_IP}" = "localhost" ]; then
-  API_SERVER_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}' 2>/dev/null || true)
-fi
-if [ -z "${API_SERVER_IP}" ]; then
-  API_SERVER_IP=$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{print $7; exit}' || hostname -I | awk '{print $1}')
-fi
-echo "    API Server: https://${API_SERVER_IP}:${API_SERVER_PORT}"
-
 echo "    Deploying Cilium CNI into cluster with Ingress & Gateway API..."
 cilium install \
-  --set kubeProxyReplacement=true \
-  --set k8sServiceHost="${API_SERVER_IP}" \
-  --set k8sServicePort="${API_SERVER_PORT}" \
   --set ingressController.enabled=true \
   --set ingressController.default=true \
   --set ingressController.loadbalancerMode=shared \
