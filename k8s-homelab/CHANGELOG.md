@@ -142,6 +142,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   scripts, ensuring zero-deadlock cluster bootstrapping while maintaining out-of-the-box dual Ingress (`31080/31443`)
   and Gateway API (`30080/30443`) management. Documented the full eBPF host routing architecture (Option 3:
   "Halloween Network Upgrade Trick" with `kubeProxyReplacement=true` and `k8sServiceHost`) as a future roadmap item.
+- **CKA Lab Ingress Manifest Spec Declaration (`roles/cka_lab`, `02-ingresses/cka-lab-ingress.yaml`)**:
+  Fixed syntax in `networking_02_ingress.yaml.j2` where `ingressClassName` and `rules` were declared directly under
+  `metadata:` instead of `spec:`, causing strict decoding errors during `kubectl apply -f cka-lab-ingress.yaml`.
 
 - **Kubelet Diagnostics Drill & Modern Failure Injection (`roles/cka_lab`, `03-kubelet-diagnostics/`)**:
   Fixed `break-kubelet.sh` where injecting `cgroupDriver: invalidDriverName` into `/var/lib/kubelet/config.yaml`
