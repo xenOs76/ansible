@@ -1,0 +1,20 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: TLSRoute
+metadata:
+  name: cka-lab-tlsroute
+  namespace: {{ cka_lab_networking_namespace | default('default') }}
+  labels:
+    app.kubernetes.io/name: cka-lab-tlsroute
+    app.kubernetes.io/part-of: cka-lab
+    cka.practice/scenario: networking
+spec:
+  parentRefs:
+    - name: cka-lab-gateway
+      namespace: {{ cka_lab_helm_ngf_namespace | default('nginx-gateway') }}
+      sectionName: tls-passthrough
+  hostnames:
+    - "{{ cka_lab_networking_gateway_tls_domain | default('secure.example.local') }}"
+  rules:
+    - backendRefs:
+        - name: cka-lab-ingress-api-svc
+          port: 80

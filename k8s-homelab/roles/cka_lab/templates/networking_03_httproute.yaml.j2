@@ -11,6 +11,7 @@ spec:
   parentRefs:
     - name: cka-lab-gateway
       namespace: {{ cka_lab_helm_ngf_namespace | default('nginx-gateway') }}
+      sectionName: http
   hostnames:
     - "{{ cka_lab_networking_gateway_domain | default('httpbin.example.local') }}"
   rules:

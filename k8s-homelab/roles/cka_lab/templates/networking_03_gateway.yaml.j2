@@ -7,12 +7,31 @@ metadata:
     app.kubernetes.io/name: cka-lab-gateway
     app.kubernetes.io/part-of: cka-lab
     cka.practice/scenario: networking
-spec:
-  gatewayClassName: nginx
+  # Cilium NodePort GatewayClass (backed by CiliumGatewayClassConfig)
+  # (For clusters running NGINX Gateway Fabric, gatewayClassName would be 'nginx')
+  gatewayClassName: cilium-nodeport
   listeners:
     - name: http
       port: 80
       protocol: HTTP
+      allowedRoutes:
+        namespaces:
+          from: All
+    - name: https-terminate
+      port: 443
+      protocol: HTTPS
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - name: cka-lab-gateway-tls
+      allowedRoutes:
+        namespaces:
+          from: All
+    - name: tls-passthrough
+      port: 8443
+      protocol: TLS
+      tls:
+        mode: Passthrough
       allowedRoutes:
         namespaces:
           from: All

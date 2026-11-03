@@ -1,5 +1,12 @@
 # NetworkPolicy Troubleshooting with Cilium Hubble
 
+> [!NOTE]
+> **Exam Context & Permissibility Notice**:
+> Cilium and the Hubble CLI (`hubble observe`) are specific to this homelab environment and are **NOT** available in
+> the official CKA examination. In the exam, use standard Kubernetes CLI tools (e.g. `kubectl describe networkpolicy`,
+> ephemeral probe pods via `kubectl run --rm ... wget -T 2`, and inspecting pod labels) for NetworkPolicy verification.
+> This guide is an auxiliary homelab reference for deep-packet observability.
+
 Troubleshoot NetworkPolicy packet drops and traffic flow denials using the Cilium `hubble` CLI.
 
 ## 1. Prerequisites & Health Verification
