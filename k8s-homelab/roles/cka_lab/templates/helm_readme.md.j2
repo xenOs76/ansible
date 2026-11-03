@@ -43,7 +43,8 @@ This directory contains standalone Helm automation scripts designed for hands-on
 ├── install-kube-prometheus.sh     # Lightweight Prometheus Operator installer (Prometheus only)
 ├── install-nfs-csi-driver.sh      # Kubernetes NFS CSI Driver installer for dynamic PVs
 ├── install-csi-driver-nfs.sh -> install-nfs-csi-driver.sh # Convenience alias symlink
-└── install-nginx-gateway-fabric.sh # NGINX Gateway Fabric installer (Gateway API)
+├── enable-cilium-ingress-gateway.sh # Cilium dual Ingress & Gateway API in-place enabler
+├── install-nginx-gateway-fabric.sh # NGINX Gateway Fabric installer (Gateway API)
 ```
 
 ---
@@ -52,6 +53,7 @@ This directory contains standalone Helm automation scripts designed for hands-on
 
 | Script | Helm Chart | Target Namespace | Description & Footprint |
 | :--- | :--- | :--- | :--- |
+| `enable-cilium-ingress-gateway.sh` | Built-in Cilium CLI | `kube-system` | Enables Cilium's native Ingress controller (NodePort `31080`/`31443`) and Gateway API controller (NodePort `30080`/`30443`) in-place with zero port collisions. |
 | `install-httpbin-go.sh` | `estahn/httpbingo` | `default` | Deploys Go-based `httpbin` service with minimal footprint (10m CPU / 16Mi RAM). Ideal test backend for Ingress, Gateway API, and NetworkPolicy drills. |
 | `install-kube-metrics.sh` | `metrics-server/metrics-server` | `kube-system` | Enables `kubectl top nodes` and `kubectl top pods`. Configured with `--kubelet-insecure-tls` for homelab kubelet scraping. |
 | `install-kube-prometheus.sh` | `prometheus-community/kube-prometheus-stack` | `monitoring` | Deploys Prometheus Operator and a single-replica Prometheus instance. Grafana, Alertmanager, node-exporter, and kube-state-metrics are disabled for a minimal footprint on lab VMs. |

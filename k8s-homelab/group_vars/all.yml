@@ -32,6 +32,16 @@ cni_plugins_version: "v1.6.0"
 cni_type: "cilium"
 cilium_cli_version: "v0.16.24"
 cilium_install_extra_args: ""
+cilium_kube_proxy_replacement: true
+cilium_ingress_enabled: true
+cilium_ingress_default: true
+cilium_ingress_service_type: "NodePort"
+cilium_ingress_http_port: 31080
+cilium_ingress_https_port: 31443
+cilium_gateway_api_enabled: true
+cilium_gateway_http_nodeport: 30080
+cilium_gateway_https_nodeport: 30443
+cilium_gateway_tls_nodeport: 30445
 
 # User config for kubeconfig setup
 cluster_admin_users:

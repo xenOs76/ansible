@@ -10,8 +10,9 @@ metadata:
   annotations:
     nginx.ingress.kubernetes.io/rewrite-target: /
     nginx.org/rewrites: "serviceName=cka-lab-ingress-web-svc rewrite=/;serviceName=cka-lab-ingress-api-svc rewrite=/"
-spec:
-  ingressClassName: nginx
+  # Cilium native Ingress controller (NodePort 31080/31443)
+  # (In standard CKA exam clusters with Ingress-NGINX, ingressClassName would be 'nginx')
+  ingressClassName: cilium
   rules:
     - host: {{ cka_lab_networking_domain | default('cka-lab.example.local') }}
       http:

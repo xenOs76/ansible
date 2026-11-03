@@ -14,6 +14,7 @@
   ansible.builtin.file:
     path: "/home/{{ ansible_user | default('vagrant') }}/install-kube-metrics.sh"
     state: absent
+  when: not (cka_lab_docs_only | default(false) | bool)
   tags:
     - cka_lab
     - helm
@@ -33,6 +34,7 @@
     - {src: "helm_install_httpbin_go.sh.j2", dest: "install-httpbin-go.sh", mode: "0755"}
     - {src: "helm_install_deprecated_nginx_ingress.sh.j2", dest: "install-deprecated-nginx-ingress.sh", mode: "0755"}
     - {src: "helm_install_nfs_csi.sh.j2", dest: "install-nfs-csi-driver.sh", mode: "0755"}
+    - {src: "helm_enable_cilium_ingress_gateway.sh.j2", dest: "enable-cilium-ingress-gateway.sh", mode: "0755"}
   loop_control:
     label: "helm/{{ item.dest }}"
   tags:
@@ -82,6 +84,7 @@
     - install-httpbin-go.sh
     - install-deprecated-nginx-ingress.sh
     - install-nfs-csi-driver.sh
+    - enable-cilium-ingress-gateway.sh
 
   register: cka_lab_helm_syntax_check
   changed_when: false

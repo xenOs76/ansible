@@ -2,7 +2,9 @@
 # ==============================================================================
 # Script: cni-install-cilium.sh
 # Purpose: Download, verify, and install the Cilium CLI, then deploy the
-#          Cilium eBPF-based Container Network Interface (CNI) to the cluster.
+#          Cilium eBPF-based Container Network Interface (CNI) to the cluster
+#          with native dual Ingress (NodePort 31080/31443) and Gateway API
+#          support.
 #
 # Context:
 #   Executed on the 'kube-control-plane' node after 'control-plane.sh' (kubeadm init)
@@ -18,21 +20,24 @@
 #   2. Detects architecture (amd64 / arm64).
 #   3. Downloads CLI archive alongside official sha256sum and verifies integrity.
 #   4. Installs 'cilium' binary into /usr/local/bin.
-#   5. Runs 'cilium install' to roll out the Cilium DaemonSet and operator.
+#   5. Applies Gateway API experimental CRDs (v1.2.1) including TLSRoute.
+#   6. Runs 'cilium install' with kubeProxyReplacement, Ingress (31080/31443),
+#      and Gateway API enabled.
+#   7. Configures 'cilium-nodeport' GatewayClass and CiliumGatewayClassConfig.
 #
 # Manual Verification:
 #   cilium status --wait
-#   kubectl get pods -n kube-system -l k8s-app=cilium -o wide
+#   kubectl get ingressclasses
+#   kubectl get gatewayclasses
 #   kubectl get nodes -o wide   # (Nodes will transition from NotReady to Ready)
-#
-# Troubleshooting:
-#   - If cilium CLI download fails: Check outbound internet connectivity.
-#   - To inspect Cilium health: cilium status --verbose
-#   - To run connectivity test drill: cilium connectivity test
 # ==============================================================================
 set -euo pipefail
 
-echo "=== [cni-install-cilium.sh] Installing Cilium CNI ==="
+echo "=== [cni-install-cilium.sh] Installing Cilium CNI (Dual Ingress & Gateway API) ==="
+
+GATEWAY_API_CRD_VERSION="${GATEWAY_API_CRD_VERSION:-v1.2.1}"
+INGRESS_HTTP_PORT="${INGRESS_HTTP_PORT:-31080}"
+INGRESS_HTTPS_PORT="${INGRESS_HTTPS_PORT:-31443}"
 
 # 1. Determine latest stable CLI version and system architecture
 CILIUM_CLI_VERSION=$(curl -s https://raw.githubusercontent.com/cilium/cilium-cli/main/stable.txt)
@@ -56,9 +61,60 @@ sha256sum --check "cilium-linux-${CLI_ARCH}.tar.gz.sha256sum"
 echo "    Installing cilium binary to /usr/local/bin..."
 sudo tar -C /usr/local/bin -xzvf "cilium-linux-${CLI_ARCH}.tar.gz"
 
-# 3. Deploy Cilium into the Kubernetes cluster
-echo "    Deploying Cilium CNI into cluster..."
-cilium install
+# 3. Ensure Gateway API standard and experimental CRDs are present
+echo "    Applying Gateway API CRDs (${GATEWAY_API_CRD_VERSION})..."
+if command -v kubectl >/dev/null 2>&1; then
+  kubectl apply --server-side --force-conflicts -f \
+    "https://github.com/kubernetes-sigs/gateway-api/releases/download/${GATEWAY_API_CRD_VERSION}/experimental-install.yaml" || true
+fi
 
-echo "=== [cni-install-cilium.sh] Cilium CNI installation initiated ==="
-echo "    Monitor status via: cilium status --wait"
+# 4. Deploy Cilium into the Kubernetes cluster
+echo "    Deploying Cilium CNI into cluster with Ingress & Gateway API..."
+cilium install \
+  --set kubeProxyReplacement=true \
+  --set ingressController.enabled=true \
+  --set ingressController.default=true \
+  --set ingressController.loadbalancerMode=shared \
+  --set ingressController.service.type=NodePort \
+  --set ingressController.service.insecureNodePort="${INGRESS_HTTP_PORT}" \
+  --set ingressController.service.secureNodePort="${INGRESS_HTTPS_PORT}" \
+  --set gatewayAPI.enabled=true
+
+echo "    Waiting for Cilium to become ready..."
+cilium status --wait
+
+# 5. Configure Cilium NodePort GatewayClass
+echo "    Configuring Cilium NodePort GatewayClass..."
+cat << 'EOF' | kubectl apply -f -
+---
+apiVersion: cilium.io/v2alpha1
+kind: CiliumGatewayClassConfig
+metadata:
+  name: cilium-nodeport
+  namespace: kube-system
+  labels:
+    app.kubernetes.io/part-of: cilium
+    gateway.networking.k8s.io/controller: io.cilium/gateway-controller
+spec:
+  service:
+    type: NodePort
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: cilium-nodeport
+  labels:
+    app.kubernetes.io/part-of: cilium
+spec:
+  controllerName: io.cilium/gateway-controller
+  description: "Cilium GatewayClass configured for NodePort service exposure"
+  parametersRef:
+    group: cilium.io
+    kind: CiliumGatewayClassConfig
+    name: cilium-nodeport
+    namespace: kube-system
+EOF
+
+echo "=== [cni-install-cilium.sh] Cilium installation complete ==="
+echo "    IngressClass:  $(kubectl get ingressclasses -o jsonpath='{.items[*].metadata.name}' 2>/dev/null || echo 'none')"
+echo "    GatewayClass:  $(kubectl get gatewayclasses -o jsonpath='{.items[*].metadata.name}' 2>/dev/null || echo 'none')"

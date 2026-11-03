@@ -54,6 +54,19 @@
         mode: '0755'
         creates: /usr/local/bin/hubble
 
+- name: Install Gateway API CRDs for Cilium Gateway controller
+  ansible.builtin.command: >-
+    kubectl apply --server-side --force-conflicts -f
+    https://github.com/kubernetes-sigs/gateway-api/releases/download/{{ cilium_gateway_api_crd_version }}/experimental-install.yaml
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  when: cilium_gateway_api_enabled | bool
+  changed_when: false
+  tags:
+    - cni
+    - cilium
+    - gateway-api
+
 - name: Check Cilium installation status in cluster
   ansible.builtin.command: cilium status --wait=false
   environment:
@@ -69,6 +82,18 @@
   ansible.builtin.command: >-
     cilium install
     --set cluster.name={{ cluster_name }}
+    {% if cilium_kube_proxy_replacement | bool %}--set kubeProxyReplacement=true{% endif %}
+    {% if cilium_ingress_enabled | bool %}
+    --set ingressController.enabled=true
+    --set ingressController.default={{ 'true' if (cilium_ingress_default | bool) else 'false' }}
+    --set ingressController.loadbalancerMode=shared
+    --set ingressController.service.type={{ cilium_ingress_service_type }}
+    --set ingressController.service.insecureNodePort={{ cilium_ingress_http_port }}
+    --set ingressController.service.secureNodePort={{ cilium_ingress_https_port }}
+    {% endif %}
+    {% if cilium_gateway_api_enabled | bool %}
+    --set gatewayAPI.enabled=true
+    {% endif %}
     {{ cilium_install_extra_args }}
   environment:
     KUBECONFIG: /etc/kubernetes/admin.conf
@@ -77,6 +102,48 @@
   tags:
     - cni
     - cilium
+
+- name: Check if Cilium Gateway API or Ingress needs upgrade
+  ansible.builtin.command: kubectl get gatewayclass cilium
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: cilium_gw_class_check
+  failed_when: false
+  changed_when: false
+  when:
+    - cilium_status_check.rc == 0
+    - cilium_gateway_api_enabled | bool
+  tags:
+    - cni
+    - cilium
+    - gateway-api
+
+- name: Upgrade Cilium in cluster to enable Ingress and Gateway API
+  ansible.builtin.command: >-
+    cilium upgrade --reuse-values
+    {% if cilium_kube_proxy_replacement | bool %}--set kubeProxyReplacement=true{% endif %}
+    {% if cilium_ingress_enabled | bool %}
+    --set ingressController.enabled=true
+    --set ingressController.default={{ 'true' if (cilium_ingress_default | bool) else 'false' }}
+    --set ingressController.loadbalancerMode=shared
+    --set ingressController.service.type={{ cilium_ingress_service_type }}
+    --set ingressController.service.insecureNodePort={{ cilium_ingress_http_port }}
+    --set ingressController.service.secureNodePort={{ cilium_ingress_https_port }}
+    {% endif %}
+    {% if cilium_gateway_api_enabled | bool %}
+    --set gatewayAPI.enabled=true
+    {% endif %}
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  when:
+    - cilium_status_check.rc == 0
+    - cilium_gateway_api_enabled | bool
+    - cilium_gw_class_check.rc != 0
+  changed_when: true
+  tags:
+    - cni
+    - cilium
+    - gateway-api
 
 - name: Wait for Cilium deployment to be ready
   ansible.builtin.command: >-
@@ -88,6 +155,24 @@
     - cni
     - cilium
     - verify
+
+- name: Deploy Cilium GatewayClass and CiliumGatewayClassConfig for NodePort
+  when: cilium_gateway_api_enabled | bool
+  tags:
+    - cni
+    - cilium
+    - gateway-api
+  block:
+    - name: Copy Cilium NodePort GatewayClass definition
+      ansible.builtin.template:
+        src: cilium-nodeport-gatewayclass.yaml.j2
+        dest: /etc/kubernetes/cilium-nodeport-gatewayclass.yaml
+        mode: '0644'
+    - name: Apply Cilium NodePort GatewayClass definition
+      ansible.builtin.command: kubectl apply -f /etc/kubernetes/cilium-nodeport-gatewayclass.yaml
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+      changed_when: false
 
 - name: Verify all cluster nodes are in Ready status
   ansible.builtin.command: kubectl get nodes --no-headers
