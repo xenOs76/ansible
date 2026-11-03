@@ -3,6 +3,12 @@ cilium_cli_version: "{{ cilium_version | default('v0.16.24') }}"
 cilium_hubble_cli_version: "{{ hubble_version | default('v1.20.2') }}"
 cilium_gateway_api_crd_version: "v1.2.1"
 cilium_kube_proxy_replacement: true
+cilium_k8s_service_host: >-
+  {{ ha_control_plane_vip if (ha_control_plane_enabled | default(false) | bool)
+     else (hostvars[groups['control_plane'][0]]['apiserver_advertise_address'] |
+           default(hostvars[groups['control_plane'][0]]['node_ip'] |
+           default(hostvars[groups['control_plane'][0]]['ansible_host'] | default('127.0.0.1')))) }}
+cilium_k8s_service_port: "{{ ha_control_plane_port if (ha_control_plane_enabled | default(false) | bool) else 6443 }}"
 cilium_ingress_enabled: true
 cilium_ingress_default: true
 cilium_ingress_service_type: "NodePort"

@@ -134,6 +134,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Cilium Hubble CLI Installation Scope (`scripts/cni-install-hubble.sh`)**:
+  Restricted script scope to strictly download, verify checksum, and install `/usr/local/bin/hubble` without invoking
+  in-cluster mutation commands (`cilium hubble enable`) or triggering status checks.
+- **Cilium kubeProxyReplacement Communication Deadlock (`roles/cilium`, `scripts/`)**:
+  Fixed communication deadlock (`connect: no route to host` on `10.96.0.1:443`) causing Cilium operator
+  `CrashLoopBackOff` during Gateway API CRD discovery and agent startup under `kubeProxyReplacement=true`. Configured
+  explicit `k8sServiceHost` and `k8sServicePort` discovery across Ansible roles, defaults, and deployment scripts.
+
 - **Kubelet Diagnostics Drill & Modern Failure Injection (`roles/cka_lab`, `03-kubelet-diagnostics/`)**:
   Fixed `break-kubelet.sh` where injecting `cgroupDriver: invalidDriverName` into `/var/lib/kubelet/config.yaml`
   had no effect in Kubernetes v1.34+ due to `KubeletCgroupDriverFromCRI` reaching GA status and ignoring the field.

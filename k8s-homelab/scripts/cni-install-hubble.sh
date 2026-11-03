@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # Script: cni-install-hubble.sh
-# Purpose: Download, verify, and install the Cilium Hubble CLI, then optionally
-#          enable Hubble observability on an active Cilium deployment.
+# Purpose: Download, verify, and install the Cilium Hubble CLI binary.
 #
 # Context:
 #   Executed on the 'kube-control-plane' node after 'cni-install-cilium.sh'
@@ -19,14 +18,11 @@
 #   2. Detects system architecture (amd64 / arm64).
 #   3. Downloads CLI archive alongside official sha256sum and verifies integrity.
 #   4. Installs 'hubble' binary into /usr/local/bin.
-#   5. Enables Hubble via 'cilium hubble enable' if Cilium is active in cluster.
 #
 # Manual Verification:
 #   hubble version
-#   cilium status
-#   cilium hubble port-forward&
-#   hubble status
-#   hubble observe
+#   # To enable Hubble in the cluster: cilium hubble enable
+#   # To observe flows: cilium hubble port-forward & followed by: hubble status
 #
 # Troubleshooting:
 #   - If Hubble CLI download fails: Check outbound internet connectivity.
@@ -65,20 +61,6 @@ echo "    Installing hubble binary to /usr/local/bin..."
 sudo tar -C /usr/local/bin -xzvf "hubble-linux-${CLI_ARCH}.tar.gz"
 sudo chmod 0755 /usr/local/bin/hubble
 
-# 3. Enable Hubble in Cilium cluster if cluster is reachable
-if command -v cilium >/dev/null 2>&1 && command -v kubectl >/dev/null 2>&1; then
-  if kubectl get nodes >/dev/null 2>&1; then
-    echo "    Cluster is accessible. Checking Cilium status..."
-    if cilium status --wait=false >/dev/null 2>&1; then
-      echo "    Enabling Hubble observability in Cilium cluster..."
-      cilium hubble enable || true
-      echo "    Cilium cluster status:"
-      cilium status || true
-    fi
-  fi
-fi
-
 echo "=== [cni-install-hubble.sh] Cilium Hubble CLI installation complete ==="
 echo "    Verify installation via: hubble version"
-echo "    Inspect cluster status via: cilium status"
-echo "    Check Hubble relay via:  cilium hubble port-forward & followed by: hubble status"
+echo "    To enable Hubble in the cluster: cilium hubble enable"

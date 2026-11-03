@@ -82,7 +82,11 @@
   ansible.builtin.command: >-
     cilium install
     --set cluster.name={{ cluster_name }}
-    {% if cilium_kube_proxy_replacement | bool %}--set kubeProxyReplacement=true{% endif %}
+    {% if cilium_kube_proxy_replacement | bool %}
+    --set kubeProxyReplacement=true
+    --set k8sServiceHost={{ cilium_k8s_service_host }}
+    --set k8sServicePort={{ cilium_k8s_service_port }}
+    {% endif %}
     {% if cilium_ingress_enabled | bool %}
     --set ingressController.enabled=true
     --set ingressController.default={{ 'true' if (cilium_ingress_default | bool) else 'false' }}
@@ -121,7 +125,11 @@
 - name: Upgrade Cilium in cluster to enable Ingress and Gateway API
   ansible.builtin.command: >-
     cilium upgrade --reuse-values
-    {% if cilium_kube_proxy_replacement | bool %}--set kubeProxyReplacement=true{% endif %}
+    {% if cilium_kube_proxy_replacement | bool %}
+    --set kubeProxyReplacement=true
+    --set k8sServiceHost={{ cilium_k8s_service_host }}
+    --set k8sServicePort={{ cilium_k8s_service_port }}
+    {% endif %}
     {% if cilium_ingress_enabled | bool %}
     --set ingressController.enabled=true
     --set ingressController.default={{ 'true' if (cilium_ingress_default | bool) else 'false' }}
