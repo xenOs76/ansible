@@ -1,4 +1,4 @@
-.PHONY: all lint syntax inventory deps check-deps preprod-up preprod-destroy preprod-recreate preprod-status preprod-provision preprod-sync-kubeconfig prod-sync-kubeconfig preprod-deploy preprod-caddy preprod-cni preprod-ceph prod-ceph preprod-ceph-status preprod-iscsi preprod-fc preprod-fc-status preprod-nfs prod-nfs preprod-ha-nfs preprod-nfs-csi prod-nfs-csi preprod-upgrade preprod-reset preprod-cka preprod-cka-lab preprod-cks-lab preprod-ha-up preprod-ha-destroy preprod-ha-recreate preprod-ha-deploy preprod-ha-sync-kubeconfig preprod-ha-cka preprod-ha-cka-lab preprod-switch-ha preprod-switch-standard help
+.PHONY: all lint syntax inventory deps check-deps preprod-up preprod-destroy preprod-recreate preprod-status preprod-provision preprod-sync-kubeconfig prod-sync-kubeconfig preprod-deploy preprod-caddy preprod-cni preprod-ceph prod-ceph preprod-ceph-status preprod-iscsi preprod-fc preprod-fc-status preprod-nfs prod-nfs preprod-ha-nfs preprod-nfs-csi prod-nfs-csi preprod-upgrade preprod-reset cka-generate preprod-cka preprod-cka-lab preprod-cks-lab preprod-ha-up preprod-ha-destroy preprod-ha-recreate preprod-ha-deploy preprod-ha-sync-kubeconfig preprod-ha-cka preprod-ha-cka-lab preprod-switch-ha preprod-switch-standard help
 
 all: help
 
@@ -10,6 +10,7 @@ help:
 	@echo "make lint              - Run yamllint, syntax check, inventory parse, and ansible-lint"
 	@echo "make syntax            - Run ansible-playbook --syntax-check on all playbooks"
 	@echo "make inventory         - Show inventory host graph"
+	@echo "make cka-generate      - Generate CKA lab docs and manifests locally in repo (offline)"
 	@echo "make preprod-up        - Boot up Vagrant libvirt preprod VMs and provision NFS server"
 	@echo "make preprod-destroy   - Destroy Vagrant libvirt preprod VMs"
 	@echo "make preprod-recreate  - Clean rebuild: destroy and boot fresh Vagrant VMs"
@@ -140,6 +141,9 @@ preprod-upgrade:
 
 preprod-reset:
 	./scripts/run-playbook.sh -e preprod -p reset.yml
+
+cka-generate:
+	ansible-playbook -i "localhost," -c local playbooks/cka_lab_generate.yml
 
 preprod-cka: preprod-cka-lab
 preprod-cka-lab:

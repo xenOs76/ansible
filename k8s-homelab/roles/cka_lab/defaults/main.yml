@@ -220,9 +220,13 @@ cka_lab_volumes_dir: "{{ cka_lab_base_dir }}/12-volumes"
 cka_lab_nfs_server_hostname: "nfs-server.local"
 cka_lab_nfs_server_ip: >-
   {{
-    hostvars[groups['control_plane'][0]]['node_ip']
-    | default(hostvars[groups['control_plane'][0]]['ansible_host']
-    | default('192.168.56.10'))
+    (
+      hostvars[groups['control_plane'][0]]['node_ip']
+      | default(hostvars[groups['control_plane'][0]]['ansible_host']
+      | default('192.168.56.10'))
+    )
+    if ('control_plane' in groups and (groups['control_plane'] | length > 0))
+    else '192.168.56.10'
   }}
 cka_lab_nfs_export_dir: "{{ nfs_export_dir | default('/srv/nfsroot') }}"
 cka_lab_nfs_legacy_export_dir: "{{ nfs_legacy_export_symlink | default('/exports') }}"
@@ -262,6 +266,12 @@ cka_lab_networking_backend_namespace: "cka-lab-net-backend"
 cka_lab_networking_domain: "cka-lab.example.local"
 cka_lab_networking_gateway_domain: "httpbin.example.local"
 cka_lab_networking_gateway_unmatched_domain: "unmatched.example.local"
+cka_lab_networking_gateway_tls_domain: "secure.example.local"
+cka_lab_networking_ingress_http_port: 31080
+cka_lab_networking_ingress_https_port: 31443
+cka_lab_networking_gateway_http_port: 30080
+cka_lab_networking_gateway_https_port: 30443
+cka_lab_networking_gateway_tls_passthrough_port: 30445
 
 
 # Scenario: scheduling (Taints, Tolerations, Affinities, HPA, and Resource Quotas)

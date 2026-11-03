@@ -75,30 +75,21 @@ kubectl auth can-i --list --as={{ cka_lab_rbac_user | default('vagrant') }} -n d
 When defining a `Role` (namespace-scoped) or `ClusterRole` (cluster-scoped), policy rules accept four primary
 parameters under `rules[]`:
 
-- **`apiGroups`** (`[]string` - Required):
-  The API group containing the target resource.
-  - Core group (`v1`): Represented by an empty string `""` (e.g. `pods`, `services`, `secrets`, `configmaps`).
-  - Named groups: Specified by group name omitting the version (e.g. `"apps"` for `deployments`, `"batch"` for `jobs`,
-    `"rbac.authorization.k8s.io"` for `roles`).
-  - Wildcard: Use `["*"]` to match all API groups.
+| Parameter | Type | Purpose & Scope | Syntax Examples |
+| --- | :---: | --- | --- |
+| `apiGroups` | `[]string` | Target API group (core v1 is `""`) | `[""]`, `["apps"]`, `["batch"]`, `["*"]` |
+| `resources` | `[]string` | Lowercase resource plurals or subresources | `pods`, `deployments`, `pods/log`, `["*"]` |
+| `verbs` | `[]string` | Permitted CRUD actions (required on every rule) | `get,list,watch`, `create,delete`, `["*"]` |
+| `resourceNames` | `[]string` | Optional whitelist restricting to specific objects | `["app-secret"]`, `["my-pod"]` |
 
-- **`resources`** (`[]string` - Required):
-  Lowercase plural resource names governed by the rule.
-  - Standard resources: `pods`, `services`, `deployments`, `configmaps`, `secrets`, `persistentvolumeclaims`.
-  - Subresources: Appended with a slash to grant fine-grained permissions without opening the parent resource (e.g.
-    `pods/log`, `pods/status`, `pods/exec`, `deployments/scale`).
-  - Wildcard: Use `["*"]` to match all resources in the specified API group.
-
-- **`verbs`** (`[]string` - Required):
-  List of action verbs permitted on the targeted resources.
-  - Common verbs: `get`, `list`, `watch`, `create`, `update`, `patch`, `delete`, `deletecollection`.
-  - Wildcard: Use `["*"]` to grant all operations.
-
-- **`resourceNames`** (`[]string` - Optional):
-  Whitelist restricting the rule to specific individual named instances.
-  - Example: `["app-secret", "db-credentials"]` limits permissions strictly to those individual resources.
-  - Permitted verbs with `resourceNames`: `get`, `update`, `patch`, `delete`.
-  - *Note*: Cannot be used to restrict `create` (object does not exist yet) or `list`/`watch` (collection queries).
+> **Key Syntax & Exam Rules**:
+>
+> - **`apiGroups`**: Use `""` for Core v1 resources (`pods`, `services`, `secrets`, `configmaps`). For named
+>   groups, omit the version (e.g. `"apps"`, `"batch"`, `"rbac.authorization.k8s.io"`).
+> - **Subresources**: Append with a slash (`pods/log`, `pods/status`, `deployments/scale`) to grant operational access
+>   without opening full resource permissions.
+> - **`resourceNames`**: Valid with `get`, `update`, `patch`, and `delete`. Cannot be used with `create`
+>   (object name does not exist prior to creation) or `list`/`watch` (collection-level queries).
 
 #### Permitted Action Verbs
 

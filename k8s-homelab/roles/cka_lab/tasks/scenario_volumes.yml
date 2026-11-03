@@ -10,6 +10,7 @@
     - "{{ cka_lab_nfs_export_dir }}"
     - "{{ cka_lab_nfs_export_dir }}/data"
     - "{{ cka_lab_nfs_export_dir }}/reports"
+  when: not (cka_lab_docs_only | default(false) | bool)
   tags:
     - cka_lab
     - volumes
@@ -51,6 +52,7 @@
         nfs-endpoint: {{ cka_lab_nfs_server_hostname }}:{{ cka_lab_nfs_export_dir }}
   loop_control:
     label: "{{ item.dest }}"
+  when: not (cka_lab_docs_only | default(false) | bool)
   tags:
     - cka_lab
     - volumes
@@ -61,7 +63,10 @@
     path: "{{ cka_lab_nfs_legacy_export_dir }}"
     follow: false
   register: _cka_lab_legacy_export_stat
-  when: (cka_lab_nfs_legacy_export_dir | default('')) != '' and cka_lab_nfs_legacy_export_dir != cka_lab_nfs_export_dir
+  when:
+    - not (cka_lab_docs_only | default(false) | bool)
+    - (cka_lab_nfs_legacy_export_dir | default('')) != ''
+    - cka_lab_nfs_legacy_export_dir != cka_lab_nfs_export_dir
   tags:
     - cka_lab
     - volumes
@@ -74,6 +79,7 @@
     remote_src: true
     mode: preserve
   when:
+    - not (cka_lab_docs_only | default(false) | bool)
     - (cka_lab_nfs_legacy_export_dir | default('')) != ''
     - cka_lab_nfs_legacy_export_dir != cka_lab_nfs_export_dir
     - _cka_lab_legacy_export_stat.stat.exists | default(false)
@@ -89,6 +95,7 @@
     path: "{{ cka_lab_nfs_legacy_export_dir }}"
     state: absent
   when:
+    - not (cka_lab_docs_only | default(false) | bool)
     - (cka_lab_nfs_legacy_export_dir | default('')) != ''
     - cka_lab_nfs_legacy_export_dir != cka_lab_nfs_export_dir
     - _cka_lab_legacy_export_stat.stat.exists | default(false)
@@ -105,7 +112,10 @@
     dest: "{{ cka_lab_nfs_legacy_export_dir }}"
     state: link
     force: true
-  when: (cka_lab_nfs_legacy_export_dir | default('')) != '' and cka_lab_nfs_legacy_export_dir != cka_lab_nfs_export_dir
+  when:
+    - not (cka_lab_docs_only | default(false) | bool)
+    - (cka_lab_nfs_legacy_export_dir | default('')) != ''
+    - cka_lab_nfs_legacy_export_dir != cka_lab_nfs_export_dir
   tags:
     - cka_lab
     - volumes

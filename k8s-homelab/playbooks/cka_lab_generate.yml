@@ -1,0 +1,13 @@
+---
+- name: Generate CKA Training Lab Documentation and Manifests in Repository
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: false
+  vars:
+    ansible_user: "{{ omit }}"
+    cka_lab_docs_only: true
+    cka_lab_cluster_initialized: false
+    cka_lab_base_dir: "{{ playbook_dir }}/../cka"
+  roles:
+    - role: cka_lab

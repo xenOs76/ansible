@@ -44,6 +44,7 @@
     owner: root
     group: root
     mode: "0700"
+  when: not (cka_lab_docs_only | default(false) | bool)
   tags:
     - cka_lab
     - etcd
@@ -56,6 +57,7 @@
     owner: root
     group: root
     mode: "0755"
+  when: not (cka_lab_docs_only | default(false) | bool)
   tags:
     - cka_lab
     - etcd
@@ -68,6 +70,7 @@
     owner: root
     group: root
     mode: "0644"
+  when: not (cka_lab_docs_only | default(false) | bool)
   tags:
     - cka_lab
     - etcd
@@ -80,6 +83,7 @@
     owner: root
     group: root
     mode: "0644"
+  when: not (cka_lab_docs_only | default(false) | bool)
   tags:
     - cka_lab
     - etcd
@@ -91,6 +95,7 @@
     enabled: true
     state: started
     daemon_reload: true
+  when: not (cka_lab_docs_only | default(false) | bool)
   tags:
     - cka_lab
     - etcd
