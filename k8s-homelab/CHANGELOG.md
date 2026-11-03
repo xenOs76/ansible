@@ -10,6 +10,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **CKA Training Lab - WordPress NodePort Service Drill (`roles/cka_lab`, `~/cka/11-networking/`)**:
+  Added the standard CKA exam drill deploying `my-web-app-deployment` (WordPress, 2 replicas) and exposing it via
+  NodePort service `my-web-app-service` on fixed nodePort `30770`. Provides both imperative shortcuts and declarative
+  manifests, hands-on student guide `my-web-app-service-guide.md`, and automated test script `test-my-web-app-service.sh`
+  asserting deployment rollout, EndpointSlice readiness, and multi-node ingress reachability.
+
+- **CKA Training Lab - NetworkPolicy Ingress & Egress Isolation (`roles/cka_lab`, `~/cka/11-networking/`)**:
+  Added the classic exam practice scenario securing `my-app-deployment` and `cache-deployment` via `my-app-network-policy`.
+  Demonstrates selective pod ingress restricted exclusively to `app=trusted` pods, dependency egress restricted to
+  `app=cache` pods with CoreDNS port 53 UDP/TCP resolution, and strict default-deny enforcement against all non-whitelisted
+  traffic. Includes automated non-interactive verification suite `test-my-app-network-policy.sh` and hands-on guide.
+
+- **Cilium Dual Ingress and Gateway API Management (`roles/cilium`, `roles/cka_lab`, `scripts/`)**:
+  Configured Cilium to natively and concurrently manage both Kubernetes Ingress resources (`networking.k8s.io/v1`)
+  and Gateway API resources (`gateway.networking.k8s.io/v1`) through its embedded Envoy proxy data-path. Eliminated
+  NodePort collisions by isolating classic Ingress onto NodePort `31080` (HTTP) / `31443` (HTTPS) via shared
+  `cilium-ingress`, while routing Gateway API traffic through NodePort `30080` (HTTP) / `30443` (HTTPS) via
+  `CiliumGatewayClassConfig` and `GatewayClass` `cilium-nodeport`. Added in-place enablement script
+  `scripts/cni-enable-ingress-gateway.sh` (provisioned to `/home/vagrant/cni-enable-ingress-gateway.sh` and
+  `~/cka/02-helm/enable-cilium-ingress-gateway.sh`) and updated `scripts/cni-install-cilium.sh` for out-of-the-box dual
+  controller support. Updated CKA Ingress and Gateway API drills to run concurrently without requiring controller uninstalls.
+
+- **CKA Training Lab - Gateway API, HTTPRoute & TLSRoute Routing Expansion (`roles/cka_lab`, `~/cka/11-networking/`)**:
+  Enhanced the Gateway API curriculum to align with official SIG-Network documentation and exam-allowed references.
+  Expanded the Gateway configuration to support multi-listener declarations (`http`, `https-terminate`, and
+  `tls-passthrough`). Added an advanced HTTPRoute exercise covering complex matching (Logical AND inside a single match,
+  Logical OR across match items, header, query parameter, and HTTP method matching), filters (`RequestHeaderModifier`
+  header additions/removals, `URLRewrite`, `RequestRedirect`), weighted canary traffic splitting (`weight: 90` / `10`),
+  granular timeouts (`timeouts.request` and `backendRequest`), and named rules. Introduced a dedicated `TLSRoute`
+  manifest for Layer 4 SNI-based passthrough routing. Reframed NetworkPolicy verification around native CKA exam CLI
+  techniques (`kubectl exec` / `kubectl run` with explicit timeouts and `kubectl describe netpol`), while contextualizing
+  Cilium Hubble packet tracing as an auxiliary homelab observability tool.
+
+- **CKA Training Lab - Local Offline Curriculum Generation (`make cka-generate`, `playbooks/cka_lab_generate.yml`)**:
+  Added the `make cka-generate` target allowing local rendering of all 19 CKA training modules, walkthrough guides,
+  drills, scripts, and Kubernetes manifests directly into `k8s-homelab/cka/` on the developer workstation without
+  requiring running VMs or cluster infrastructure. Refactored `roles/cka_lab` with centralized base directory
+  configuration (`cka_lab_base_dir`), safe generation mode guards (`cka_lab_docs_only`), and gitignored the generated
+  `cka/` artifacts.
 - **CKA Training Lab - Advanced Kustomize Directives & Patching (`roles/cka_lab`, `~/cka/09-kustomize/`)**:
   Expanded Kustomize practice scenarios covering `secretGenerator` from key-value `.env` files, `commonAnnotations`,
   `nameSuffix`, and image transformers (`images:` with tag and digest overrides). Added exhaustive JSON 6902 RFC 6902

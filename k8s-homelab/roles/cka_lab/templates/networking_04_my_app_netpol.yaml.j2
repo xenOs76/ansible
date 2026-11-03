@@ -1,0 +1,54 @@
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: my-app-network-policy
+  namespace: {{ cka_lab_networking_namespace | default('default') }}
+  labels:
+    app.kubernetes.io/name: my-app-network-policy
+    app.kubernetes.io/part-of: cka-lab
+    cka.practice/scenario: networking
+spec:
+  # 1. Target my-app-deployment pods
+  podSelector:
+    matchLabels:
+      app: my-app
+  # 2. Enforce both Ingress and Egress isolation (default-deny for non-whitelisted flows)
+  policyTypes:
+    - Ingress
+    - Egress
+  # 3. Allow incoming traffic only from pods with label app=trusted
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: trusted
+      ports:
+        - protocol: TCP
+          port: 80
+  # 4. Allow outgoing traffic to pods (cache pods) and CoreDNS for hostname resolution
+  egress:
+    # 4a. Allow egress to cache pods
+    - to:
+        - podSelector:
+            matchLabels:
+              app: cache
+      ports:
+        - protocol: TCP
+          port: 6379
+    # 4b. Allow DNS resolution to kube-system CoreDNS
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # --------------------------------------------------------------------------
+    # Optional Exam Variation: Allow outgoing traffic to ALL pods in namespace
+    # --------------------------------------------------------------------------
+    # - to:
+    #     - podSelector: {}

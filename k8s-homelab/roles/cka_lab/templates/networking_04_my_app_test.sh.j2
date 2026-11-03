@@ -1,0 +1,98 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# test-my-app-network-policy.sh: Automated Verification for my-app NetworkPolicy Drill
+# ==============================================================================
+set -euo pipefail
+
+NAMESPACE="{{ cka_lab_networking_namespace | default('default') }}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+echo "==> [my-app NetworkPolicy Drill] Setting up workloads and client pods..."
+kubectl apply -f "${SCRIPT_DIR}/cka-lab-my-app-workload.yaml" -n "${NAMESPACE}"
+kubectl apply -f "${SCRIPT_DIR}/cka-lab-my-app-clients.yaml" -n "${NAMESPACE}"
+
+echo "Waiting for my-app and cache deployments to become Ready..."
+kubectl rollout status deployment/my-app-deployment -n "${NAMESPACE}" --timeout=60s
+kubectl rollout status deployment/cache-deployment -n "${NAMESPACE}" --timeout=60s
+kubectl wait --for=condition=Ready pod/trusted-client -n "${NAMESPACE}" --timeout=60s
+kubectl wait --for=condition=Ready pod/untrusted-client -n "${NAMESPACE}" --timeout=60s
+
+MY_APP_URL="http://my-app-service.${NAMESPACE}.svc.cluster.local:80"
+CACHE_HOST="cache-service.${NAMESPACE}.svc.cluster.local"
+
+# ------------------------------------------------------------------------------
+# Test 1: Baseline Connectivity Before NetworkPolicy (All Should Succeed)
+# ------------------------------------------------------------------------------
+echo "==> 1. Testing baseline connectivity before applying policy (expect SUCCESS)..."
+if kubectl exec -n "${NAMESPACE}" trusted-client -- wget -qO- -T 3 "${MY_APP_URL}" >/dev/null 2>&1; then
+  echo "    OK: trusted-client can reach my-app-service."
+else
+  echo "    ERROR: trusted-client failed to reach my-app-service prior to policy." >&2
+  exit 1
+fi
+
+if kubectl exec -n "${NAMESPACE}" untrusted-client -- wget -qO- -T 3 "${MY_APP_URL}" >/dev/null 2>&1; then
+  echo "    OK: untrusted-client can reach my-app-service initially."
+else
+  echo "    ERROR: untrusted-client failed baseline check." >&2
+  exit 1
+fi
+
+# Pick one my-app pod to test outgoing connectivity
+MY_APP_POD=$(kubectl get pods -n "${NAMESPACE}" -l app=my-app -o jsonpath='{.items[0].metadata.name}')
+
+echo "==> 2. Testing baseline egress from my-app to cache-service (expect SUCCESS)..."
+if kubectl exec -n "${NAMESPACE}" "${MY_APP_POD}" -- nc -z -w 3 "${CACHE_HOST}" 6379 >/dev/null 2>&1; then
+  echo "    OK: my-app can reach cache-service on port 6379 initially."
+fi
+
+# ------------------------------------------------------------------------------
+# Test 2: Apply my-app-network-policy
+# ------------------------------------------------------------------------------
+echo "==> 3. Applying NetworkPolicy 'my-app-network-policy' in ${NAMESPACE}..."
+kubectl apply -f "${SCRIPT_DIR}/cka-lab-my-app-network-policy.yaml" -n "${NAMESPACE}"
+
+# Give CNI eBPF/iptables datapath a brief moment to program rules
+sleep 2
+
+# ------------------------------------------------------------------------------
+# Test 3: Ingress Restrictions
+# ------------------------------------------------------------------------------
+echo "==> 4. Verifying Ingress from trusted-client (label app=trusted -> expect SUCCESS)..."
+if kubectl exec -n "${NAMESPACE}" trusted-client -- wget -qO- -T 3 "${MY_APP_URL}" >/dev/null 2>&1; then
+  echo "    PASS: trusted-client successfully accessed my-app-service."
+else
+  echo "    FAIL: trusted-client was unexpectedly blocked by my-app-network-policy." >&2
+  exit 1
+fi
+
+echo "==> 5. Verifying Ingress from untrusted-client (label app=untrusted -> expect BLOCKED)..."
+if ! kubectl exec -n "${NAMESPACE}" untrusted-client -- wget -qO- -T 2 "${MY_APP_URL}" >/dev/null 2>&1; then
+  echo "    PASS: untrusted-client was blocked by my-app-network-policy as expected."
+else
+  echo "    FAIL: untrusted-client was allowed through my-app-network-policy." >&2
+  exit 1
+fi
+
+# ------------------------------------------------------------------------------
+# Test 4: Egress Restrictions
+# ------------------------------------------------------------------------------
+echo "==> 6. Verifying Egress from my-app to cache-service:6379 (expect SUCCESS)..."
+if kubectl exec -n "${NAMESPACE}" "${MY_APP_POD}" -- nc -z -w 3 "${CACHE_HOST}" 6379 >/dev/null 2>&1; then
+  echo "    PASS: my-app successfully connected to cache-service on port 6379."
+else
+  echo "    FAIL: my-app could not connect to cache-service on port 6379." >&2
+  exit 1
+fi
+
+echo "==> 7. Verifying Egress from my-app to unauthorized external host (expect BLOCKED)..."
+if ! kubectl exec -n "${NAMESPACE}" "${MY_APP_POD}" -- nc -z -w 2 1.1.1.1 80 >/dev/null 2>&1; then
+  echo "    PASS: my-app external egress to 1.1.1.1:80 was blocked by policy."
+else
+  echo "    FAIL: my-app was unexpectedly able to reach external IP 1.1.1.1." >&2
+  exit 1
+fi
+
+echo "===================================================================="
+echo "  [SUCCESS] All my-app-network-policy assertions passed!            "
+echo "===================================================================="

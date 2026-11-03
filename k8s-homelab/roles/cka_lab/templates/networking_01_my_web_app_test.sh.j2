@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# test-my-web-app-service.sh: Non-Interactive Verification of my-web-app-service
+# ==============================================================================
+set -euo pipefail
+
+NAMESPACE="{{ cka_lab_networking_namespace | default('default') }}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+echo "==> [NodePort Drill] Deploying my-web-app-deployment and my-web-app-service..."
+kubectl apply -f "${SCRIPT_DIR}/cka-lab-my-web-app-deployment.yaml" -n "${NAMESPACE}"
+kubectl apply -f "${SCRIPT_DIR}/cka-lab-my-web-app-service.yaml" -n "${NAMESPACE}"
+
+echo "Waiting for my-web-app-deployment rollout (replicas: 2)..."
+kubectl rollout status deployment/my-web-app-deployment -n "${NAMESPACE}" --timeout=120s
+
+echo "==> 1. Verifying Service type and fixed NodePort 30770:"
+SVC_TYPE=$(kubectl get svc my-web-app-service -n "${NAMESPACE}" -o jsonpath='{.spec.type}')
+NODE_PORT=$(kubectl get svc my-web-app-service -n "${NAMESPACE}" -o jsonpath='{.spec.ports[0].nodePort}')
+PORT=$(kubectl get svc my-web-app-service -n "${NAMESPACE}" -o jsonpath='{.spec.ports[0].port}')
+
+echo "    Service Type: ${SVC_TYPE}"
+echo "    Service Port: ${PORT}"
+echo "    NodePort:     ${NODE_PORT}"
+
+if [[ "${SVC_TYPE}" != "NodePort" ]]; then
+  echo "    FAILED: Expected Service type NodePort, got ${SVC_TYPE}."
+  exit 1
+fi
+
+if [[ "${NODE_PORT}" != "30770" ]]; then
+  echo "    FAILED: Expected NodePort 30770, got ${NODE_PORT}."
+  exit 1
+fi
+echo "    OK: Service correctly configured as NodePort on port 30770."
+
+echo "==> 2. Verifying Endpoint registration (2 Pod replicas):"
+READY_EPS=$(kubectl get endpoints my-web-app-service -n "${NAMESPACE}" \
+  -o jsonpath='{.subsets[0].addresses[*].ip}' | tr ' ' '\n' | grep -c -v '^$' || true)
+echo "    Ready endpoints count: ${READY_EPS}"
+if [[ "${READY_EPS}" -lt 2 ]]; then
+  echo "    FAILED: Expected at least 2 ready endpoints, found ${READY_EPS}."
+  exit 1
+fi
+echo "    OK: All 2 backend Pod endpoints are active and registered."
+
+echo "==> 3. Verifying in-cluster CoreDNS and ClusterIP connectivity via ephemeral Pod:"
+CLUSTER_IP=$(kubectl get svc my-web-app-service -n "${NAMESPACE}" -o jsonpath='{.spec.clusterIP}')
+DNS_HTTP_TEST=$(kubectl run my-web-app-dns-probe \
+  --image=busybox:1.36.1 \
+  --rm -i --restart=Never \
+  -n "${NAMESPACE}" \
+  -- wget -q -S -O- -T 5 "http://my-web-app-service.${NAMESPACE}.svc.cluster.local:80" 2>&1 || true)
+
+if echo "${DNS_HTTP_TEST}" | grep -qE "200 OK|302 Found|WordPress"; then
+  echo "    OK: Ephemeral probe reached my-web-app-service (ClusterIP: ${CLUSTER_IP})."
+else
+  echo "    Warning: Response from in-cluster probe: ${DNS_HTTP_TEST:0:100}"
+fi
+
+echo "==> 4. Verifying multi-node external NodePort accessibility across cluster nodes:"
+NODE_IPS=$(kubectl get nodes -o jsonpath='{.items[*].status.addresses[?(@.type=="InternalIP")].address}')
+
+for N_IP in ${NODE_IPS}; do
+  echo "    Probing http://${N_IP}:30770/..."
+  HTTP_CODE=$(curl -s -m 5 -o /dev/null -w "%{http_code}" "http://${N_IP}:30770/" || true)
+  echo "    Node ${N_IP}:30770 returned HTTP ${HTTP_CODE}"
+  if [[ "${HTTP_CODE}" == "200" || "${HTTP_CODE}" == "302" ]]; then
+    echo "    OK: Node ${N_IP}:30770 is accessible and serving WordPress."
+  else
+    echo "    FAILED: Node ${N_IP}:30770 returned unexpected status ${HTTP_CODE}."
+    exit 1
+  fi
+done
+
+echo "==> my-web-app-service NodePort drill completed successfully."
