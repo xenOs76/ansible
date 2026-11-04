@@ -6,8 +6,10 @@ set -euo pipefail
 
 NAMESPACE="{{ cka_lab_networking_namespace | default('default') }}"
 DOMAIN="{{ cka_lab_networking_domain | default('cka-lab.example.local') }}"
+SECURE_DOMAIN="{{ cka_lab_networking_secure_domain | default('secure-ingress.example.local') }}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INGRESS_HTTP_PORT="{{ cka_lab_networking_ingress_http_port | default(31080) }}"
+INGRESS_HTTPS_PORT="{{ cka_lab_networking_ingress_https_port | default(31443) }}"
 
 echo "==> [Ingress Drill] Checking Ingress controller prerequisites..."
 if ! kubectl get ingressclass cilium >/dev/null 2>&1 && ! kubectl get ingressclass nginx >/dev/null 2>&1; then
@@ -17,16 +19,32 @@ if ! kubectl get ingressclass cilium >/dev/null 2>&1 && ! kubectl get ingresscla
   echo "    (Or deploy deprecated Ingress-NGINX via /home/vagrant/cka/helm/install-deprecated-nginx-ingress.sh)."
 fi
 
+echo "==> [Ingress Drill] Ensuring TLS certificate secret exists for Ingress TLS termination..."
+if ! kubectl get secret cka-lab-ingress-tls -n "${NAMESPACE}" >/dev/null 2>&1; then
+  echo "    Generating self-signed certificate for ${SECURE_DOMAIN}..."
+  TMP_CERT=$(mktemp)
+  TMP_KEY=$(mktemp)
+  openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+    -keyout "${TMP_KEY}" -out "${TMP_CERT}" \
+    -subj "/CN=${SECURE_DOMAIN}" >/dev/null 2>&1
+  kubectl create secret tls cka-lab-ingress-tls \
+    --cert="${TMP_CERT}" --key="${TMP_KEY}" -n "${NAMESPACE}"
+  rm -f "${TMP_CERT}" "${TMP_KEY}"
+fi
+
 echo "==> [Ingress Drill] Deploying Ingress backends and routing rules..."
 kubectl apply -f "${SCRIPT_DIR}/cka-lab-ingress-backends.yaml" -n "${NAMESPACE}"
 kubectl apply -f "${SCRIPT_DIR}/cka-lab-ingress.yaml" -n "${NAMESPACE}"
+if [ -f "${SCRIPT_DIR}/cka-lab-ingress-tls.yaml" ]; then
+  kubectl apply -f "${SCRIPT_DIR}/cka-lab-ingress-tls.yaml" -n "${NAMESPACE}"
+fi
 
 echo "Waiting for backend deployments to become ready..."
 kubectl rollout status deployment/cka-lab-ingress-web -n "${NAMESPACE}" --timeout=60s
 kubectl rollout status deployment/cka-lab-ingress-api -n "${NAMESPACE}" --timeout=60s
 
 echo "==> Ingress resource details:"
-kubectl get ingress cka-lab-ingress -n "${NAMESPACE}"
+kubectl get ingress -n "${NAMESPACE}"
 
 NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
 
@@ -36,13 +54,24 @@ if kubectl get svc -n kube-system cilium-ingress >/dev/null 2>&1; then
   if [ -n "${DETECTED_PORT:-}" ] && [ "${DETECTED_PORT}" != "null" ]; then
     INGRESS_HTTP_PORT="${DETECTED_PORT}"
   fi
+  DETECTED_HTTPS_PORT=$(kubectl get svc -n kube-system cilium-ingress -o jsonpath='{.spec.ports[?(@.port==443)].nodePort}' 2>/dev/null || echo "")
+  if [ -n "${DETECTED_HTTPS_PORT:-}" ] && [ "${DETECTED_HTTPS_PORT}" != "null" ]; then
+    INGRESS_HTTPS_PORT="${DETECTED_HTTPS_PORT}"
+  fi
 fi
 
-echo "==> Testing Ingress path routing via NodePort ${INGRESS_HTTP_PORT} with Host header ${DOMAIN}..."
+echo "==> Testing HTTP Ingress path routing via NodePort ${INGRESS_HTTP_PORT} (Host: ${DOMAIN})..."
 WEB_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -H "Host: ${DOMAIN}" "http://${NODE_IP}:${INGRESS_HTTP_PORT}/web" || echo "000")
 echo "HTTP response code for /web: ${WEB_STATUS}"
 
 API_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -H "Host: ${DOMAIN}" "http://${NODE_IP}:${INGRESS_HTTP_PORT}/api" || echo "000")
 echo "HTTP response code for /api: ${API_STATUS}"
+
+echo "==> Testing HTTPS Ingress TLS termination via NodePort ${INGRESS_HTTPS_PORT} (Host: ${SECURE_DOMAIN})..."
+SECURE_WEB_STATUS=$(curl -k -s -o /dev/null -w "%{http_code}" -H "Host: ${SECURE_DOMAIN}" "https://${NODE_IP}:${INGRESS_HTTPS_PORT}/web" || echo "000")
+echo "HTTPS response code for /web (TLS): ${SECURE_WEB_STATUS}"
+
+SECURE_API_STATUS=$(curl -k -s -o /dev/null -w "%{http_code}" -H "Host: ${SECURE_DOMAIN}" "https://${NODE_IP}:${INGRESS_HTTPS_PORT}/api" || echo "000")
+echo "HTTPS response code for /api (TLS): ${SECURE_API_STATUS}"
 
 echo "==> Ingress drill verification complete."

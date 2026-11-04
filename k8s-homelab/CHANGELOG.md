@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **CKA Training Lab - Ingress and Gateway API TLS Certificate Termination (`roles/cka_lab`, `~/cka/11-networking/`)**:
+  Provisioned hands-on exam scenarios demonstrating TLS certificate termination across both standard Ingress and
+  modern Gateway API. Added declarative manifests `cka-lab-ingress-tls.yaml` (terminating TLS for
+  `secure-ingress.example.local` via `kubernetes.io/tls` secret) and `cka-lab-httproute-tls.yaml` (attaching to the
+  Gateway `https-terminate` listener for `secure-gateway.example.local`). Expanded test harnesses `test-ingress.sh` and
+  `test-gateway.sh` with automated certificate generation (`openssl req`), TLS secret provisioning, and NodePort HTTPS
+  reachability verification (`curl -k` on ports `31443` and `30443`). Updated student guide `networking_readme.md.j2`
+  with step-by-step certificate creation and verification workflows.
+
 - **CKA Training Lab - WordPress NodePort Service Drill (`roles/cka_lab`, `~/cka/11-networking/`)**:
   Added the standard CKA exam drill deploying `my-web-app-deployment` (WordPress, 2 replicas) and exposing it via
   NodePort service `my-web-app-service` on fixed nodePort `30770`. Provides both imperative shortcuts and declarative

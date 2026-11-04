@@ -43,10 +43,12 @@
     - {src: "networking_01_my_web_app_exercise.md.j2", dest: "01-services/my-web-app-service-guide.md", mode: "0644"}
     - {src: "networking_02_ingress_backends.yaml.j2", dest: "02-ingresses/cka-lab-ingress-backends.yaml"}
     - {src: "networking_02_ingress.yaml.j2", dest: "02-ingresses/cka-lab-ingress.yaml"}
+    - {src: "networking_02_ingress_tls.yaml.j2", dest: "02-ingresses/cka-lab-ingress-tls.yaml"}
     - {src: "networking_02_test_ingress.sh.j2", dest: "02-ingresses/test-ingress.sh", mode: "0755"}
     - {src: "networking_03_gateway.yaml.j2", dest: "03-gateway-api/cka-lab-gateway.yaml"}
     - {src: "networking_03_httproute.yaml.j2", dest: "03-gateway-api/cka-lab-httproute.yaml"}
     - {src: "networking_03_httproute_advanced.yaml.j2", dest: "03-gateway-api/cka-lab-httproute-advanced.yaml"}
+    - {src: "networking_03_httproute_tls.yaml.j2", dest: "03-gateway-api/cka-lab-httproute-tls.yaml"}
     - {src: "networking_03_tlsroute.yaml.j2", dest: "03-gateway-api/cka-lab-tlsroute.yaml"}
     - {src: "networking_03_caddy_integration.md.j2", dest: "03-gateway-api/cka-lab-caddy-integration.md", mode: "0644"}
     - {src: "networking_03_test_gateway.sh.j2", dest: "03-gateway-api/test-gateway.sh", mode: "0755"}

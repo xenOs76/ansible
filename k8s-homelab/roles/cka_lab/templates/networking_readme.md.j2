@@ -49,11 +49,13 @@ primitives and modern architectural patterns:
 ├── 02-ingresses/                              # Module 2: Ingresses & Path Routing
 │   ├── cka-lab-ingress-backends.yaml          # Web and API backend deployments & services
 │   ├── cka-lab-ingress.yaml                   # Ingress resource with path-prefix rules
+│   ├── cka-lab-ingress-tls.yaml               # Ingress resource with TLS certificate termination
 │   └── test-ingress.sh                        # Non-interactive Ingress testing
 ├── 03-gateway-api/                            # Module 3: Gateway API & Advanced Routing
 │   ├── cka-lab-gateway.yaml                   # Gateway with HTTP, HTTPS & TLS Passthrough listeners
 │   ├── cka-lab-httproute.yaml                 # Basic HTTPRoute matching /httpbin and /api
 │   ├── cka-lab-httproute-advanced.yaml        # Advanced HTTPRoute (matches, filters, weights, timeouts)
+│   ├── cka-lab-httproute-tls.yaml             # HTTPRoute bound to Gateway HTTPS terminate listener
 │   ├── cka-lab-tlsroute.yaml                  # Layer 4 SNI-based passthrough routing via TLSRoute
 │   ├── cka-lab-caddy-integration.md           # Edge forwarding architecture (Caddy -> NGF)
 │   └── test-gateway.sh                        # Non-interactive Gateway API test script
@@ -320,6 +322,7 @@ If practicing in a cluster where Cilium Ingress was not pre-enabled, run:
 
 > [!NOTE]
 > **Zero Port Collision Architecture & Routing Modes**:
+>
 > - **Dual Ingress & Gateway API (Option 2 - Active Baseline)**:
 >   Cilium's embedded Envoy data-path manages both Ingress and Gateway API simultaneously. Classic Kubernetes Ingresses
 >   use NodePort `31080` (HTTP), while Gateway API Gateways use NodePort `30080` (HTTP). Standard `kube-proxy` handles
@@ -377,7 +380,65 @@ curl -i -H "Host: {{ cka_lab_networking_domain | default('cka-lab.example.local'
   "http://${NODE_IP}:{{ cka_lab_networking_ingress_http_port | default(31080) }}/api"
 ```
 
-#### Step 4: Run Automated Verification for Module 2
+#### Step 4: Ingress TLS Certificate Termination Drill
+
+In the CKA exam, you are frequently tasked with configuring HTTPS/TLS termination on an Ingress resource using a
+`kubernetes.io/tls` Secret.
+
+1. **Generate a private key and self-signed TLS certificate**:
+
+   ```bash
+   openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+     -keyout /tmp/ingress-tls.key -out /tmp/ingress-tls.crt \
+     -subj "/CN={{ cka_lab_networking_secure_domain | default('secure-ingress.example.local') }}"
+   ```
+
+1. **Create the TLS Secret imperatively**:
+
+   ```bash
+   kubectl create secret tls cka-lab-ingress-tls \
+     --cert=/tmp/ingress-tls.crt --key=/tmp/ingress-tls.key \
+     -n {{ cka_lab_networking_namespace | default('default') }}
+   rm -f /tmp/ingress-tls.key /tmp/ingress-tls.crt
+   kubectl get secret cka-lab-ingress-tls -n {{ cka_lab_networking_namespace | default('default') }}
+   ```
+
+1. **Apply the TLS-enabled Ingress manifest**:
+
+   ```bash
+   cat cka-lab-ingress-tls.yaml
+   kubectl apply -f cka-lab-ingress-tls.yaml -n {{ cka_lab_networking_namespace | default('default') }}
+   kubectl describe ingress cka-lab-ingress-tls -n {{ cka_lab_networking_namespace | default('default') }}
+   ```
+
+   Notice the `spec.tls` block terminating TLS for the declared hostname:
+
+   ```yaml
+   spec:
+     ingressClassName: cilium
+     tls:
+       - hosts:
+           - {{ cka_lab_networking_secure_domain | default('secure-ingress.example.local') }}
+         secretName: cka-lab-ingress-tls
+   ```
+
+1. **Verify HTTPS reachability on port {{ cka_lab_networking_ingress_https_port | default(31443) }}**:
+
+   ```bash
+   # Test HTTPS routing with self-signed certificate (-k / --insecure)
+   curl -k -i -H "Host: {{ cka_lab_networking_secure_domain | default('secure-ingress.example.local') }}" \
+     "https://${NODE_IP}:{{ cka_lab_networking_ingress_https_port | default(31443) }}/web"
+   ```
+
+1. **Inspect TLS certificate presentation via OpenSSL**:
+
+   ```bash
+   openssl s_client -connect "${NODE_IP}:{{ cka_lab_networking_ingress_https_port | default(31443) }}" \
+     -servername {{ cka_lab_networking_secure_domain | default('secure-ingress.example.local') }} \
+     </dev/null 2>/dev/null | openssl x509 -noout -subject -issuer
+   ```
+
+#### Step 5: Run Automated Verification for Module 2
 
 ```bash
 ./test-ingress.sh
@@ -502,7 +563,74 @@ Key TLSRoute mechanisms:
 - **Direct L4 Forwarding**: Streams raw encrypted TCP traffic directly to the destination backend service on port
   80/443.
 
-#### Step 5: Test Gateway API Routing
+#### Step 5: Gateway HTTPS Certificate Termination Drill
+
+The Gateway API separates certificate management from application routing. The Cluster Operator configures TLS
+listeners and references the certificate Secret on the `Gateway`, while application developers bind routes to that
+listener using `sectionName: https-terminate`.
+
+1. **Generate a self-signed TLS certificate for the Gateway domain**:
+
+   ```bash
+   openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+     -keyout /tmp/gateway-tls.key -out /tmp/gateway-tls.crt \
+     -subj "/CN={{ cka_lab_networking_gateway_secure_domain | default('secure-gateway.example.local') }}"
+   ```
+
+1. **Create the TLS Secret in the Gateway infrastructure namespace**:
+
+   ```bash
+   kubectl create secret tls cka-lab-gateway-tls \
+     --cert=/tmp/gateway-tls.crt --key=/tmp/gateway-tls.key \
+     -n {{ cka_lab_helm_ngf_namespace | default('nginx-gateway') }}
+   rm -f /tmp/gateway-tls.key /tmp/gateway-tls.crt
+   kubectl get secret cka-lab-gateway-tls -n {{ cka_lab_helm_ngf_namespace | default('nginx-gateway') }}
+   ```
+
+1. **Inspect the Gateway HTTPS terminate listener**:
+
+   In `cka-lab-gateway.yaml`, notice the `https-terminate` listener referencing `certificateRefs`:
+
+   ```yaml
+   listeners:
+     - name: https-terminate
+       port: 443
+       protocol: HTTPS
+       tls:
+         mode: Terminate
+         certificateRefs:
+           - name: cka-lab-gateway-tls
+       allowedRoutes:
+         namespaces:
+           from: All
+   ```
+
+1. **Deploy the TLS-bound HTTPRoute**:
+
+   Apply `cka-lab-httproute-tls.yaml`, which explicitly binds to `sectionName: https-terminate`:
+
+   ```bash
+   cat cka-lab-httproute-tls.yaml
+   kubectl apply -f cka-lab-httproute-tls.yaml -n {{ cka_lab_networking_namespace | default('default') }}
+   kubectl describe httproute cka-lab-httproute-tls -n {{ cka_lab_networking_namespace | default('default') }}
+   ```
+
+1. **Verify HTTPS routing through Gateway NodePort {{ cka_lab_networking_gateway_https_port | default(30443) }}**:
+
+   ```bash
+   curl -k -i -H "Host: {{ cka_lab_networking_gateway_secure_domain | default('secure-gateway.example.local') }}" \
+     "https://${NODE_IP}:{{ cka_lab_networking_gateway_https_port | default(30443) }}/secure-api"
+   ```
+
+1. **Inspect the Gateway TLS certificate handshake with OpenSSL**:
+
+   ```bash
+   openssl s_client -connect "${NODE_IP}:{{ cka_lab_networking_gateway_https_port | default(30443) }}" \
+     -servername {{ cka_lab_networking_gateway_secure_domain | default('secure-gateway.example.local') }} \
+     </dev/null 2>/dev/null | openssl x509 -noout -subject -issuer
+   ```
+
+#### Step 6: Test Gateway API Routing
 
 Probe the endpoints to verify basic routing, complex matches, and redirect rules:
 
@@ -520,7 +648,7 @@ curl -i -H "Host: {{ cka_lab_networking_gateway_domain | default('httpbin.exampl
 curl -i -H "Host: {{ cka_lab_networking_gateway_domain | default('httpbin.example.local') }}" "http://${NODE_IP}:30080/legacy-api"
 ```
 
-#### Step 6: Run Automated Verification for Module 3
+#### Step 7: Run Automated Verification for Module 3
 
 ```bash
 ./test-gateway.sh

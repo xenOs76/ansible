@@ -26,11 +26,12 @@ cleanup() {
   kubectl delete service cka-lab-clusterip-svc cka-lab-nodeport-svc cka-headless-svc cka-lab-ingress-web-svc \
     cka-lab-ingress-api-svc my-app-service cache-service my-web-app-service \
     -n "${NAMESPACE}" --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
-  kubectl delete ingress cka-lab-ingress -n "${NAMESPACE}" --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
+  kubectl delete ingress cka-lab-ingress cka-lab-ingress-tls -n "${NAMESPACE}" --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
   kubectl delete networkpolicy my-app-network-policy -n "${NAMESPACE}" --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
-  kubectl delete httproute cka-lab-httproute cka-lab-httproute-advanced -n "${NAMESPACE}" --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
+  kubectl delete httproute cka-lab-httproute cka-lab-httproute-advanced cka-lab-httproute-tls -n "${NAMESPACE}" --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
   kubectl delete tlsroute cka-lab-tlsroute -n "${NAMESPACE}" --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
   kubectl delete gateway cka-lab-gateway -n "${GW_NAMESPACE}" --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
+  kubectl delete secret cka-lab-ingress-tls -n "${NAMESPACE}" --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
   kubectl delete secret cka-lab-gateway-tls -n "${GW_NAMESPACE}" --ignore-not-found=true --interactive=false --now >/dev/null 2>&1 || true
   CLIENT_NS="{{ cka_lab_networking_client_namespace | default('cka-lab-net-client') }}"
   BACKEND_NS="{{ cka_lab_networking_backend_namespace | default('cka-lab-net-backend') }}"
