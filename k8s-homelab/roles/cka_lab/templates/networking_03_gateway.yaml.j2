@@ -7,6 +7,7 @@ metadata:
     app.kubernetes.io/name: cka-lab-gateway
     app.kubernetes.io/part-of: cka-lab
     cka.practice/scenario: networking
+spec:
   # Cilium NodePort GatewayClass (backed by CiliumGatewayClassConfig)
   # (For clusters running NGINX Gateway Fabric, gatewayClassName would be 'nginx')
   gatewayClassName: cilium-nodeport
