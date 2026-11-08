@@ -1,0 +1,18 @@
+---
+# ==============================================================================
+# CKA Lab Provisioning Stage 3: Full Multi-Node Cluster Ready
+# Deploys full multi-node Kubernetes cluster with control plane, joined workers,
+# Cilium CNI, NFS shared storage, and workstation kubeconfig synchronization.
+# Ideal baseline for all workload, networking, scheduling, and capstone drills.
+# ==============================================================================
+- name: 0. Announce CKA Stage 3 (Full Multi-Node Cluster Ready)
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Display Stage 3 announcement
+      ansible.builtin.debug:
+        msg: "=== CKA Staging: Stage 3 (Full Multi-Node Cluster Ready) ==="
+
+- name: 1. Deploy complete Kubernetes cluster suite
+  ansible.builtin.import_playbook: site.yml

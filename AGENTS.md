@@ -50,30 +50,42 @@ Multi-node Kubernetes 1.34+ cluster automated using `kubeadm`, `containerd`, and
 1. **`control_plane_tools`**: Control plane utilities including `etcdctl`, `etcdutl` (pinned `v3.5.16` with system-wide
    `ETCDCTL_API=3`), `k9s` (pinned `v0.51.0` with transparent Nord skin), `glow` (pinned `2.1.1` with styled alias),
    `krew` (pinned `v0.5.0` plugin manager), and `kubectl-cyclonus` (pinned `v0.2.1` NetworkPolicy analyzer).
-1. **`cka_lab`**: Hands-on CKA exam practice scenarios deployed exclusively via `make preprod-cka-lab` (`playbooks/cka_lab.yml`), including initial steps reminder MOTD activation.
+1. **`cka_lab`**: Node preparation and lab synchronization role deployed via `make preprod-cka-lab`
+   (`playbooks/cka_lab.yml`), including initial steps reminder MOTD, inter-node SSH, trainee user `anna`, and repo sync.
 1. **`upgrade`**: Rolling node upgrades (`kubeadm upgrade apply/node`, `kubelet`, `kubectl`).
 1. **`reset`**: Safe cluster teardown and node state reset (`kubeadm reset -f`, interface cleanups).
 
 ---
 
-## 3. CKA Lab Practice Environment (`cka_lab`)
+## 3. CKA Lab Practice Environment & Decoupled `os76-cka-lab`
 
-Dedicated CKA certification scenarios provisioned on `kube-control-plane` under `/home/vagrant/cka/`, organized into 17 sequentially numbered chapters (`01-jsonpath` through `17-cluster-troubleshooting`) ordered by increasing architectural complexity and concept dependencies. Legacy unnumbered paths are preserved via root symlinks for full backward compatibility:
+The CKA exam training curriculum is hosted in an independent, purpose-built repository **`os76-cka-lab`**
+(`git@git.priv.os76.xyz:xeno/os76-cka-lab.git`, private on Gitea only, not mirrored to GitHub). It features
+pure YAML manifests, native bash setup/verification scripts, and the lightweight `./ckalab` CLI runner.
 
-- **User Authentication (`user_rbac`)**:
-  - Trainee user `anna`: Dedicated Linux user with CSR-approved certificate (`/CN=anna/O=developers`) and isolated `~/.kube/config`.
-  - Minimal context script (`create-user-context.sh`): Located at `/home/vagrant/cka/rbac/create-user-context.sh` (symlinked at `/home/vagrant/cka/create-user-context.sh`). Follows `bmuschko/cka-crash-course` (Exercise 04) to generate client keys, approve CSRs, and configure a minimal-permission user context `vagrant` in `~/.kube/config`.
-  - Manual user drill (`manual-user/`): Hands-on manual execution of all OpenSSL key/CSR generation, Kubernetes CSR manifest creation, approval, certificate extraction, and kubeconfig credential/context binding at `/home/vagrant/cka/rbac/manual-user/` with automated verification suite (`verify-manual-user.sh`) and cleanup tooling.
-  - Exercise guide: `/home/vagrant/cka/rbac/README.md`.
-- **etcd Disaster Recovery & Automated Daily Backup (`etcd`)**:
-  - Manual backup and restore procedures (`01-backup-restore/`) with static pod TLS discovery and canary simulation (`simulate-loss-drill.sh`).
-  - Automated daily backup scenario (`02-automated-backup/`): Health-checked backup script (`backup-etcd-daily.sh`), timestamp and prefix naming (`etcd-snapshot-YYYYMMDD_HHMMSS.db`), 7-day retention pruning, and systemd timer management (`etcd-backup.timer`, `etcd-backup.service`, `install-timer.sh`).
-  - Comprehensive automated test validation suite (`test-etcd-drills.sh`).
-- **Secrets Scenario (`secrets`)**: Sample Secrets across `default` and `development` namespaces (`Opaque`, `basic-auth`, `tls`, `ssh-auth`) at `/home/vagrant/cka/secrets/sample-secrets.yaml`.
-- **ConfigMaps & Kustomize (`configmaps`)**:
-  - Sample ConfigMaps across namespaces at `/home/vagrant/cka/configmaps/sample-configmaps.yaml`.
-  - Self-contained Kustomize lab at `/home/vagrant/cka/kustomize/` (`base/`, `overlays/development/`, `overlays/production/`).
-- **Helm & Addons (`helm`)**: Standalone installation scripts for Metrics Server (`install-kube-metrics.sh`), Prometheus Operator (`install-kube-prometheus.sh`), NGINX Gateway Fabric (`install-nginx-gateway-fabric.sh`), and httpbin-go (`install-httpbin-go.sh`) at `/home/vagrant/cka/helm/`.
+The `os76-ansible` repository provides the foundational infrastructure automation and reproducible intermediate
+VM staging states required for all CKA challenges:
+
+- **Stage 0 (`make preprod-stage-bare`)**: OS tuning, sysctls, and kernel modules (`overlay`, `br_netfilter`) only.
+  Leaves nodes without containerd or k8s binaries for CRI and cluster bootstrapping drills from scratch.
+- **Stage 1 (`make preprod-stage-prebootstrap`)**: Nodes primed with `containerd`, pinned `kubeadm`, `kubelet`,
+  and `kubectl`, and control plane tools. Uninitialized (`kubeadm init` has not run).
+- **Stage 2 (`make preprod-stage-cp-only`)**: Control plane initialized with Cilium CNI and workstation credentials
+  synced. Worker nodes unjoined for token creation, discovery hash calculation, and worker join practice.
+- **Stage 3 (`make preprod-stage-ready`)**: Full multi-node cluster ready (identical to `make preprod-deploy`).
+- **Snapshot Management (`make cka-snapshot-save` / `make cka-snapshot-restore`)**: Instant Libvirt snapshot
+  save and restore for disaster recovery and fast training ground resets without full VM re-creation.
+- **Lab Synchronization (`make cka-lab-clone`)**: Synchronizes the standalone `os76-cka-lab` repository into
+  `/home/vagrant/cka/` on `kube-control-plane`.
+
+- **Node-Level Infrastructure Preparation (`roles/cka_lab`)**:
+  - Trainee user `anna`: Dedicated Linux user with CSR-approved certificate (`/CN=anna/O=developers`) and isolated
+    `~/.kube/config`.
+  - Inter-node SSH: Automated SSH keypair and `/etc/hosts` resolution across cluster nodes for seamless worker access.
+  - Training MOTD: Reminds trainee of standard environment variables (`kdo`, `know`), aliases (`k`, `etcdctl`), and
+    exam documentation boundaries.
+  - Automated synchronization: Synchronizes the standalone `os76-cka-lab` suite into `/home/vagrant/cka/` via
+    `ansible.posix.synchronize` (or Git clone fallback) and ensures executable permissions on `./ckalab`.
 
 ---
 

@@ -8,172 +8,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-11-08
+
 ### Added
 
-- **CKA Training Lab - Ingress and Gateway API TLS Certificate Termination (`roles/cka_lab`, `~/cka/11-networking/`)**:
-  Provisioned hands-on exam scenarios demonstrating TLS certificate termination across both standard Ingress and
-  modern Gateway API. Added declarative manifests `cka-lab-ingress-tls.yaml` (terminating TLS for
-  `secure-ingress.example.local` via `kubernetes.io/tls` secret) and `cka-lab-httproute-tls.yaml` (attaching to the
-  Gateway `https-terminate` listener for `secure-gateway.example.local`). Expanded test harnesses `test-ingress.sh` and
-  `test-gateway.sh` with automated certificate generation (`openssl req`), TLS secret provisioning, and NodePort HTTPS
-  reachability verification (`curl -k` on ports `31443` and `30443`). Updated student guide `networking_readme.md.j2`
-  with step-by-step certificate creation and verification workflows.
-
-- **CKA Training Lab - WordPress NodePort Service Drill (`roles/cka_lab`, `~/cka/11-networking/`)**:
-  Added the standard CKA exam drill deploying `my-web-app-deployment` (WordPress, 2 replicas) and exposing it via
-  NodePort service `my-web-app-service` on fixed nodePort `30770`. Provides both imperative shortcuts and declarative
-  manifests, hands-on student guide `my-web-app-service-guide.md`, and automated test script `test-my-web-app-service.sh`
-  asserting deployment rollout, EndpointSlice readiness, and multi-node ingress reachability.
-
-- **CKA Training Lab - NetworkPolicy Ingress & Egress Isolation (`roles/cka_lab`, `~/cka/11-networking/`)**:
-  Added the classic exam practice scenario securing `my-app-deployment` and `cache-deployment` via `my-app-network-policy`.
-  Demonstrates selective pod ingress restricted exclusively to `app=trusted` pods, dependency egress restricted to
-  `app=cache` pods with CoreDNS port 53 UDP/TCP resolution, and strict default-deny enforcement against all non-whitelisted
-  traffic. Includes automated non-interactive verification suite `test-my-app-network-policy.sh` and hands-on guide.
-
-- **Cilium Dual Ingress and Gateway API Management (`roles/cilium`, `roles/cka_lab`, `scripts/`)**:
-  Configured Cilium to natively and concurrently manage both Kubernetes Ingress resources (`networking.k8s.io/v1`)
-  and Gateway API resources (`gateway.networking.k8s.io/v1`) through its embedded Envoy proxy data-path. Eliminated
-  NodePort collisions by isolating classic Ingress onto NodePort `31080` (HTTP) / `31443` (HTTPS) via shared
-  `cilium-ingress`, while routing Gateway API traffic through NodePort `30080` (HTTP) / `30443` (HTTPS) via
-  `CiliumGatewayClassConfig` and `GatewayClass` `cilium-nodeport`. Added in-place enablement script
-  `scripts/cni-enable-ingress-gateway.sh` (provisioned to `/home/vagrant/cni-enable-ingress-gateway.sh` and
-  `~/cka/02-helm/enable-cilium-ingress-gateway.sh`) and updated `scripts/cni-install-cilium.sh` for out-of-the-box dual
-  controller support. Updated CKA Ingress and Gateway API drills to run concurrently without requiring controller uninstalls.
-
-- **CKA Training Lab - Gateway API, HTTPRoute & TLSRoute Routing Expansion (`roles/cka_lab`, `~/cka/11-networking/`)**:
-  Enhanced the Gateway API curriculum to align with official SIG-Network documentation and exam-allowed references.
-  Expanded the Gateway configuration to support multi-listener declarations (`http`, `https-terminate`, and
-  `tls-passthrough`). Added an advanced HTTPRoute exercise covering complex matching (Logical AND inside a single match,
-  Logical OR across match items, header, query parameter, and HTTP method matching), filters (`RequestHeaderModifier`
-  header additions/removals, `URLRewrite`, `RequestRedirect`), weighted canary traffic splitting (`weight: 90` / `10`),
-  granular timeouts (`timeouts.request` and `backendRequest`), and named rules. Introduced a dedicated `TLSRoute`
-  manifest for Layer 4 SNI-based passthrough routing. Reframed NetworkPolicy verification around native CKA exam CLI
-  techniques (`kubectl exec` / `kubectl run` with explicit timeouts and `kubectl describe netpol`), while contextualizing
-  Cilium Hubble packet tracing as an auxiliary homelab observability tool.
-
-- **CKA Training Lab - Local Offline Curriculum Generation (`make cka-generate`, `playbooks/cka_lab_generate.yml`)**:
-  Added the `make cka-generate` target allowing local rendering of all 19 CKA training modules, walkthrough guides,
-  drills, scripts, and Kubernetes manifests directly into `k8s-homelab/cka/` on the developer workstation without
-  requiring running VMs or cluster infrastructure. Refactored `roles/cka_lab` with centralized base directory
-  configuration (`cka_lab_base_dir`), safe generation mode guards (`cka_lab_docs_only`), and gitignored the generated
-  `cka/` artifacts.
-- **CKA Training Lab - Advanced Kustomize Directives & Patching (`roles/cka_lab`, `~/cka/09-kustomize/`)**:
-  Expanded Kustomize practice scenarios covering `secretGenerator` from key-value `.env` files, `commonAnnotations`,
-  `nameSuffix`, and image transformers (`images:` with tag and digest overrides). Added exhaustive JSON 6902 RFC 6902
-  patches (`replace` memory, `remove` probe, `add` sidecars, `add` environment variables, and label-targeted patches)
-  alongside strategic merge patching, backed by an automated verification test suite and comprehensive options guide.
-- **CKA Training Lab - Pod Topology Spread Constraints (`roles/cka_lab`, `~/cka/10-scheduling/06-topology-spread/`)**:
-  Provisioned hands-on scenarios for fine-grained failure domain distribution using `topologySpreadConstraints`. Covers
-  `maxSkew` calculations, `whenUnsatisfiable` policies (`DoNotSchedule` hard enforcement vs `ScheduleAnyway` soft
-  balancing), and `matchLabelKeys: ["pod-template-hash"]` for rolling updates, complete with automated multi-node
-  validation.
-- **CKA Training Lab - In-Pod API Server Interrogation (`roles/cka_lab`, `~/cka/03-rbac/03-api-access/`)**:
-  Implemented in-pod API interrogation drills using projected ServiceAccount tokens and CA certificates
-  (`/var/run/secrets/kubernetes.io/serviceaccount/`). Covers core vs named API taxonomy (`/api/v1` vs `/apis`), namespace
-  resource querying (`/api/v1/namespaces/{ns}/secrets`), base64 payload extraction, RBAC boundary enforcement (HTTP 403
-  Forbidden), interactive inspection tooling, and `kubectl proxy` workflows.
-- **CKA Training Lab - Inter-Node DNS Resolution & Passwordless SSH (`playbooks/cka_lab.yml`, `roles/cka_lab`)**:
-  Automated cluster-wide `/etc/hosts` population across `k8s_cluster` and distributed a dedicated Ed25519 lab SSH
-  keypair from `control_plane[0]` to all worker nodes (`~/.ssh/authorized_keys` and `~/.ssh/config`) exclusively for
-  CKA training. Enables 1:1 CKA exam terminal fidelity (`ssh kube-worker-1`), eliminates DNS resolution failures during
-  worker diagnostics (`break-cni.sh`, `break-kubelet.sh`), and adds dynamic Kubernetes Node API IP resolution
-  fallbacks.
-- **CKA Training Lab - Comprehensive Troubleshooting Drills Expansion (`roles/cka_lab`)**:
-  Expanded Chapter 17 with 14 end-to-end break-fix drills covering control plane static pods (`kube-apiserver`,
-  `kube-controller-manager`, `kube-scheduler`), worker node diagnostics (unparseable YAML, corrupted CRI socket,
-  systemd drop-in mismatch, expired client certificates), CNI plugin recovery (`09-cni-recovery/`), RBAC authorization
-  alignment (`10-rbac-recovery/`), storage & volume triage (`11-storage-recovery/`), Ingress routing triage
-  (`06-service-endpoints-recovery/`), worker static mirror pod NodePort exposure, advanced scheduling taints
-  (`12-scheduling-recovery/`), cluster reconnaissance (`13-cluster-recon/`), and PKI certificate renewal
-  (`14-pki-certs/`).
-- **CKA Training Lab - Pod Lifecycle & Upstream Dependency Probes (`roles/cka_lab`, `~/cka/04-pods/`)**:
-  Added Killer.sh practice scenarios for pod lifecycle management, including upstream ClusterIP service readiness
-  dependency validation via custom `exec` `readinessProbe` before marking pods Ready.
-- **CKA Training Lab - Network Policies & Hubble Diagnostics (`roles/cka_lab`, `~/cka/11-networking/`)**:
-  Restored comprehensive CKA NetworkPolicy scenarios covering default-deny ingress, client pod ingress allow rules,
-  CoreDNS egress, and database egress restrictions. Includes real-time packet drop troubleshooting via Hubble CLI
-  (`hubble observe --verdict DROPPED`) and non-interactive automated verification.
-- **CKS Training Lab - Pod-to-Pod Security & Network Policies (`roles/cks_lab`, `~/cks/network-policies/`)**:
-  Provisioned comprehensive CKS exam practice scenarios covering basic isolation and cloud metadata protection
-  (`01-basic-isolation/`, `169.254.169.254/32` via `ipBlock.except`), progressive zero-trust microsegmentation
-  (`02-progressive-microsegmentation/`), multi-tenant cross-namespace boundaries (`03-multi-tenant-isolation/`),
-  and static policy auditing via `kubectl-cyclonus` (`04-policy-analysis-cyclonus/`). Includes non-interactive
-  automated test suites, self-contained microservice test workloads, and Cilium Hubble eBPF drop analysis guides.
-- **Krew & kubectl-cyclonus Tooling (`roles/control_plane_tools`, `scripts/control-plane-tools.sh`)**:
-  Integrated `krew` (`v0.5.0`) kubectl plugin manager and `kubectl-cyclonus` (`v0.2.1`) NetworkPolicy analyzer into
-  control plane bootstrap automation across Ansible tasks, Vagrant shell provisioning, user environment profile
-  (`PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"`), and CKA training lab playbooks and scenario guides.
-- **CKA Shell Shortcuts & etcdctl TLS Alias (`roles/control_plane`, `roles/cka_lab`)**:
-  Added standard CKA productivity shortcuts and aliases across control plane shell profiles
-  (`/etc/profile.d/k8s-completion.sh`, `~/.bashrc`) and the initial steps reminder MOTD (`~/cka` / `~/.motd`). Includes
-  dry-run manifest generator (`export kdo="--dry-run=client -o yaml"`), fast deletion (`export know="--force
-  --grace-period=0"`), and pre-configured static pod TLS alias for `etcdctl`.
-- **Cilium Hubble CLI Installation & Vagrant Provisioning (`scripts/cni-install-hubble.sh`, `roles/cilium`)**:
-  Added automated Hubble CLI installation script (`cni-install-hubble.sh`) with official upstream release checksum
-  verification and optional cluster enablement. Co-located with `cni-install-cilium.sh` in repository `scripts/`,
-  Vagrant VM provisioning (`/home/vagrant/cni-install-hubble.sh`), and the Ansible `cilium` role.
+- **CKA Lab Architecture Decoupling & Standalone Repository (`os76-cka-lab`)**:
+  Decoupled the hands-on CKA curriculum into an independent private repository (`os76-cka-lab`) featuring 42
+  active-recall challenges across 21 chapters, progressive hints, automated validation, and the POSIX/Bash `./ckalab`
+  CLI runner. Modernized `roles/cka_lab` to automatically synchronize the standalone suite into `/home/vagrant/cka/`
+  via `ansible.posix.synchronize` and maintain trainee credentials (`anna`) and inter-node SSH access.
+- **Reproducible Multi-Stage VM Provisioning & Snapshot Management (`Makefile`, `playbooks/`)**:
+  Introduced intermediate VM staging playbooks and Makefile targets to prepare clean environments for any CKA drill:
+  Stage 0 Bare Nodes (`make preprod-stage-bare`), Stage 1 Pre-bootstrap (`make preprod-stage-prebootstrap`), Stage 2
+  Control Plane Only (`make preprod-stage-cp-only`), and Stage 3 Ready Cluster (`make preprod-stage-ready`). Added
+  instant atomic Libvirt disk snapshot targets (`make cka-snapshot-save`, `make cka-snapshot-restore`).
+- **Cilium Dual Ingress and Gateway API Management (`roles/cilium`, `scripts/`)**:
+  Configured Cilium to concurrently manage classic Kubernetes Ingress (`networking.k8s.io/v1`) on NodePort 31080/31443
+  and Gateway API (`gateway.networking.k8s.io/v1`) on NodePort 30080/30443 without port collisions, supporting
+  advanced HTTPRoute filtering, TLSRoute SNI passthrough, and traffic splitting.
+- **Control Plane Tooling & Productivity Ergonomics (`roles/control_plane_tools`, `roles/control_plane`)**:
+  Integrated pinned `krew` (`v0.5.0`) plugin manager, `kubectl-cyclonus` (`v0.2.1`) NetworkPolicy analyzer, and `glow`
+  markdown viewer into control plane automation, alongside shell productivity aliases (`kdo`, `know`, `etcdctl`).
+- **CKS Security Training Scenarios (`roles/cks_lab`)**:
+  Expanded CKS practice lab with zero-trust NetworkPolicy microsegmentation, cloud metadata endpoint protection
+  (`169.254.169.254/32`), AppArmor/Seccomp profiles, and static policy auditing via `kubectl-cyclonus`.
 
 ### Changed
 
-- **CKA vs CKS Network Policy Curriculum Separation (`roles/cka_lab`, `roles/cks_lab`)**:
-  Refined curriculum boundaries: CKA focuses on standard functional NetworkPolicy isolation (ingress/egress selectors,
-  port rules, and Hubble packet drop analysis), while CKS focuses on hardened zero-trust security (cloud metadata
-  endpoint isolation `169.254.169.254/32` and automated Cyclonus matrix auditing).
-- **Static Pod Troubleshooting & Canary Diagnostics (`roles/cka_lab`, `02-static-pod-recovery/`)**:
-  Modernized the control plane static pod recovery drill with multi-scenario failure injection (`--scenario=kubeconfig`,
-  `mount`, `syntax`), automated canary workload verification (`cka-scheduler-probe`), robust recovery scripting
-  (`fix-scheduler.sh`), automated self-testing (`test-static-pod-recovery.sh`), and real-world incident post-mortem
-  citations from `hjacobs/kubernetes-failure-stories`, OpenAI, Datadog, and CNCF curriculum standards.
-- **Storage Decoupling & Baseline Streamlining (`roles/common`, `playbooks/site.yml`, `scripts/common.sh`)**:
-  Removed optional storage layers from the default baseline cluster installation to accelerate provisioning and simplify
-  maintenance. Ceph (`rook_ceph`, `rbd.ko`) and iSCSI (`open-iscsi`, `iscsi_tcp.ko`, `iscsid.service`) are now strictly
-  on-demand auxiliary layers with self-contained module and service preparation in `playbooks/ceph.yml` (`make
-  preprod-ceph`) and `playbooks/iscsi.yml` (`make preprod-iscsi`). Classic NFS (`nfs-common`, `nfs-kernel-server`)
-  remains the guaranteed core storage baseline.
-- **Cross-Namespace Gateway Architecture & Simplified Network Policies (`roles/cka_lab`, `~/cka/11-networking`)**:
-  Moved the Gateway resource to the dedicated infrastructure namespace (`nginx-gateway`) with cross-namespace routing
-  allowed. Eliminated internal proxy lockdown boilerplate in tenant namespace `default`, reducing tenant policies to
-  two clean cross-namespace rules: ingress to `httpbingo:8080` from `nginx-gateway` and egress to `nginx-gateway:80`
-  from client pods. Updated `test-gateway.sh` and `test-advanced-netpol.sh` test suites, and documented in-cluster and
-  external verification procedures in `README.md`.
-- **Terminal Ergonomics & Walkthrough Guide Formatting (`roles/cka_lab`)**:
-  Replaced wide multi-column markdown tables with structured incident and remediation lists across static pod and
-  networking walkthrough guides for optimal rendering in `glow` terminal viewer, and updated the CKA master index.
+- **Baseline Storage Decoupling & Core NFS Standardization (`roles/common`, `playbooks/`)**:
+  Streamlined default cluster provisioning by decoupling Ceph (`roles/rook_ceph`) and iSCSI (`roles/iscsi_target`)
+  into strictly on-demand auxiliary playbooks (`make preprod-ceph`, `make preprod-iscsi`), keeping NFS as the
+  lightweight core storage baseline.
+- **Static Pod & Kubelet Diagnostics Modernization (`roles/cka_lab`)**:
+  Refactored static pod and kubelet break-fix drills with authentic failure modes (unparseable YAML, corrupted CRI
+  socket, systemd drop-ins) compatible with Kubernetes 1.34+ GA behavior and isolated manifest backup paths.
+
+### Removed
+
+- **Legacy CKA Templates & Monolithic Playbook Tasks (`roles/cka_lab`)**:
+  Pruned 695 redundant Jinja2 template files and 20 monolithic scenario tasks from `roles/cka_lab`, migrating all
+  manifests and drill logic to native YAML and bash scripts in the standalone `os76-cka-lab` repository.
 
 ### Fixed
 
-- **Cilium Hubble CLI Installation Scope (`scripts/cni-install-hubble.sh`)**:
-  Restricted script scope to strictly download, verify checksum, and install `/usr/local/bin/hubble` without invoking
-  in-cluster mutation commands (`cilium hubble enable`) or triggering status checks.
-- **Cilium Service Routing Mode & Halloween Network Upgrade Trick (`roles/cilium`, `scripts/`)**:
-  Restored standard `kube-proxy` service routing (Option 2) across Cilium Ansible defaults and standalone deployment
-  scripts, ensuring zero-deadlock cluster bootstrapping while maintaining out-of-the-box dual Ingress (`31080/31443`)
-  and Gateway API (`30080/30443`) management. Documented the full eBPF host routing architecture (Option 3:
-  "Halloween Network Upgrade Trick" with `kubeProxyReplacement=true` and `k8sServiceHost`) as a future roadmap item.
-- **CKA Lab Ingress Manifest Spec Declaration (`roles/cka_lab`, `02-ingresses/cka-lab-ingress.yaml`)**:
-  Fixed syntax in `networking_02_ingress.yaml.j2` where `ingressClassName` and `rules` were declared directly under
-  `metadata:` instead of `spec:`, causing strict decoding errors during `kubectl apply -f cka-lab-ingress.yaml`.
-- **CKA Lab Gateway Manifest Spec Declaration (`roles/cka_lab`, `03-gateway-api/cka-lab-gateway.yaml`)**:
-  Fixed syntax in `networking_03_gateway.yaml.j2` where `gatewayClassName` and `listeners` were declared directly
-  under `metadata:` instead of `spec:`, causing strict decoding errors during `kubectl apply -f cka-lab-gateway.yaml`.
-
-- **Kubelet Diagnostics Drill & Modern Failure Injection (`roles/cka_lab`, `03-kubelet-diagnostics/`)**:
-  Fixed `break-kubelet.sh` where injecting `cgroupDriver: invalidDriverName` into `/var/lib/kubelet/config.yaml`
-  had no effect in Kubernetes v1.34+ due to `KubeletCgroupDriverFromCRI` reaching GA status and ignoring the field.
-  Replaced with authentic multi-scenario failure injection (`--scenario=config` with unparseable YAML syntax in
-  `config.yaml`, `--scenario=cri` with corrupted CRI runtime socket in `kubeadm-flags.env`, and `--scenario=systemd`
-  with invalid config path in `10-kubeadm.conf`), added defensive verification to ensure service failure detection,
-  and updated `fix-kubelet.sh` and guide documentation to restore all configuration layers.
-- **Static Pod Failure Drills & Backup Path Isolation (`roles/cka_lab`, `02-static-pod-recovery/`)**:
-  Fixed static pod recovery drills (`break-scheduler.sh`, `break-controller-manager.sh`, `break-apiserver.sh`) where
-  manifest backups stored inside `/etc/kubernetes/manifests/*.bak` caused kubelet to parse and run the healthy backup
-  manifest, preventing failure simulation. Relocated backup files outside the manifests directory
-  (`/etc/kubernetes/*.yaml.bak`), added immediate container process reload (`crictl stop`), and ensured canary workloads
-  consistently reflect scheduling and replica stalls.
-- **Headless Service & Advanced Netpol Test Harnesses (`roles/cka_lab`, `~/cka/11-networking`)**:
-  Corrected the headless service manifest path in `test-headless.sh` to match `cka-lab-headless-service.yaml`, and
-  added pre-test cleanup to `test-advanced-netpol.sh` to prevent stale policies from invalidating baseline checks.
+- **Cilium Service Routing & Hubble Scope (`roles/cilium`, `scripts/`)**:
+  Restored standard `kube-proxy` service routing mode to eliminate bootstrapping deadlocks, and restricted Hubble CLI
+  installation to standalone binary deployment without invoking mutating in-cluster commands.
+- **Manifest Syntax & Test Suite Alignments (`roles/cka_lab`)**:
+  Corrected Ingress and Gateway API spec declarations, fixed headless service manifest paths, and added pre-test
+  cleanups to NetworkPolicy test harnesses.
 
 ## [1.5.2] - 2026-10-20
 

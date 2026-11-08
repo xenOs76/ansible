@@ -1,0 +1,32 @@
+---
+# ==============================================================================
+# CKA Lab Provisioning Stage 1: Pre-bootstrap Node Environment
+# Sets up containerd runtime, pinned Kubernetes APT packages (kubeadm, kubelet,
+# kubectl), and control plane tooling. Nodes are primed but uninitialized
+# (kubeadm init has not run).
+# Ideal for kubeadm init, HA cluster bootstrap, and CNI installation drills.
+# ==============================================================================
+- name: 0. Announce CKA Stage 1 (Pre-bootstrap Node Environment)
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Display Stage 1 announcement
+      ansible.builtin.debug:
+        msg: "=== CKA Staging: Stage 1 (Containerd & K8s Packages Installed, Uninitialized) ==="
+
+- name: 1. Bootstrap common prerequisites, containerd, and kubernetes packages
+  hosts: k8s_cluster
+  become: true
+  roles:
+    - role: common
+    - role: containerd
+    - role: kubernetes_packages
+
+- name: 2. Bootstrap control plane tooling
+  hosts: control_plane
+  become: true
+  roles:
+    - role: control_plane_tools
+  tags:
+    - tools

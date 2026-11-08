@@ -1,0 +1,21 @@
+---
+# ==============================================================================
+# CKA Lab Provisioning Stage 0: Bare Nodes
+# Bootstraps baseline OS tuning, sysctl, kernel modules, vim, and utilities.
+# Leaves nodes without container runtime or Kubernetes binaries.
+# Ideal for end-to-end installation drills (CRI + kubeadm from scratch).
+# ==============================================================================
+- name: 0. Announce CKA Stage 0 (Bare Nodes)
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Display Stage 0 announcement
+      ansible.builtin.debug:
+        msg: "=== CKA Staging: Stage 0 (Bare Nodes / OS Prerequisites Only) ==="
+
+- name: 1. Provision common OS prerequisites and kernel modules
+  hosts: k8s_cluster
+  become: true
+  roles:
+    - role: common

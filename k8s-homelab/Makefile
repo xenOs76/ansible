@@ -1,4 +1,4 @@
-.PHONY: all lint syntax inventory deps check-deps preprod-up preprod-destroy preprod-recreate preprod-status preprod-provision preprod-sync-kubeconfig prod-sync-kubeconfig preprod-deploy preprod-caddy preprod-cni preprod-ceph prod-ceph preprod-ceph-status preprod-iscsi preprod-fc preprod-fc-status preprod-nfs prod-nfs preprod-ha-nfs preprod-nfs-csi prod-nfs-csi preprod-upgrade preprod-reset cka-generate preprod-cka preprod-cka-lab preprod-cks-lab preprod-ha-up preprod-ha-destroy preprod-ha-recreate preprod-ha-deploy preprod-ha-sync-kubeconfig preprod-ha-cka preprod-ha-cka-lab preprod-switch-ha preprod-switch-standard help
+.PHONY: all lint syntax inventory deps check-deps preprod-up preprod-destroy preprod-recreate preprod-status preprod-provision preprod-sync-kubeconfig prod-sync-kubeconfig preprod-deploy preprod-caddy preprod-cni preprod-ceph prod-ceph preprod-ceph-status preprod-iscsi preprod-fc preprod-fc-status preprod-nfs prod-nfs preprod-ha-nfs preprod-nfs-csi prod-nfs-csi preprod-upgrade preprod-reset cka-generate preprod-cka preprod-cka-lab preprod-cka-chaos preprod-cks-lab preprod-ha-up preprod-ha-destroy preprod-ha-recreate preprod-ha-deploy preprod-ha-sync-kubeconfig preprod-ha-cka preprod-ha-cka-lab preprod-switch-ha preprod-switch-standard preprod-stage-bare preprod-stage-prebootstrap preprod-stage-cp-only preprod-stage-ready cka-snapshot-save cka-snapshot-restore cka-lab-clone help
 
 all: help
 
@@ -37,6 +37,13 @@ help:
 	@echo "make preprod-cka-lab   - Deploy CKA training lab scenarios on preprod"
 	@echo "make preprod-cka-chaos - Deploy CKA lab including Litmus dynamic chaos drills"
 	@echo "make preprod-cks-lab   - Deploy CKS training lab scenarios on preprod"
+	@echo "make preprod-stage-bare - Provision Stage 0: OS tuning & prerequisites only (bare nodes)"
+	@echo "make preprod-stage-prebootstrap - Provision Stage 1: containerd & k8s packages (uninitialized)"
+	@echo "make preprod-stage-cp-only - Provision Stage 2: Control plane initialized, workers unjoined"
+	@echo "make preprod-stage-ready - Provision Stage 3: Full multi-node cluster ready"
+	@echo "make cka-snapshot-save - Save snapshot of current VM state (name: cka-baseline)"
+	@echo "make cka-snapshot-restore - Restore VMs from snapshot (name: cka-baseline)"
+	@echo "make cka-lab-clone     - Sync standalone os76-cka-lab into control plane ~/cka"
 	@echo "make preprod-ha-up     - Boot up Vagrant libvirt preprod HA VMs (3 CPs + 1 Worker)"
 	@echo "make preprod-ha-deploy - Run full Ansible playbook deployment on HA preprod"
 	@echo "make preprod-ha-destroy - Destroy Vagrant libvirt preprod HA VMs"
@@ -151,6 +158,52 @@ preprod-cka-lab:
 
 preprod-cka-chaos:
 	./scripts/run-playbook.sh -e preprod -p cka_lab.yml --extra-vars "cka_lab_scenario_chaos_troubleshooting_enabled=true"
+
+preprod-stage-bare:
+	./scripts/run-playbook.sh -e preprod -p cka_stage_bare.yml
+
+preprod-stage-prebootstrap:
+	./scripts/run-playbook.sh -e preprod -p cka_stage_prebootstrap.yml
+
+preprod-stage-cp-only:
+	./scripts/run-playbook.sh -e preprod -p cka_stage_cp_only.yml
+
+preprod-stage-ready:
+	./scripts/run-playbook.sh -e preprod -p cka_stage_ready.yml
+
+cka-snapshot-save:
+	@echo "Saving libvirt VM snapshot 'cka-baseline' across all preprod VMs..."
+	@for dom in k8s-homelab_kube-control-plane k8s-homelab_kube-worker-1 k8s-homelab_kube-worker-2; do \
+		echo "  -> Snapshotting $$dom..."; \
+		virsh -c qemu:///system snapshot-create-as --domain "$$dom" --name cka-baseline --disk-only --atomic 2>/dev/null || true; \
+	done
+	@echo "✔ Snapshot 'cka-baseline' saved successfully."
+
+cka-snapshot-restore:
+	@echo "Restoring preprod VMs from snapshot 'cka-baseline'..."
+	@for dom in k8s-homelab_kube-control-plane k8s-homelab_kube-worker-1 k8s-homelab_kube-worker-2; do \
+		echo "  -> Reverting $$dom..."; \
+		virsh -c qemu:///system snapshot-revert --domain "$$dom" --snapshotname cka-baseline 2>/dev/null || true; \
+	done
+	@./scripts/sync-kubeconfig.sh --best-effort || true
+	@echo "✔ Restored to snapshot 'cka-baseline'."
+
+cka-lab-clone:
+	@echo "Synchronizing standalone os76-cka-lab repository to control plane ~/cka..."
+	@CP_IP=$$(awk '/\[control_plane\]/{getline; print $$2}' inventory/preprod/hosts.ini 2>/dev/null | cut -d= -f2); \
+	CP_IP=$${CP_IP:-192.168.56.10}; \
+	CP_KEY=".vagrant/machines/kube-control-plane/libvirt/private_key"; \
+	SSH_CMD="ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"; \
+	if [ -f "$$CP_KEY" ]; then SSH_CMD="$$SSH_CMD -i $$CP_KEY"; fi; \
+	rsync -avz --delete \
+		-e "$$SSH_CMD" \
+		--exclude '.git' \
+		--exclude 'ckalab.env' \
+		/home/xeno/git/gitea/os76-cka-lab/ \
+		vagrant@$$CP_IP:/home/vagrant/cka/ && \
+	$$SSH_CMD vagrant@$$CP_IP \
+		"chmod +x /home/vagrant/cka/ckalab /home/vagrant/cka/scripts/*.sh 2>/dev/null || true"
+	@echo "✔ Standalone CKA lab synced to kube-control-plane:~/cka"
 
 preprod-cks-lab:
 	./scripts/run-playbook.sh -e preprod -p cks_lab.yml

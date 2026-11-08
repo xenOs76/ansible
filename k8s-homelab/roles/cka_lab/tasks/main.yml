@@ -23,15 +23,11 @@
   ansible.builtin.debug:
     msg: >-
       {{
-        'Generating offline CKA curriculum and manifests in ' ~ cka_lab_base_dir ~ ' (docs only).'
-        if (cka_lab_docs_only | default(false) | bool)
+        'Cluster is online on ' ~ inventory_hostname ~ '. Synchronizing standalone CKA lab files into ' ~ cka_lab_base_dir ~ '.'
+        if cka_lab_cluster_initialized | bool
         else (
-          'Cluster is online on ' ~ inventory_hostname ~ '. Staging lab files and applying in-cluster practice resources.'
-          if cka_lab_cluster_initialized | bool
-          else (
-            'Cluster is UNINITIALIZED on ' ~ inventory_hostname ~
-            '. Staging walkthrough guides, manifests, and cluster bootstrap drills in ' ~ cka_lab_base_dir ~ '.'
-          )
+          'Cluster is UNINITIALIZED on ' ~ inventory_hostname ~
+          '. Synchronizing standalone CKA lab files into ' ~ cka_lab_base_dir ~ '.'
         )
       }}
   tags:
@@ -41,190 +37,105 @@
 - name: Execute CKA Lab Scenario - Initial Steps Reminder MOTD (motd)
   ansible.builtin.include_tasks: scenario_motd.yml
   when:
-    - cka_lab_scenario_motd_enabled | bool
+    - cka_lab_scenario_motd_enabled | default(true) | bool
     - not (cka_lab_docs_only | default(false) | bool)
   tags:
     - cka_lab
     - motd
 
-- name: Execute CKA Lab Scenario - Directory Structure & Compatibility Links (directories)
-  ansible.builtin.include_tasks: scenario_directories.yml
-  tags:
-    - cka_lab
-    - directories
-
 - name: Execute CKA Lab Scenario - Inter-Node DNS & Passwordless SSH (inter_node_ssh)
   ansible.builtin.include_tasks: scenario_inter_node_ssh.yml
   when:
-    - cka_lab_scenario_inter_node_ssh_enabled | bool
+    - cka_lab_scenario_inter_node_ssh_enabled | default(true) | bool
     - not (cka_lab_docs_only | default(false) | bool)
   tags:
     - cka_lab
     - inter_node_ssh
     - cka_ssh
 
-- name: Execute CKA Lab Scenario - Cluster Installation & Bootstrapping (cluster_installation)
-  ansible.builtin.include_tasks: scenario_cluster_installation.yml
-  when: cka_lab_scenario_cluster_installation_enabled | bool
-  tags:
-    - cka_lab
-    - cluster_installation
-    - installation
-    - bootstrap
-
-- name: Execute CKA Lab Scenario - User Authentication & RBAC (user_rbac)
-  ansible.builtin.include_tasks: scenario_user_rbac.yml
-  when: cka_lab_scenario_user_rbac_enabled | bool
+- name: Execute CKA Lab User & PKI Account Setup (user_rbac)
+  ansible.builtin.include_tasks: scenario_user_rbac_account.yml
+  when:
+    - cka_lab_scenario_user_rbac_enabled | default(true) | bool
+    - not (cka_lab_docs_only | default(false) | bool)
+    - cka_lab_cluster_initialized | default(false) | bool
   tags:
     - cka_lab
     - user_rbac
 
-- name: Execute CKA Lab Scenario - Sample Secrets (secrets)
-  ansible.builtin.include_tasks: scenario_secrets.yml
-  when: cka_lab_scenario_secrets_enabled | bool
+- name: Ensure git and rsync packages are installed
+  ansible.builtin.apt:
+    name:
+      - git
+      - rsync
+    state: present
   tags:
     - cka_lab
-    - secrets
 
-- name: Execute CKA Lab Scenario - Sample ConfigMaps (configmaps)
-  ansible.builtin.include_tasks: scenario_configmaps.yml
-  when: cka_lab_scenario_configmaps_enabled | bool
+- name: Ensure CKA lab base directory exists
+  ansible.builtin.file:
+    path: "{{ cka_lab_base_dir }}"
+    state: directory
+    owner: "{{ ansible_user | default('vagrant') }}"
+    group: "{{ ansible_user | default('vagrant') }}"
+    mode: "0755"
   tags:
     - cka_lab
-    - configmaps
 
-- name: Execute CKA Lab Scenario - Helm Tools & Monitoring (helm)
-  ansible.builtin.include_tasks: scenario_helm.yml
-  when: cka_lab_scenario_helm_enabled | bool
+- name: Check if local os76-cka-lab repository exists on Ansible controller
+  ansible.builtin.stat:
+    path: "{{ cka_lab_local_source_dir }}"
+  register: cka_lab_local_repo_stat
+  delegate_to: localhost
+  become: false
   tags:
     - cka_lab
-    - helm
 
-- name: Execute CKA Lab Scenario - NFS & Storage Volumes (volumes)
-  ansible.builtin.include_tasks: scenario_volumes.yml
-  when: cka_lab_scenario_volumes_enabled | bool
+- name: Synchronize standalone CKA lab files from local repository
+  ansible.posix.synchronize:
+    src: "{{ cka_lab_local_source_dir }}/"
+    dest: "{{ cka_lab_base_dir }}/"
+    delete: false
+    rsync_opts:
+      - "--exclude=.git"
+      - "--exclude=ckalab.env"
+  become: false
+  when: cka_lab_local_repo_stat.stat.exists | default(false)
   tags:
     - cka_lab
-    - volumes
-    - nfs
 
-- name: Execute CKA Lab Scenario - Deployments & ReplicaSets (deployments)
-  ansible.builtin.include_tasks: scenario_deployments.yml
-  when: cka_lab_scenario_deployments_enabled | bool
+- name: Clone standalone os76-cka-lab repository from Gitea if local source not found
+  ansible.builtin.git:
+    repo: "{{ cka_lab_git_repo }}"
+    dest: "{{ cka_lab_base_dir }}"
+    version: "{{ cka_lab_git_version | default('main') }}"
+    force: false
+  when: not (cka_lab_local_repo_stat.stat.exists | default(false))
   tags:
     - cka_lab
-    - deployments
-    - workloads
 
-- name: Execute CKA Lab Scenario - Pods & Namespaces (pods)
-  ansible.builtin.include_tasks: scenario_pods.yml
-  when: cka_lab_scenario_pods_enabled | bool
+- name: Ensure correct ownership of CKA lab files
+  ansible.builtin.file:
+    path: "{{ cka_lab_base_dir }}"
+    owner: "{{ ansible_user | default('vagrant') }}"
+    group: "{{ ansible_user | default('vagrant') }}"
+    recurse: true
   tags:
     - cka_lab
-    - pods
-    - workloads
 
-- name: Execute CKA Lab Scenario - Services, Ingress & Gateway API (networking)
-  ansible.builtin.include_tasks: scenario_networking.yml
-  when: cka_lab_scenario_networking_enabled | bool
+- name: Ensure executable permissions on ckalab runner
+  ansible.builtin.file:
+    path: "{{ cka_lab_base_dir }}/ckalab"
+    mode: "0755"
+  failed_when: false
   tags:
     - cka_lab
-    - networking
-    - services
-    - ingress
-    - gateway
 
-- name: Execute CKA Lab Scenario - Advanced Scheduling & Capacity (scheduling)
-  ansible.builtin.include_tasks: scenario_scheduling.yml
-  when: cka_lab_scenario_scheduling_enabled | bool
+- name: Ensure executable permissions on cka scripts
+  ansible.builtin.file:
+    path: "{{ cka_lab_base_dir }}/scripts"
+    mode: "0755"
+    recurse: true
+  failed_when: false
   tags:
     - cka_lab
-    - scheduling
-    - taints
-    - affinity
-    - hpa
-    - quota
-
-- name: Execute CKA Lab Scenario - Advanced Workloads & Multi-Container (workloads_advanced)
-  ansible.builtin.include_tasks: scenario_workloads_advanced.yml
-  when: cka_lab_scenario_workloads_advanced_enabled | bool
-  tags:
-    - cka_lab
-    - workloads_advanced
-    - daemonsets
-    - jobs
-    - cronjobs
-    - sidecars
-
-- name: Execute CKA Lab Scenario - Dynamic Storage & StorageClasses (storage_classes)
-  ansible.builtin.include_tasks: scenario_storage_classes.yml
-  when: cka_lab_scenario_storage_classes_enabled | bool
-  tags:
-    - cka_lab
-    - storage_classes
-    - storage
-    - pvc
-    - provisioner
-
-- name: Execute CKA Lab Scenario - Cluster Maintenance & Troubleshooting (cluster_troubleshooting)
-  ansible.builtin.include_tasks: scenario_cluster_troubleshooting.yml
-  when: cka_lab_scenario_cluster_troubleshooting_enabled | bool
-  tags:
-    - cka_lab
-    - cluster_troubleshooting
-    - troubleshooting
-    - drain
-    - static_pods
-    - kubelet
-
-- name: Execute CKA Lab Scenario - Custom Resource Definitions (crds)
-  ansible.builtin.include_tasks: scenario_crds.yml
-  when: cka_lab_scenario_crds_enabled | bool
-  tags:
-    - cka_lab
-    - crds
-    - schema
-    - operators
-
-- name: Execute CKA Lab Scenario - Chaos Engineering & Dynamic Troubleshooting (chaos_troubleshooting)
-  ansible.builtin.include_tasks: scenario_chaos_troubleshooting.yml
-  when: cka_lab_scenario_chaos_troubleshooting_enabled | bool
-  tags:
-    - cka_lab
-    - chaos_troubleshooting
-    - chaos
-    - resilience
-
-- name: Execute CKA Lab Scenario - etcd Backup & Restore (etcd)
-  ansible.builtin.include_tasks: scenario_etcd.yml
-  when: cka_lab_scenario_etcd_enabled | bool
-  tags:
-    - cka_lab
-    - etcd
-    - backup
-    - restore
-
-- name: Execute CKA Lab Scenario - Manual Kubeadm Cluster Upgrade (upgrade_drill)
-  ansible.builtin.include_tasks: scenario_upgrade_drill.yml
-  when: cka_lab_scenario_upgrade_drill_enabled | bool
-  tags:
-    - cka_lab
-    - upgrade_drill
-    - upgrade
-    - maintenance
-
-- name: Execute CKA Lab Scenario - Speed JSONPath & Output Formatting (jsonpath)
-  ansible.builtin.include_tasks: scenario_jsonpath.yml
-  when: cka_lab_scenario_jsonpath_enabled | bool
-  tags:
-    - cka_lab
-    - jsonpath
-    - speed_drills
-
-- name: Execute CKA Lab Scenario - High-Availability Control Plane (ha_cluster)
-  ansible.builtin.include_tasks: scenario_ha_cluster.yml
-  when: cka_lab_scenario_ha_cluster_enabled | bool
-  tags:
-    - cka_lab
-    - ha_cluster
-    - ha
