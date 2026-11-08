@@ -29,25 +29,38 @@ The environment serves as both an enterprise-grade homelab foundation and a rapi
 
 ### 1. Storage Architecture
 
-- **Rook-Ceph (`roles/rook_ceph`, `playbooks/ceph.yml`)**: Cloud-native Ceph orchestration backed by `/dev/vdb` on the
-  control plane, dynamically provisioning block PVCs via `rook-ceph-block` StorageClass.
-- **NFS Shared Storage (`roles/nfs_server`, `playbooks/nfs.yml`)**: Linux kernel NFS server exporting `/exports` across
-  cluster worker nodes.
-- **iSCSI Target Server (`roles/iscsi_target`, `playbooks/iscsi.yml`)**: Standalone Linux-IO (`LIO`) kernel target with
-  file-backed LUNs for raw block and static PV testing.
+- **NFS Shared Storage (`roles/nfs_server`, `playbooks/nfs.yml`)**: Linux kernel NFS server exporting `/srv/nfsroot`
+  (with legacy `/exports` symlink) across cluster worker nodes as the lightweight core storage baseline.
+- **Rook-Ceph (`roles/rook_ceph`, `playbooks/ceph.yml`)**: On-demand cloud-native Ceph orchestration backed by
+  `/dev/vdb` on the control plane, dynamically provisioning block PVCs via `rook-ceph-block` StorageClass.
+- **iSCSI Target Server (`roles/iscsi_target`, `playbooks/iscsi.yml`)**: On-demand standalone Linux-IO (`LIO`) kernel
+  target with file-backed LUNs for raw block and static PV testing.
 
-### 2. CKA Hands-on Lab Suite (`roles/cka_lab`)
+### 2. CKA Staged Provisioning & Practice Infrastructure (`roles/cka_lab`, `playbooks/`)
 
-Deployed to `/home/vagrant/cka/` on `kube-control-plane` (`make preprod-cka-lab`):
+The CKA curriculum is decoupled into an independent challenge repository featuring 42 active-recall drills and the
+POSIX/Bash `./ckalab` CLI runner. `k8s-homelab` provides the foundational infrastructure automation and reproducible
+intermediate VM staging states required for all CKA challenges:
 
-- **Workloads & Pods**: Advanced scheduling (taints, tolerations, affinity), sidecar containers, jobs, cronjobs, and
-  ephemeral debug containers.
-- **Networking**: ClusterIP, NodePort, Ingress prefix routing, and Gateway API (`HTTPRoute`).
-- **Storage Drills**: Static PV/PVC mounts across NFS, Ceph RBD, and iSCSI raw block devices.
-- **Cluster Maintenance**: Safe drain/cordon, etcd backup/restore drills (`etcdctl`/`etcdutl` v3.5.16), and rolling
-  cluster upgrades.
-- **Dynamic Chaos Injection (`make preprod-cka-chaos`)**: Headless LitmusChaos drills (OOM kills, network latency, DNS
-  blackholing, node memory pressure).
+- **Stage 0: Bare Nodes (`make preprod-stage-bare`)**: OS tuning, sysctls, and kernel modules (`overlay`,
+  `br_netfilter`) only. Leaves nodes without containerd or k8s binaries for CRI and cluster bootstrapping drills from
+  scratch.
+- **Stage 1: Pre-bootstrap (`make preprod-stage-prebootstrap`)**: Nodes primed with `containerd`, pinned `kubeadm`,
+  `kubelet`, `kubectl`, and control plane tools. Uninitialized (`kubeadm init` has not run).
+- **Stage 2: Control Plane Only (`make preprod-stage-cp-only`)**: Control plane initialized with Cilium CNI and
+  workstation credentials synced. Worker nodes unjoined for token creation, discovery hash calculation, and worker join
+  practice.
+- **Stage 3: Ready Cluster (`make preprod-stage-ready` / `make preprod-deploy`)**: Full multi-node cluster ready.
+- **Snapshot Management (`make cka-snapshot-save` / `make cka-snapshot-restore`)**: Instant atomic Libvirt disk snapshot
+  save and restore for disaster recovery and fast training ground resets without full VM re-creation.
+- **Node-Level Infrastructure Preparation (`roles/cka_lab`)**:
+  - Trainee user `anna`: Dedicated Linux user with CSR-approved certificate (`/CN=anna/O=developers`) and isolated
+    `~/.kube/config`.
+  - Inter-node SSH: Automated SSH keypair and `/etc/hosts` resolution across cluster nodes for seamless worker access.
+  - Training MOTD: Reminds trainee of standard environment variables (`kdo`, `know`), aliases (`k`, `etcdctl`), and
+    exam documentation boundaries.
+  - Lab Synchronization: Synchronizes the standalone CKA practice suite into `/home/vagrant/cka/` via
+    `ansible.posix.synchronize` (or Git fallback) and ensures executable permissions on `./ckalab`.
 
 ### 3. CKS Certification Lab Suite (`roles/cks_lab`)
 
@@ -86,14 +99,21 @@ make preprod-sync-kubeconfig
 kubectl --context=k8s-homelab-preprod get nodes -o wide
 ```
 
-### Certification Labs
+### Certification Labs & CKA Staged Lifecycle
 
 ```bash
-# Deploy hands-on CKA training scenarios
-make preprod-cka-lab
+# Intermediate staging states for CRI and bootstrapping drills
+make preprod-stage-bare          # Stage 0: OS tuning only (no containerd/k8s)
+make preprod-stage-prebootstrap  # Stage 1: containerd & k8s binaries installed
+make preprod-stage-cp-only       # Stage 2: Control plane initialized, workers unjoined
+make preprod-stage-ready         # Stage 3: Full multi-node cluster ready
 
-# Deploy CKA lab with dynamic LitmusChaos troubleshooting drills
-make preprod-cka-chaos
+# Instant Libvirt disk snapshots for rapid drill resets
+make cka-snapshot-save           # Save 'cka-baseline' snapshot across all VMs
+make cka-snapshot-restore        # Revert all VMs to 'cka-baseline'
+
+# Prepare control plane trainee environment & sync CKA lab suite
+make preprod-cka-lab
 
 # Deploy hands-on CKS security training scenarios
 make preprod-cks-lab
@@ -141,7 +161,7 @@ k8s-homelab/
 │   ├── preprod/hosts.ini         # Vagrant libvirt inventory with per-host keys
 │   └── prod/hosts.ini            # Bare-metal / physical cluster inventory
 ├── group_vars/
-│   ├── all.yml                   # Cluster version, CIDRs, suite version (1.4.3)
+│   ├── all.yml                   # Cluster version, CIDRs, suite version (1.6.0)
 │   ├── preprod.yml               # Preprod environment overrides
 │   ├── control_plane.yml         # Control plane settings
 │   └── workers.yml               # Worker node settings
@@ -157,11 +177,11 @@ k8s-homelab/
 │   ├── rook_ceph/                # Rook-Ceph operator & CephBlockPool storage
 │   ├── nfs_server/               # Linux kernel NFS shared storage export
 │   ├── iscsi_target/             # LIO iSCSI target server with file-backed LUNs
-│   ├── cka_lab/                  # 15 hands-on CKA practice scenarios & Litmus chaos
+│   ├── cka_lab/                  # CKA trainee node setup (MOTD, SSH, anna) & lab sync
 │   ├── cks_lab/                  # Hands-on CKS security tools, AppArmor, and Seccomp
 │   ├── upgrade/                  # Zero-downtime rolling cluster upgrade playbook
 │   └── reset/                    # Fast cluster wipe (kubeadm reset, iptables flush)
-├── playbooks/                    # Orchestration playbooks (site, cka_lab, cks_lab, etc.)
+├── playbooks/                    # Orchestration playbooks (site, cka_stage_*, cks_lab)
 └── scripts/                      # Lifecycle wrappers, credential sync, and linters
 ```
 
