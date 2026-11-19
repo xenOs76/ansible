@@ -20,7 +20,7 @@
 #   2. Detects architecture (amd64 / arm64).
 #   3. Downloads CLI archive alongside official sha256sum and verifies integrity.
 #   4. Installs 'cilium' binary into /usr/local/bin.
-#   5. Applies Gateway API experimental CRDs (v1.2.1) including TLSRoute.
+#   5. Applies Gateway API experimental CRDs (v1.6.3) including TLSRoute.
 #   6. Runs 'cilium install' with Ingress (31080/31443) and Gateway API enabled
 #      (standard kube-proxy service routing).
 #   7. Configures 'cilium-nodeport' GatewayClass and CiliumGatewayClassConfig.
@@ -35,7 +35,8 @@ set -euo pipefail
 
 echo "=== [cni-install-cilium.sh] Installing Cilium CNI (Dual Ingress & Gateway API) ==="
 
-GATEWAY_API_CRD_VERSION="${GATEWAY_API_CRD_VERSION:-v1.2.1}"
+CILIUM_CHART_VERSION="${CILIUM_CHART_VERSION:-1.20.4}"
+GATEWAY_API_CRD_VERSION="${GATEWAY_API_CRD_VERSION:-v1.6.3}"
 INGRESS_HTTP_PORT="${INGRESS_HTTP_PORT:-31080}"
 INGRESS_HTTPS_PORT="${INGRESS_HTTPS_PORT:-31443}"
 
@@ -69,8 +70,9 @@ if command -v kubectl >/dev/null 2>&1; then
 fi
 
 # 4. Deploy Cilium into the Kubernetes cluster
-echo "    Deploying Cilium CNI into cluster with Ingress & Gateway API..."
+echo "    Deploying Cilium CNI (${CILIUM_CHART_VERSION}) into cluster with Ingress & Gateway API..."
 cilium install \
+  --version "${CILIUM_CHART_VERSION}" \
   --set ingressController.enabled=true \
   --set ingressController.default=true \
   --set ingressController.loadbalancerMode=shared \

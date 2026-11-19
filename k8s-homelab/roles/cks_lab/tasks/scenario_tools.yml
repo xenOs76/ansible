@@ -2,7 +2,6 @@
 - name: Determine architecture mappings for CKS tools
   ansible.builtin.set_fact:
     cks_lab_deb_arch: "{{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}"
-    cks_lab_trivy_arch: "{{ 'ARM64' if ansible_architecture == 'aarch64' else '64bit' }}"
     cks_lab_hadolint_arch: "{{ 'arm64' if ansible_architecture == 'aarch64' else 'x86_64' }}"
     cks_lab_kubesec_arch: "{{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}"
     cks_lab_cosign_arch: "{{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}"
@@ -31,20 +30,38 @@
     - cks_lab
     - tools
 
-- name: Check if trivy is installed
-  ansible.builtin.stat:
-    path: /usr/local/bin/trivy
-  register: cks_lab_trivy_stat
+- name: Ensure Trivy apt keyring directory exists
+  ansible.builtin.file:
+    path: /usr/share/keyrings
+    state: directory
+    mode: "0755"
   tags:
     - cks_lab
     - tools
 
-- name: Install trivy from official release deb package
-  ansible.builtin.apt:
-    deb: >-
-      https://github.com/aquasecurity/trivy/releases/download/v{{ cks_lab_trivy_version }}/trivy_{{ cks_lab_trivy_version }}_Linux-{{ cks_lab_trivy_arch }}.deb
+- name: Download Trivy GPG key
+  ansible.builtin.get_url:
+    url: https://aquasecurity.github.io/trivy-repo/deb/public.key
+    dest: /usr/share/keyrings/trivy-archive-keyring.asc
+    mode: "0644"
+  tags:
+    - cks_lab
+    - tools
+
+- name: Add Trivy official apt repository
+  ansible.builtin.apt_repository:
+    repo: "deb [signed-by=/usr/share/keyrings/trivy-archive-keyring.asc] https://aquasecurity.github.io/trivy-repo/deb generic main"
     state: present
-  when: not cks_lab_trivy_stat.stat.exists
+    filename: trivy
+  tags:
+    - cks_lab
+    - tools
+
+- name: Install or update trivy from official apt repository  # noqa: package-latest
+  ansible.builtin.apt:
+    name: trivy
+    state: latest
+    update_cache: true
   tags:
     - cks_lab
     - tools
@@ -108,6 +125,43 @@
     - cks_lab
     - tools
 
+- name: Ensure CKS diagnostic packages are installed on cluster nodes
+  ansible.builtin.apt:
+    name:
+      - jq
+      - strace
+      - curl
+    state: present
+  delegate_to: "{{ item }}"
+  loop: "{{ groups['k8s_cluster'] }}"
+  tags:
+    - cks_lab
+    - tools
+
+- name: Check if kube-linter is installed
+  ansible.builtin.stat:
+    path: /usr/local/bin/kube-linter
+  register: cks_lab_kube_linter_stat
+  tags:
+    - cks_lab
+    - tools
+
+- name: Install kube-linter CLI binary
+  ansible.builtin.unarchive:
+    src: >-
+      {{
+        'https://github.com/stackrox/kube-linter/releases/download/v' ~ cks_lab_kube_linter_version ~
+        '/kube-linter-linux' ~ ('_arm64' if ansible_architecture == 'aarch64' else '') ~ '.tar.gz'
+      }}
+    dest: /usr/local/bin
+    remote_src: true
+    mode: "0755"
+    creates: /usr/local/bin/kube-linter
+  when: not cks_lab_kube_linter_stat.stat.exists
+  tags:
+    - cks_lab
+    - tools
+
 - name: Verify installed CKS security tools
   ansible.builtin.command: "{{ item.cmd }}"
   register: cks_lab_tool_check
@@ -117,6 +171,7 @@
     - {name: "trivy", cmd: "trivy --version"}
     - {name: "hadolint", cmd: "hadolint --version"}
     - {name: "kubesec", cmd: "kubesec version"}
+    - {name: "kube-linter", cmd: "kube-linter version"}
     - {name: "cosign", cmd: "cosign version"}
   tags:
     - cks_lab

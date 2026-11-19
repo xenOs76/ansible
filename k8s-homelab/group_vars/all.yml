@@ -1,6 +1,6 @@
 ---
 # Playbook suite version
-playbook_version: "1.6.0"
+playbook_version: "2.0.0"
 
 # Kubernetes versions and repositories (Base: v1.36, Target Upgrade: v1.37)
 k8s_version: "1.36.0-1.1"
@@ -30,7 +30,10 @@ cni_plugins_version: "v1.6.0"
 
 # CNI (Cilium)
 cni_type: "cilium"
-cilium_cli_version: "v0.16.24"
+cilium_cli_version: "v0.20.3"
+cilium_chart_version: "1.20.4"
+cilium_hubble_cli_version: "v1.20.4"
+cilium_gateway_api_crd_version: "v1.6.3"
 cilium_install_extra_args: ""
 cilium_kube_proxy_replacement: true
 cilium_ingress_enabled: true
@@ -167,11 +170,11 @@ nfs_server_enabled: true
 nfs_server_hostname: "nfs-server.local"
 nfs_export_dir: "/srv/nfsroot"
 nfs_legacy_export_symlink: "/exports"
-nfs_export_subnet: "{{ '192.168.56.0/24' if ('preprod' in groups) else (pod_network_cidr | default('10.0.0.0/8')) }}"
-nfs_export_options: "rw,sync,no_subtree_check,no_root_squash,insecure,fsid=0"
+nfs_export_clients: []
+nfs_export_options: "rw,sync,no_subtree_check,no_root_squash,insecure"
 
 # NFS CSI Driver Helm & in-cluster dynamic storage provisioning
-nfs_csi_enabled: false
+nfs_csi_enabled: true
 nfs_csi_helm_repo: "https://raw.githubusercontent.com/kubernetes-csi/csi-driver-nfs/master/charts"
 nfs_csi_chart_version: "v4.9.0"
 nfs_csi_namespace: "kube-system"

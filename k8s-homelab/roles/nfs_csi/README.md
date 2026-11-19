@@ -23,7 +23,7 @@ PersistentVolume provisioning backed by the homelab Linux kernel NFS server (`/e
 
 | Variable | Default | Description |
 | :--- | :--- | :--- |
-| `nfs_csi_enabled` | `false` (in `group_vars/all.yml`) | Enables or bypasses the NFS CSI driver deployment. |
+| `nfs_csi_enabled` | `true` (in `group_vars/all.yml`) | Enables or bypasses the NFS CSI driver deployment. |
 | `nfs_csi_helm_repo` | `https://raw.githubusercontent.com/.../charts` | Helm repository hosting the official CSI chart. |
 | `nfs_csi_release_name` | `csi-driver-nfs` | Helm release identifier. |
 | `nfs_csi_namespace` | `kube-system` | Target namespace for the driver pods. |

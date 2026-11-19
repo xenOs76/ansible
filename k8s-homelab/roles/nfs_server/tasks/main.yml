@@ -96,11 +96,51 @@
     - nfs_server
     - storage
 
-- name: Configure NFS export for cluster subnet in /etc/exports
+- name: Initialize NFS export client IP list
+  ansible.builtin.set_fact:
+    nfs_server_resolved_clients: "{{ nfs_server_export_clients | default([], true) }}"
+  when: (storage_nfs_provider | default('kernel')) == 'kernel'
+  tags:
+    - nfs
+    - nfs_server
+    - storage
+
+- name: Collect cluster node IPs for NFS export
+  ansible.builtin.set_fact:
+    nfs_server_resolved_clients: "{{ nfs_server_resolved_clients + [item_ip] }}"
+  vars:
+    item_ip: "{{ hostvars[item]['node_ip'] | default(hostvars[item]['ansible_host'] | default('')) }}"
+  loop: "{{ groups['k8s_cluster'] | default([]) }}"
+  when:
+    - (storage_nfs_provider | default('kernel')) == 'kernel'
+    - (nfs_server_export_clients | default([], true) | length) == 0
+    - item_ip | length > 0
+    - item_ip not in nfs_server_resolved_clients
+  tags:
+    - nfs
+    - nfs_server
+    - storage
+
+- name: Ensure at least one NFS export client IP is resolved
+  ansible.builtin.assert:
+    that:
+      - nfs_server_resolved_clients | length > 0
+    fail_msg: >-
+      No cluster node IPs resolved for NFS export.
+      Define node_ip/ansible_host on k8s_cluster hosts or set nfs_export_clients.
+  when: (storage_nfs_provider | default('kernel')) == 'kernel'
+  tags:
+    - nfs
+    - nfs_server
+    - storage
+
+- name: Configure NFS export for cluster component IPs in /etc/exports
   ansible.builtin.lineinfile:
     path: /etc/exports
     regexp: '^{{ nfs_server_export_dir | regex_escape }}\s+'
-    line: "{{ nfs_server_export_dir }} {{ nfs_server_export_subnet }}({{ nfs_server_export_options }})"
+    line: >-
+      {{ nfs_server_export_dir }}
+      {{ nfs_server_resolved_clients | map('regex_replace', '^(.*)$', '\1(' ~ nfs_server_export_options ~ ')') | join(' ') }}
     state: present
   notify: Reload NFS exports
   when: (storage_nfs_provider | default('kernel')) == 'kernel'
@@ -109,12 +149,81 @@
     - nfs_server
     - storage
 
-- name: Ensure nfs-server.local is mapped in /etc/hosts on control plane
+- name: Ensure nfs-server.local is mapped in /etc/hosts across all cluster nodes
   ansible.builtin.lineinfile:
     path: /etc/hosts
-    regexp: '.*(\s+)nfs-server\.local(\s*)$'
+    regexp: '.*(\s+){{ nfs_server_hostname | regex_escape }}(\s*)$'
     line: "{{ nfs_server_ip }} {{ nfs_server_hostname }}"
     state: present
+  delegate_to: "{{ item }}"
+  loop: "{{ groups['k8s_cluster'] | default([inventory_hostname]) }}"
+  run_once: true
+  tags:
+    - nfs
+    - nfs_server
+    - storage
+
+- name: Check if Kubernetes admin.conf exists before updating CoreDNS
+  ansible.builtin.stat:
+    path: /etc/kubernetes/admin.conf
+  register: _nfs_server_admin_conf
+  run_once: true
+  tags:
+    - nfs
+    - nfs_server
+    - storage
+
+- name: Fetch CoreDNS Corefile from kube-system ConfigMap
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - get
+      - configmap
+      - coredns
+      - -n
+      - kube-system
+      - -o
+      - jsonpath={.data.Corefile}
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: _nfs_server_coredns_cm
+  changed_when: false
+  failed_when: false
+  run_once: true
+  when: _nfs_server_admin_conf.stat.exists | default(false)
+  tags:
+    - nfs
+    - nfs_server
+    - storage
+
+- name: Render CoreDNS ConfigMap manifest with nfs-server.local hosts entry
+  ansible.builtin.template:
+    src: coredns-cm.yaml.j2
+    dest: /etc/kubernetes/coredns-cm.yaml
+    owner: root
+    group: root
+    mode: "0644"
+  run_once: true
+  when:
+    - _nfs_server_admin_conf.stat.exists | default(false)
+    - (_nfs_server_coredns_cm.rc | default(1)) == 0
+    - (_nfs_server_coredns_cm.stdout | default('') | length) > 0
+  tags:
+    - nfs
+    - nfs_server
+    - storage
+
+- name: Apply CoreDNS ConfigMap with nfs-server.local hosts entry
+  ansible.builtin.command: kubectl apply -f /etc/kubernetes/coredns-cm.yaml
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: _nfs_server_coredns_apply
+  changed_when: "'configured' in _nfs_server_coredns_apply.stdout or 'created' in _nfs_server_coredns_apply.stdout"
+  run_once: true
+  when:
+    - _nfs_server_admin_conf.stat.exists | default(false)
+    - (_nfs_server_coredns_cm.rc | default(1)) == 0
+    - (_nfs_server_coredns_cm.stdout | default('') | length) > 0
   tags:
     - nfs
     - nfs_server

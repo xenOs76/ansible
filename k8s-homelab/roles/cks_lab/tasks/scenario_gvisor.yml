@@ -1,0 +1,71 @@
+---
+- name: Ensure apt keyring directory exists for gVisor
+  ansible.builtin.file:
+    path: /usr/share/keyrings
+    state: directory
+    mode: "0755"
+  delegate_to: "{{ item }}"
+  loop: "{{ groups['k8s_cluster'] }}"
+  tags:
+    - cks_lab
+    - gvisor
+
+- name: Download gVisor archive GPG key on cluster nodes
+  ansible.builtin.get_url:
+    url: https://gvisor.dev/archive.key
+    dest: /usr/share/keyrings/gvisor-archive-keyring.asc
+    mode: "0644"
+  delegate_to: "{{ item }}"
+  loop: "{{ groups['k8s_cluster'] }}"
+  tags:
+    - cks_lab
+    - gvisor
+
+- name: Add gVisor apt repository on cluster nodes
+  ansible.builtin.apt_repository:
+    repo: >-
+      deb [signed-by=/usr/share/keyrings/gvisor-archive-keyring.asc]
+      https://storage.googleapis.com/gvisor/releases release main
+    state: present
+    filename: gvisor
+  delegate_to: "{{ item }}"
+  loop: "{{ groups['k8s_cluster'] }}"
+  tags:
+    - cks_lab
+    - gvisor
+
+- name: Install gVisor runsc package on cluster nodes
+  ansible.builtin.apt:
+    name: runsc
+    state: present
+    update_cache: true
+  delegate_to: "{{ item }}"
+  loop: "{{ groups['k8s_cluster'] }}"
+  tags:
+    - cks_lab
+    - gvisor
+
+- name: Register runsc runtime handler in containerd config.toml
+  ansible.builtin.blockinfile:
+    path: /etc/containerd/config.toml
+    marker: "# {mark} ANSIBLE MANAGED GVISOR RUNSC BLOCK"
+    block: |
+      [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runsc]
+        runtime_type = "io.containerd.runsc.v1"
+  delegate_to: "{{ item }}"
+  loop: "{{ groups['k8s_cluster'] }}"
+  register: cks_lab_containerd_gvisor_cfg
+  tags:
+    - cks_lab
+    - gvisor
+
+- name: Restart containerd on nodes where gVisor runtime was configured
+  ansible.builtin.systemd:
+    name: containerd
+    state: restarted
+  delegate_to: "{{ item.item }}"
+  loop: "{{ cks_lab_containerd_gvisor_cfg.results }}"
+  when: item.changed | bool
+  tags:
+    - cks_lab
+    - gvisor

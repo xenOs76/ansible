@@ -15,8 +15,8 @@ The environment serves as both an enterprise-grade homelab foundation and a rapi
 | Node Name | IP Address | Roles | vCPU | RAM | Storage Disks |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | `kube-control-plane` | `192.168.56.10` | Control Plane, API Server, etcd, NFS, iSCSI | 2 | 4096 MB | 25GB root + 20GB Ceph volume (`/dev/vdb`) |
-| `kube-worker-1` | `192.168.56.21` | Worker Node | 2 | 2048 MB | 25GB root |
-| `kube-worker-2` | `192.168.56.22` | Worker Node | 2 | 2048 MB | 25GB root |
+| `kube-worker-1` | `192.168.56.21` | Worker Node | 2 | 4096 MB | 25GB root |
+| `kube-worker-2` | `192.168.56.22` | Worker Node | 2 | 4096 MB | 25GB root |
 
 - **Operating System**: Ubuntu 26.04 LTS
 - **Container Runtime**: `containerd` (`SystemdCgroup = true`)
@@ -161,7 +161,7 @@ k8s-homelab/
 │   ├── preprod/hosts.ini         # Vagrant libvirt inventory with per-host keys
 │   └── prod/hosts.ini            # Bare-metal / physical cluster inventory
 ├── group_vars/
-│   ├── all.yml                   # Cluster version, CIDRs, suite version (1.6.0)
+│   ├── all.yml                   # Cluster version, CIDRs, suite version (2.0.0)
 │   ├── preprod.yml               # Preprod environment overrides
 │   ├── control_plane.yml         # Control plane settings
 │   └── workers.yml               # Worker node settings

@@ -37,7 +37,8 @@ if [ -z "${KUBECONFIG:-}" ] && [ -f /etc/kubernetes/admin.conf ] && [ ! -f "${HO
   export KUBECONFIG=/etc/kubernetes/admin.conf
 fi
 
-GATEWAY_API_CRD_VERSION="${GATEWAY_API_CRD_VERSION:-v1.2.1}"
+CILIUM_CHART_VERSION="${CILIUM_CHART_VERSION:-1.20.4}"
+GATEWAY_API_CRD_VERSION="${GATEWAY_API_CRD_VERSION:-v1.6.3}"
 INGRESS_HTTP_PORT="${INGRESS_HTTP_PORT:-31080}"
 INGRESS_HTTPS_PORT="${INGRESS_HTTPS_PORT:-31443}"
 
@@ -47,8 +48,10 @@ kubectl apply --server-side --force-conflicts -f \
   "https://github.com/kubernetes-sigs/gateway-api/releases/download/${GATEWAY_API_CRD_VERSION}/experimental-install.yaml"
 
 # 2. Upgrade Cilium deployment in-place
-echo "==> [2/4] Upgrading Cilium with Ingress and Gateway API enabled..."
-cilium upgrade --reuse-values \
+echo "==> [2/4] Upgrading Cilium (${CILIUM_CHART_VERSION}) with Ingress and Gateway API enabled..."
+cilium upgrade \
+  --version "${CILIUM_CHART_VERSION}" \
+  --reset-then-reuse-values \
   --set ingressController.enabled=true \
   --set ingressController.default=true \
   --set ingressController.loadbalancerMode=shared \

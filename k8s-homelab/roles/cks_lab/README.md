@@ -38,7 +38,7 @@ Specialist (CKS) Study Guide* and the Linux Foundation / CNCF CKS Curriculum.
 - **Domain**: Exam Utilities & Prerequisites.
 - **Objective**: Install pinned security binaries on `kube-control-plane`:
   - `kube-bench` (`v0.16.0`): CIS Kubernetes benchmark runner.
-  - `trivy` (`v0.75.0`): Vulnerability and misconfiguration scanner.
+  - `trivy` (latest via official APT repo): Vulnerability and misconfiguration scanner.
   - `hadolint` (`v2.12.0`): Dockerfile static linter.
   - `kubesec` (`v2.14.2`): Kubernetes manifest security analyzer.
   - `cosign` (`v2.4.3`): Sigstore container image signing and verification CLI.
@@ -121,3 +121,31 @@ make preprod-cks-lab
 ./scripts/run-playbook.sh playbooks/cks_lab.yml -t audit_logs
 ./scripts/run-playbook.sh playbooks/cks_lab.yml -t etcd_enc
 ```
+
+---
+
+## 4. On-Demand Cluster Addons (Opt-In)
+
+Both Trivy Operator and Cilium Hubble UI are **disabled by default** (`false` in `defaults/main.yml`) to keep the
+preprod VM memory footprint minimal during standard `make preprod-cks-lab` runs. Enable them on demand when needed:
+
+```bash
+cd k8s-homelab
+
+# Install Aqua Trivy Operator via Helm (namespace: trivy-system, concurrent scan limit: 2)
+make preprod-cks-trivy-operator
+
+# Enable Cilium Hubble Relay & Hubble UI (namespace: kube-system)
+make preprod-cks-hubble-ui
+
+# Install both addons together
+make preprod-cks-addons
+```
+
+- **Trivy Operator (`cks_lab_trivy_operator_enabled`)**: Runs a built-in Trivy Server (`ClientServer` mode) with
+  `trivy-db` cached once on a `5Gi` `nfs-csi` PVC so scan jobs reuse it without re-downloading, and stores scan
+  report artifacts on a `5Gi` `nfs-csi` PVC (`alternateReportStorage.enabled=true` at `/mnt/data/trivy-operator`).
+  Set `cks_lab_trivy_operator_alternate_report_storage_enabled=false` to store CRDs in etcd instead (`kubectl get
+  vulnerabilityreports,configauditreports,rbacassessmentreports -A`).
+- **Cilium Hubble UI (`cks_lab_hubble_ui_enabled`)**: Visualize live eBPF network flows and NetworkPolicy drops by
+  running `cilium hubble ui` or `kubectl -n kube-system port-forward svc/hubble-ui 12000:80`.

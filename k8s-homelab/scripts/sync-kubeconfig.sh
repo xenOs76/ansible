@@ -138,10 +138,22 @@ if [[ "${ENV}" == "preprod" || "${ENV}" == "preprod-ha" ]]; then
     PRIMARY_CP="kube-cp-1"
   fi
 
+  USE_ERRANT=false
+  if [[ "${VM_PROVIDER:-}" == "errant" || -n "${ERRANT_SSH_CONFIG:-}" ]]; then
+    USE_ERRANT=true
+  elif [[ "${VM_PROVIDER:-}" != "vagrant" && -f "${BASE_DIR}/.errant/ssh_config" ]] \
+    && [[ ! -f "${BASE_DIR}/.vagrant/machines/kube-control-plane/libvirt/private_key" ]] \
+    && [[ ! -f "${BASE_DIR}/.vagrant/machines/kube-cp-1/libvirt/private_key" ]]; then
+    USE_ERRANT=true
+  fi
+  ERRANT_SSH_CFG="${ERRANT_SSH_CONFIG:-${BASE_DIR}/.errant/ssh_config}"
+
   # For preprod, ensure apiserver certificate includes all VM network interface IPs
   if [[ -f "${BASE_DIR}/scripts/update-apiserver-sans.sh" ]]; then
-    UPDATE_CMD="if [ -x /vagrant/scripts/update-apiserver-sans.sh ]; then sudo /vagrant/scripts/update-apiserver-sans.sh; else sudo bash -s; fi"
-    if command -v vagrant >/dev/null 2>&1; then
+    UPDATE_CMD="if [ -x /vagrant/scripts/update-apiserver-sans.sh ]; then sudo /vagrant/scripts/update-apiserver-sans.sh; elif [ -x /errant/scripts/update-apiserver-sans.sh ]; then sudo /errant/scripts/update-apiserver-sans.sh; else sudo bash -s; fi"
+    if [[ "${USE_ERRANT}" == "true" && -f "${ERRANT_SSH_CFG}" ]]; then
+      ssh -F "${ERRANT_SSH_CFG}" "${PRIMARY_CP}" "${UPDATE_CMD}" < "${BASE_DIR}/scripts/update-apiserver-sans.sh" 2>/dev/null || true
+    elif command -v vagrant >/dev/null 2>&1; then
       vagrant ssh "${PRIMARY_CP}" -c "${UPDATE_CMD}" < "${BASE_DIR}/scripts/update-apiserver-sans.sh" 2>/dev/null || true
     elif [[ -x "${BASE_DIR}/scripts/shell.sh" ]]; then
       "${BASE_DIR}/scripts/shell.sh" --run "vagrant ssh ${PRIMARY_CP} -c '${UPDATE_CMD}'" < "${BASE_DIR}/scripts/update-apiserver-sans.sh" 2>/dev/null || true
@@ -150,7 +162,11 @@ if [[ "${ENV}" == "preprod" || "${ENV}" == "preprod-ha" ]]; then
 
   # Refresh credentials from the VM rather than accepting a possibly stale staged file
   FETCH_SUCCESS=false
-  if command -v vagrant >/dev/null 2>&1; then
+  if [[ "${USE_ERRANT}" == "true" && -f "${ERRANT_SSH_CFG}" ]]; then
+    if ssh -F "${ERRANT_SSH_CFG}" "${PRIMARY_CP}" "sudo cat /etc/kubernetes/admin.conf" > "${SRC_CONF}" 2>/dev/null; then
+      FETCH_SUCCESS=true
+    fi
+  elif command -v vagrant >/dev/null 2>&1; then
     if vagrant ssh "${PRIMARY_CP}" -c "sudo cat /etc/kubernetes/admin.conf" > "${SRC_CONF}" 2>/dev/null; then
       FETCH_SUCCESS=true
     fi

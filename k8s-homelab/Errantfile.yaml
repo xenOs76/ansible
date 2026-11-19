@@ -1,0 +1,165 @@
+---
+version: "1"
+project: k8s-homelab
+
+defaults:
+  image: "https://cloud-images.ubuntu.com/resolute/current/resolute-server-cloudimg-amd64.img"
+  image_alias: "ubuntu-26.04"
+  driver: libvirt
+  storage_pool: vmstore
+  # Graceful ACPI shutdown timeout before disk snapshots (default: 180s; k8s/NFS nodes may need longer)
+  shutdown_timeout: "10m"
+  snapshot_mode: disk
+  memory_mb: 2048
+  cpus: 2
+  root_disk_size: "25G"
+  ssh:
+    user: vagrant
+  synced_folders:
+    - source: "."
+      target: "/errant"
+      type: virtiofs
+    - source: "."
+      target: "/vagrant"
+      type: virtiofs
+
+network:
+  mode: private
+  subnet: "192.168.56.0/24"
+  bridge: "errbr-56"
+  dhcp: true
+
+profiles:
+  control-plane:
+    role: control-plane
+    memory_mb: 4096
+    cpus: 2
+    disks:
+      - device: vdb
+        size: "20G"
+        format: qcow2
+    provision:
+      - type: file
+        source: scripts/cni-install-cilium.sh
+        target: /home/vagrant/cni-install-cilium.sh
+        mode: "0755"
+      - type: file
+        source: scripts/cni-enable-ingress-gateway.sh
+        target: /home/vagrant/cni-enable-ingress-gateway.sh
+        mode: "0755"
+      - type: file
+        source: scripts/cni-install-hubble.sh
+        target: /home/vagrant/cni-install-hubble.sh
+        mode: "0755"
+      - type: file
+        source: scripts/cni-install-calico.sh
+        target: /home/vagrant/cni-install-calico.sh
+        mode: "0755"
+      - type: shell
+        inline: chmod +x /home/vagrant/*.sh && chown vagrant:vagrant /home/vagrant/*.sh
+      - type: shell
+        script: scripts/common.sh
+        env:
+          K8S_VERSION: "1.36.0-1.1"
+      - type: shell
+        script: scripts/control-plane-tools.sh
+        env:
+          K9S_VERSION: "v0.51.0"
+          ETCD_VERSION: "v3.5.16"
+          KREW_VERSION: "v0.5.0"
+          CYCLONUS_VERSION: "v0.2.1"
+
+  worker:
+    role: worker
+    memory_mb: 2048
+    cpus: 2
+    provision:
+      - type: shell
+        script: scripts/common.sh
+        env:
+          K8S_VERSION: "1.36.0-1.1"
+
+topologies:
+  standard:
+    description: "Standard cluster: 1 Control Plane + 2 Workers"
+    nodes:
+      - name: kube-control-plane
+        profile: control-plane
+        ip: 192.168.56.10
+
+      - name: "kube-worker-${index}"
+        profile: worker
+        count: 2
+        ip_start: 192.168.56.21
+        memory_mb: 4096
+
+  ha:
+    description: "High Availability cluster: 3 Control Planes + 1 Worker"
+    nodes:
+      - name: "kube-cp-${index}"
+        profile: control-plane
+        count: 3
+        ip_start: 192.168.56.10
+        memory_mb: 2560
+        disks:
+          - condition: "${index} == 1"
+            device: vdb
+            size: "20G"
+            format: qcow2
+
+      - name: kube-worker-1
+        profile: worker
+        ip: 192.168.56.21
+    steps:
+      - name: preprod-ha-up
+        description: Configure HA control plane (make preprod-ha-up)
+        provision:
+          - type: local
+            dir: .
+            inline: |
+              set -e
+              VM_PROVIDER=errant ./scripts/run-playbook.sh -e preprod-ha -p ha_control_plane.yml
+              VM_PROVIDER=errant ./scripts/sync-kubeconfig.sh -e preprod-ha --best-effort || true
+      - name: preprod-ha-deploy
+        description: Deploy full HA Kubernetes cluster (make preprod-ha-deploy)
+        provision:
+          - type: local
+            dir: .
+            inline: VM_PROVIDER=errant ./scripts/run-playbook.sh -e preprod-ha -p site.yml
+
+global_provision:
+  - type: shell
+    when: once
+    inline: |
+      export DEBIAN_FRONTEND=noninteractive
+      apt-get update -y
+      apt-get upgrade -y
+      apt-get clean -y
+  - type: shell
+    when: always
+    inline: |
+      chsh -s /bin/bash vagrant || usermod -s /bin/bash vagrant
+      swapoff -a
+
+steps:
+  - name: preprod-up
+    description: Configure NFS server and sync kubeconfig (make preprod-up)
+    provision:
+      - type: local
+        dir: .
+        inline: |
+          set -e
+          VM_PROVIDER=errant ./scripts/run-playbook.sh -e preprod -p nfs.yml
+          VM_PROVIDER=errant ./scripts/sync-kubeconfig.sh -e preprod --best-effort || true
+  - name: preprod-deploy
+    description: Deploy full Kubernetes cluster (make preprod-deploy)
+    provision:
+      - type: local
+        dir: .
+        inline: VM_PROVIDER=errant ./scripts/run-playbook.sh -e preprod -p site.yml
+  - name: preprod-cks-lab
+    description: Deploy CKS training lab scenarios (make preprod-cks-lab)
+    provision:
+      - type: local
+        dir: .
+        inline: VM_PROVIDER=errant ./scripts/run-playbook.sh -e preprod -p cks_lab.yml

@@ -1,0 +1,17 @@
+---
+- name: Ensure CKS control-plane security directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+  loop:
+    - "{{ cks_lab_audit_log_dir }}"
+    - "{{ cks_lab_enc_dir }}"
+    - "{{ cks_lab_admission_dir }}"
+  tags:
+    - cks_lab
+    - audit_logs
+    - etcd_enc
+    - admission

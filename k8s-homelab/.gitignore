@@ -1,4 +1,6 @@
 .vagrant
+.errant/
+.provider
 .direnv
 .devenv
 devenv.lock

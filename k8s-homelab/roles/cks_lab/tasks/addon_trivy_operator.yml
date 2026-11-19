@@ -1,0 +1,110 @@
+---
+- name: Add Aqua Security Helm repository for Trivy Operator
+  ansible.builtin.command: >-
+    helm repo add aqua {{ cks_lab_trivy_operator_helm_repo }} --force-update
+  register: cks_lab_trivy_helm_repo_add
+  changed_when: "'has been added' in cks_lab_trivy_helm_repo_add.stdout"
+  tags:
+    - cks_lab
+    - trivy_operator
+    - cks_addons
+- name: Update Aqua Security Helm repository cache
+  ansible.builtin.command: helm repo update aqua
+  changed_when: false
+  tags:
+    - cks_lab
+    - trivy_operator
+    - cks_addons
+- name: Check if Trivy Operator Helm release is installed
+  ansible.builtin.command: >-
+    helm status {{ cks_lab_trivy_operator_release_name }}
+    -n {{ cks_lab_trivy_operator_namespace }}
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: cks_lab_trivy_helm_status
+  failed_when: false
+  changed_when: false
+  tags:
+    - cks_lab
+    - trivy_operator
+    - cks_addons
+
+- name: Verify NFS StorageClass exists for Trivy Operator storage
+  when: (cks_lab_trivy_operator_alternate_report_storage_enabled | bool) or (cks_lab_trivy_operator_client_server_enabled | bool)
+  tags:
+    - cks_lab
+    - trivy_operator
+    - cks_addons
+  block:
+    - name: Check target StorageClass availability
+      ansible.builtin.command: >-
+        kubectl get storageclass {{ cks_lab_trivy_operator_storage_class }}
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+      register: cks_lab_trivy_sc_check
+      failed_when: false
+      changed_when: false
+    - name: Fail if required NFS StorageClass is missing
+      ansible.builtin.assert:
+        that:
+          - cks_lab_trivy_sc_check.rc == 0
+        fail_msg: >-
+          StorageClass '{{ cks_lab_trivy_operator_storage_class }}' not found.
+          Run 'make preprod-nfs-csi' first or disable NFS-backed Trivy storage options.
+
+- name: Install or upgrade Trivy Operator via Helm
+  ansible.builtin.command: >-
+    helm upgrade --install {{ cks_lab_trivy_operator_release_name }}
+    aqua/trivy-operator
+    --namespace {{ cks_lab_trivy_operator_namespace }}
+    --create-namespace
+    --version {{ cks_lab_trivy_operator_chart_version }}
+    --set operator.scanJobsConcurrentLimit={{ cks_lab_trivy_operator_scan_concurrent_limit }}
+    {% if cks_lab_trivy_operator_client_server_enabled | bool %}
+    --set operator.builtInTrivyServer=true
+    --set trivy.mode=ClientServer
+    --set trivy.storageClassEnabled=true
+    --set trivy.storageClassName={{ cks_lab_trivy_operator_storage_class }}
+    --set trivy.storageSize={{ cks_lab_trivy_operator_db_storage_size }}
+    {% endif %}
+    {% if cks_lab_trivy_operator_alternate_report_storage_enabled | bool %}
+    --set alternateReportStorage.enabled=true
+    --set alternateReportStorage.storageClassName={{ cks_lab_trivy_operator_storage_class }}
+    --set alternateReportStorage.storage={{ cks_lab_trivy_operator_storage_size }}
+    {% endif %}
+    --wait
+    --timeout 5m
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  changed_when: cks_lab_trivy_helm_status.rc != 0
+  tags:
+    - cks_lab
+    - trivy_operator
+    - cks_addons
+- name: Wait for Trivy Operator deployment to become ready
+  ansible.builtin.command: >-
+    kubectl -n {{ cks_lab_trivy_operator_namespace }}
+    rollout status deployment/{{ cks_lab_trivy_operator_release_name }}
+    --timeout=180s
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  changed_when: false
+  tags:
+    - cks_lab
+    - trivy_operator
+    - cks_addons
+- name: Display Trivy Operator inspection commands
+  ansible.builtin.debug:
+    msg:
+      - "Trivy Operator is running in namespace '{{ cks_lab_trivy_operator_namespace }}'."
+      - >-
+        {{
+          'Reports are stored on NFS PVC (' ~ cks_lab_trivy_operator_storage_class ~
+          ') under /mnt/data/trivy-operator.'
+          if (cks_lab_trivy_operator_alternate_report_storage_enabled | bool)
+          else 'Inspect CRDs: kubectl get vulnerabilityreports,configauditreports,rbacassessmentreports -A'
+        }}
+  tags:
+    - cks_lab
+    - trivy_operator
+    - cks_addons

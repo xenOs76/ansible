@@ -14,6 +14,25 @@ cks_lab_scenario_supply_chain_enabled: true
 cks_lab_scenario_falco_enabled: true
 cks_lab_scenario_netpol_enabled: true
 
+# Optional on-demand cluster addons (disabled by default to keep lab footprint minimal)
+cks_lab_trivy_operator_enabled: false
+cks_lab_hubble_ui_enabled: false
+
+# Trivy Operator Helm configuration
+cks_lab_trivy_operator_namespace: "trivy-system"
+cks_lab_trivy_operator_release_name: "trivy-operator"
+cks_lab_trivy_operator_helm_repo: "https://aquasecurity.github.io/helm-charts/"
+cks_lab_trivy_operator_chart_version: "0.38.1"
+cks_lab_trivy_operator_scan_concurrent_limit: 2
+cks_lab_trivy_operator_client_server_enabled: true
+cks_lab_trivy_operator_db_storage_size: "5Gi"
+cks_lab_trivy_operator_alternate_report_storage_enabled: true
+cks_lab_trivy_operator_storage_class: "{{ nfs_csi_storage_class_name | default('nfs-csi') }}"
+cks_lab_trivy_operator_storage_size: "5Gi"
+
+# Cilium Hubble UI configuration
+cks_lab_hubble_ui_port_forward_port: 12000
+
 # User and workspace settings
 cks_lab_user: "{{ ansible_user | default('vagrant') }}"
 cks_lab_workspace_dir: "/home/{{ cks_lab_user }}/cks"
@@ -35,10 +54,16 @@ cks_lab_seccomp_profiles_dir: "/var/lib/kubelet/seccomp/profiles"
 
 # Tooling versions and download definitions
 cks_lab_kube_bench_version: "0.16.0"
-cks_lab_trivy_version: "0.75.0"
 cks_lab_hadolint_version: "2.12.0"
 cks_lab_kubesec_version: "2.14.2"
+cks_lab_kube_linter_version: "0.7.1"
 cks_lab_cosign_version: "2.4.3"
+cks_lab_gvisor_arch: "{{ 'aarch64' if ansible_architecture == 'aarch64' else 'x86_64' }}"
+
+# Control-plane security lab directories
+cks_lab_audit_log_dir: "/var/log/kubernetes/audit"
+cks_lab_enc_dir: "/etc/kubernetes/enc"
+cks_lab_admission_dir: "/etc/kubernetes/admission"
 
 # MOTD configuration
 cks_lab_motd_file: "/home/{{ cks_lab_user }}/.motd"

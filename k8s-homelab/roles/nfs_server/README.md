@@ -11,9 +11,8 @@ control plane node, exporting `/exports` to cluster worker nodes across preprodu
 - **Daemon**: `nfs-kernel-server` (systemd service)
 - **Default Export Path**: `/exports` (with subdirectories `/exports/data` and `/exports/reports`)
 - **DNS Mapping**: Registers `nfs-server.local` in `/etc/hosts` pointing to the control plane IP address.
-- **Environment Support**:
-  - **Preprod (Vagrant/Libvirt)**: Exports to `192.168.56.0/24`.
-  - **Prod (Bare Metal)**: Exports to cluster network CIDR (`pod_network_cidr` or `10.0.0.0/8`).
+- **Access Control**: Restricts `/etc/exports` entries strictly to the individual IPs of cluster nodes in
+  `k8s_cluster` (`node_ip` or `ansible_host`), rather than exporting to a whole subnet.
 
 ---
 
@@ -25,7 +24,7 @@ control plane node, exporting `/exports` to cluster worker nodes across preprodu
 | `nfs_server_hostname` | `nfs-server.local` | FQDN/local hostname for NFS endpoints in Pods and PVs. |
 | `nfs_server_ip` | Dynamic (`node_ip`) | IP address of the NFS server (defaults to control plane IP). |
 | `nfs_server_export_dir` | `/exports` | Root directory path exported by the NFS server. |
-| `nfs_server_export_subnet` | Auto-detected | Client subnet permitted to mount (`192.168.56.0/24` in preprod). |
+| `nfs_server_export_clients` | `[]` (auto-discovered) | List of client IPs permitted to mount; defaults to all `k8s_cluster` node IPs. |
 | `nfs_server_export_options` | `rw,sync,no_subtree_check,no_root_squash,insecure` | NFS export options in `/etc/exports`. |
 
 ---

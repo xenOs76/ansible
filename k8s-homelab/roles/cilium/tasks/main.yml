@@ -6,16 +6,17 @@
     - cni
     - cilium
 
-- name: Check if Cilium CLI binary is already installed
-  ansible.builtin.stat:
-    path: /usr/local/bin/cilium
-  register: cilium_bin_stat
+- name: Check installed Cilium CLI version
+  ansible.builtin.command: /usr/local/bin/cilium version --client
+  register: cilium_bin_version
+  failed_when: false
+  changed_when: false
   tags:
     - cni
     - cilium
 
 - name: Install Cilium CLI
-  when: not cilium_bin_stat.stat.exists
+  when: cilium_bin_version.rc != 0 or cilium_cli_version not in cilium_bin_version.stdout
   tags:
     - cni
     - cilium
@@ -27,19 +28,19 @@
         dest: /usr/local/bin
         remote_src: true
         mode: '0755'
-        creates: /usr/local/bin/cilium
 
-- name: Check if Hubble CLI binary is already installed
-  ansible.builtin.stat:
-    path: /usr/local/bin/hubble
-  register: cilium_hubble_bin_stat
+- name: Check installed Hubble CLI version
+  ansible.builtin.command: /usr/local/bin/hubble version
+  register: cilium_hubble_bin_version
+  failed_when: false
+  changed_when: false
   tags:
     - cni
     - cilium
     - hubble
 
 - name: Install Hubble CLI
-  when: not cilium_hubble_bin_stat.stat.exists
+  when: cilium_hubble_bin_version.rc != 0 or cilium_hubble_cli_version not in cilium_hubble_bin_version.stdout
   tags:
     - cni
     - cilium
@@ -52,7 +53,6 @@
         dest: /usr/local/bin
         remote_src: true
         mode: '0755'
-        creates: /usr/local/bin/hubble
 
 - name: Install Gateway API CRDs for Cilium Gateway controller
   ansible.builtin.command: >-
@@ -81,6 +81,7 @@
 - name: Install Cilium CNI in cluster
   ansible.builtin.command: >-
     cilium install
+    --version {{ cilium_chart_version }}
     --set cluster.name={{ cluster_name }}
     {% if cilium_kube_proxy_replacement | bool %}
     --set kubeProxyReplacement=true
@@ -107,6 +108,18 @@
     - cni
     - cilium
 
+- name: Check running Cilium image version in cluster
+  ansible.builtin.command: cilium version
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: cilium_running_version_check
+  failed_when: false
+  changed_when: false
+  when: cilium_status_check.rc == 0
+  tags:
+    - cni
+    - cilium
+
 - name: Check if Cilium Gateway API or Ingress needs upgrade
   ansible.builtin.command: kubectl get gatewayclass cilium
   environment:
@@ -122,9 +135,11 @@
     - cilium
     - gateway-api
 
-- name: Upgrade Cilium in cluster to enable Ingress and Gateway API
+- name: Upgrade Cilium in cluster to target version and enable Ingress and Gateway API
   ansible.builtin.command: >-
-    cilium upgrade --reuse-values
+    cilium upgrade
+    --version {{ cilium_chart_version }}
+    --reset-then-reuse-values
     {% if cilium_kube_proxy_replacement | bool %}
     --set kubeProxyReplacement=true
     --set k8sServiceHost={{ cilium_k8s_service_host }}
@@ -145,8 +160,9 @@
     KUBECONFIG: /etc/kubernetes/admin.conf
   when:
     - cilium_status_check.rc == 0
-    - cilium_gateway_api_enabled | bool
-    - cilium_gw_class_check.rc != 0
+    - >-
+      ('cilium image (running): ' ~ cilium_chart_version) not in (cilium_running_version_check.stdout | default(''))
+      or ((cilium_gateway_api_enabled | bool) and (cilium_gw_class_check.rc | default(0) != 0))
   changed_when: true
   tags:
     - cni
@@ -171,6 +187,15 @@
     - cilium
     - gateway-api
   block:
+    - name: Wait for CiliumGatewayClassConfig CRD to be established
+      ansible.builtin.command: kubectl get crd ciliumgatewayclassconfigs.cilium.io
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+      register: cilium_gwcc_crd_check
+      until: cilium_gwcc_crd_check.rc == 0
+      retries: 12
+      delay: 5
+      changed_when: false
     - name: Copy Cilium NodePort GatewayClass definition
       ansible.builtin.template:
         src: cilium-nodeport-gatewayclass.yaml.j2

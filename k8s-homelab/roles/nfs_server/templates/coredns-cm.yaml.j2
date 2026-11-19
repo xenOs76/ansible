@@ -1,0 +1,20 @@
+{% set cf = _nfs_server_coredns_cm.stdout %}
+{% set entry = nfs_server_ip ~ ' ' ~ nfs_server_hostname %}
+{% if 'hosts {' in cf %}
+{% if nfs_server_hostname in cf %}
+{% set updated_cf = cf | regex_replace('(?m)^([ \t]*)\S+\s+' ~ (nfs_server_hostname | regex_escape) ~ '\s*$', '\\1' ~ entry) %}
+{% else %}
+{% set updated_cf = cf | regex_replace('(?m)^([ \t]*)hosts\s*\{\n', '\\1hosts {\n\\1    ' ~ entry ~ '\n') %}
+{% endif %}
+{% else %}
+{% set updated_cf = cf | regex_replace('(?m)^([ \t]*)errors\n', '\\1errors\n\\1hosts {\n\\1    ' ~ entry ~ '\n\\1    fallthrough\n\\1}\n') %}
+{% endif %}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: coredns
+  namespace: kube-system
+data:
+  Corefile: |
+    {{ updated_cf | trim | indent(4) }}
+

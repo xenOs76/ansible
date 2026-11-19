@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+cat <<'EOF'
+=== OS76 CKS Training Lab Quick Reference ===
+  Lab Runner   : cd ~/cncf-lab && ./cncflab --cert=cks list
+  Manifests    : /etc/kubernetes/manifests/
+  Kubelet Cfg  : /var/lib/kubelet/config.yaml
+  Seccomp      : /var/lib/kubelet/seccomp/profiles/
+  AppArmor     : /etc/apparmor.d/ (aa-status, apparmor_parser)
+  Audit Logs   : /var/log/kubernetes/audit/
+  Encryption   : /etc/kubernetes/enc/
+  Admission    : /etc/kubernetes/admission/
+  Tools        : kube-bench, trivy, hadolint, kubesec, kube-linter, cosign, falco
+==============================================
+EOF
+

@@ -68,3 +68,22 @@ hubble observe --namespace {{ cks_lab_netpol_namespace | default('default') }} -
 # Compact one-line flow format for high-throughput troubleshooting
 hubble observe --namespace {{ cks_lab_netpol_namespace | default('default') }} -o compact
 ```
+
+---
+
+## 5. Optional Visual Inspection with Hubble UI
+
+Hubble UI is disabled by default to keep the lab footprint minimal. To enable it on demand from `k8s-homelab/` on
+your workstation:
+
+```bash
+make preprod-cks-hubble-ui
+```
+
+Then open the UI via port-forwarding:
+
+```bash
+cilium hubble ui
+# Or explicitly forward to port 12000:
+kubectl -n kube-system port-forward svc/hubble-ui 12000:80
+```

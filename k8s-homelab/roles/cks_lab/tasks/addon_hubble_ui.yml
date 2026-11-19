@@ -1,0 +1,63 @@
+---
+- name: Check Cilium cluster status before enabling Hubble UI
+  ansible.builtin.command: cilium status --wait=false
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  changed_when: false
+  tags:
+    - cks_lab
+    - hubble_ui
+    - cks_addons
+- name: Check if Hubble UI deployment is already present
+  ansible.builtin.command: kubectl -n kube-system get deployment hubble-ui
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: cks_lab_hubble_ui_check
+  failed_when: false
+  changed_when: false
+  tags:
+    - cks_lab
+    - hubble_ui
+    - cks_addons
+- name: Enable Cilium Hubble Relay and Hubble UI
+  ansible.builtin.command: cilium hubble enable --ui
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  when: cks_lab_hubble_ui_check.rc != 0
+  changed_when: true
+  tags:
+    - cks_lab
+    - hubble_ui
+    - cks_addons
+- name: Wait for Hubble Relay deployment to become ready
+  ansible.builtin.command: >-
+    kubectl -n kube-system rollout status deployment/hubble-relay --timeout=180s
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  changed_when: false
+  tags:
+    - cks_lab
+    - hubble_ui
+    - cks_addons
+- name: Wait for Hubble UI deployment to become ready
+  ansible.builtin.command: >-
+    kubectl -n kube-system rollout status deployment/hubble-ui --timeout=180s
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  changed_when: false
+  tags:
+    - cks_lab
+    - hubble_ui
+    - cks_addons
+- name: Display Hubble UI access instructions
+  ansible.builtin.debug:
+    msg:
+      - "Cilium Hubble Relay and Hubble UI are ready in namespace 'kube-system'."
+      - "Launch UI locally: cilium hubble ui"
+      - >-
+        Or port-forward: kubectl -n kube-system port-forward svc/hubble-ui
+        {{ cks_lab_hubble_ui_port_forward_port }}:80
+  tags:
+    - cks_lab
+    - hubble_ui
+    - cks_addons

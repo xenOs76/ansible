@@ -139,6 +139,22 @@ fi
 
 CMD=(ansible-playbook -i "${INVENTORY}")
 
+USE_ERRANT=false
+if [[ "${ENV}" == "preprod" || "${ENV}" == "preprod-ha" ]]; then
+  if [[ "${VM_PROVIDER:-}" == "errant" || -n "${ERRANT_SSH_CONFIG:-}" ]]; then
+    USE_ERRANT=true
+  elif [[ "${VM_PROVIDER:-}" != "vagrant" && -f "${BASE_DIR}/.errant/ssh_config" ]] \
+    && [[ ! -f "${BASE_DIR}/.vagrant/machines/kube-control-plane/libvirt/private_key" ]] \
+    && [[ ! -f "${BASE_DIR}/.vagrant/machines/kube-cp-1/libvirt/private_key" ]]; then
+    USE_ERRANT=true
+  fi
+fi
+
+ERRANT_SSH_CFG="${ERRANT_SSH_CONFIG:-${BASE_DIR}/.errant/ssh_config}"
+if [[ "${USE_ERRANT}" == "true" && -f "${ERRANT_SSH_CFG}" ]]; then
+  CMD+=(--ssh-common-args="-F ${ERRANT_SSH_CFG}" --extra-vars "ansible_ssh_private_key_file=")
+fi
+
 if [[ -n "${TAGS}" ]]; then
   CMD+=(--tags "${TAGS}")
 fi

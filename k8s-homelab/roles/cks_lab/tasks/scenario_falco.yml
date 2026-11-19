@@ -1,0 +1,60 @@
+---
+- name: Ensure Falco apt keyring directory exists
+  ansible.builtin.file:
+    path: /usr/share/keyrings
+    state: directory
+    mode: "0755"
+  delegate_to: "{{ item }}"
+  loop: "{{ groups['k8s_cluster'] }}"
+  tags:
+    - cks_lab
+    - falco
+
+- name: Download Falco GPG key on cluster nodes
+  ansible.builtin.get_url:
+    url: https://falco.org/repo/falcosecurity-packages.asc
+    dest: /usr/share/keyrings/falcosecurity-archive-keyring.asc
+    mode: "0644"
+  delegate_to: "{{ item }}"
+  loop: "{{ groups['k8s_cluster'] }}"
+  tags:
+    - cks_lab
+    - falco
+
+- name: Add Falco apt repository on cluster nodes
+  ansible.builtin.apt_repository:
+    repo: "deb [signed-by=/usr/share/keyrings/falcosecurity-archive-keyring.asc] https://download.falco.org/packages/deb stable main"
+    state: present
+    filename: falcosecurity
+  delegate_to: "{{ item }}"
+  loop: "{{ groups['k8s_cluster'] }}"
+  tags:
+    - cks_lab
+    - falco
+
+- name: Install Falco package on cluster nodes
+  ansible.builtin.apt:
+    name: falco
+    state: present
+    update_cache: true
+  environment:
+    FALCO_FRONTEND: noninteractive
+    FALCO_DRIVER_CHOICE: modern_ebpf
+  delegate_to: "{{ item }}"
+  loop: "{{ groups['k8s_cluster'] }}"
+  tags:
+    - cks_lab
+    - falco
+
+- name: Ensure /etc/falco/falco_rules.local.yaml exists
+  ansible.builtin.file:
+    path: /etc/falco/falco_rules.local.yaml
+    state: touch
+    mode: "0644"
+    modification_time: preserve
+    access_time: preserve
+  delegate_to: "{{ item }}"
+  loop: "{{ groups['k8s_cluster'] }}"
+  tags:
+    - cks_lab
+    - falco

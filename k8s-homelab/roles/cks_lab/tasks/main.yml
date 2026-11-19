@@ -10,12 +10,42 @@
     - cks_lab
     - tools
 
+- name: Execute CKS Lab Scenario - MOTD Quick Reference (motd)
+  ansible.builtin.include_tasks: scenario_motd.yml
+  when: cks_lab_scenario_motd_enabled | bool
+  tags:
+    - cks_lab
+    - motd
+
 - name: Execute CKS Lab Scenario - Tooling Provisioning (tools)
   ansible.builtin.include_tasks: scenario_tools.yml
   when: cks_lab_scenario_tools_enabled | bool
   tags:
     - cks_lab
     - tools
+
+- name: Execute CKS Lab Scenario - Control Plane Security Directories (audit_logs, etcd_enc, admission)
+  ansible.builtin.include_tasks: scenario_audit_etcd.yml
+  when: (cks_lab_scenario_audit_logs_enabled | bool) or (cks_lab_scenario_etcd_enc_enabled | bool) or (cks_lab_scenario_admission_enabled | bool)
+  tags:
+    - cks_lab
+    - audit_logs
+    - etcd_enc
+    - admission
+
+- name: Execute CKS Lab Scenario - gVisor Container Sandboxing (gvisor)
+  ansible.builtin.include_tasks: scenario_gvisor.yml
+  when: cks_lab_scenario_gvisor_enabled | bool
+  tags:
+    - cks_lab
+    - gvisor
+
+- name: Execute CKS Lab Scenario - Falco Runtime Intrusion Detection (falco)
+  ansible.builtin.include_tasks: scenario_falco.yml
+  when: cks_lab_scenario_falco_enabled | bool
+  tags:
+    - cks_lab
+    - falco
 
 - name: Execute CKS Lab Scenario - System Hardening (system)
   ansible.builtin.include_tasks: scenario_system_hardening.yml
@@ -47,3 +77,19 @@
     - netpol
     - network_policy
     - microservices
+
+- name: Execute CKS Lab Addon - Trivy Operator (trivy_operator)
+  ansible.builtin.include_tasks: addon_trivy_operator.yml
+  when: cks_lab_trivy_operator_enabled | bool
+  tags:
+    - cks_lab
+    - trivy_operator
+    - cks_addons
+
+- name: Execute CKS Lab Addon - Cilium Hubble UI (hubble_ui)
+  ansible.builtin.include_tasks: addon_hubble_ui.yml
+  when: cks_lab_hubble_ui_enabled | bool
+  tags:
+    - cks_lab
+    - hubble_ui
+    - cks_addons

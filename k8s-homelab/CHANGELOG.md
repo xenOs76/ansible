@@ -8,6 +8,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-11-19
+
+### Changed
+
+- **Trivy APT Repository & Unpinned Upgrades (`roles/cks_lab`)**:
+  Switched `trivy` installation from a pinned GitHub `.deb` release to Aqua Security's official APT repository
+  (`state: latest`, unpinned and unheld) so both playbook runs and `apt upgrade` stay on the latest version.
+
+### Added
+
+- **Interoperable Errant VM Provider & Step Snapshots (`Errantfile.yaml`, `Makefile`, `scripts/`)**:
+  Added `Errantfile.yaml` with `standard` and `ha` topologies, dual `virtiofs` mounts (`/errant` and `/vagrant`),
+  and the 3-step CKS study trunk (`preprod-up`, `preprod-deploy`, `preprod-cks-lab`). Added `VM_PROVIDER`
+  auto-detection (`vagrant` | `errant`) across `Makefile`, `run-playbook.sh`, `sync-kubeconfig.sh`, and `shell.nix`,
+  plus `preprod-up-bare`, `preprod-snapshot-run`, and `preprod-snapshot-revert` for ad-hoc branched `errant steps`
+  checkpoints.
+- **On-Demand CKS Cluster Addons (`roles/cks_lab`, `Makefile`)**:
+  Added opt-in `Makefile` targets and Ansible tasks (disabled by default) to install Aqua Trivy Operator via Helm
+  (`make preprod-cks-trivy-operator`, using `ClientServer` mode with a built-in Trivy Server caching `trivy-db` on
+  `nfs-csi` and `alternateReportStorage` persisting report artifacts on `nfs-csi`) and enable Cilium Hubble Relay &
+  Hubble UI (`make preprod-cks-hubble-ui`, or both via `make preprod-cks-addons`) for in-cluster vulnerability
+  reporting and visual network/firewall flow inspection.
+- **Makefile Help Reorganization & Production Deploy Target (`Makefile`, `inventory/prod/hosts.ini`)**:
+  Reorganized `make help` into logical sections separating whole-cluster lifecycle/deployment targets from
+  individual-role targets across Preliminaries, Preprod, Preprod HA, CKA/CKS Lab, and Prod. Added `make prod-deploy`
+  and `environment_name=prod` in the production inventory.
+
+### Fixed
+
+- **Cluster-Wide `nfs-server.local` `/etc/hosts` & CoreDNS Propagation (`roles/nfs_server`)**:
+  Updated `roles/nfs_server` to propagate the `nfs-server.local` mapping both to `/etc/hosts` across all `k8s_cluster`
+  nodes via `delegate_to` (including when `site.yml` is run with `--tags storage` or `--tags nfs_server`) and into
+  the `kube-system/coredns` `ConfigMap` `Corefile` `hosts` block when the cluster is initialized.
+- **NFS CSI StorageClass & Cluster-IP Export Scoping (`group_vars/all.yml`, `playbooks/site.yml`, `roles/nfs_server`)**:
+  Enabled `nfs_csi_enabled` by default so `make preprod-deploy` deploys the `csi-driver-nfs` Helm chart and `nfs-csi`
+  `StorageClass`. Restricted `nfs_server` `/etc/exports` entries to the individual IPs of cluster nodes in
+  `k8s_cluster` instead of an entire `/24` subnet, and removed `fsid=0` from `nfs_export_options` so NFSv4.1 clients can
+  mount `/srv/nfsroot` by full path.
+- **Cilium CNI & Gateway API Version Alignment (`roles/cilium`, `group_vars/all.yml`, `scripts/`)**:
+  Updated Cilium CNI to `1.20.4`, Cilium CLI to `v0.20.3`, Hubble CLI to `v1.20.4`, and Gateway API experimental CRDs
+  to `v1.6.3`. Added explicit `--version` pinning during Cilium installation/upgrade and a readiness wait for the
+  `ciliumgatewayclassconfigs.cilium.io` CRD before applying the `cilium-nodeport` `GatewayClass`.
+
 ## [1.6.0] - 2026-11-08
 
 ### Added
@@ -80,7 +123,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `Pod.spec.serviceAccount`) with automated loader, cleanup, and Prometheus metric auditing.
 - **Chronological Node Upgrade Order Enforcement (`roles/cka_lab`, `~/cka/16-upgrade/`)**:
   Restructured upgrade drill workflow to strictly enforce all control planes (primary and secondary) reaching target
-  version parity before worker node maintenance: Phase 0 Pre-Upgrade Deprecations, Phase 1 Primary Control Plane, Phase 2
+  version parity before worker node maintenance: Phase 0 Pre-Upgrade Deprecations, Phase 1 Primary Control Plane, Phase
+  2
   Secondary Control Planes, and Phase 3 Worker Nodes.
 
 ## [1.5.0] - 2026-10-19
@@ -145,23 +189,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Automated Daily etcd Backup & Retention (`roles/control_plane`, `roles/cka_lab`, `scripts/etcd-backup.sh`)**: Added automated daily etcd snapshot backups scheduled via systemd timer (`etcd-backup.timer`, `OnCalendar=daily`, `Persistent=true`) with health validation, endpoint TLS extraction, timestamped filenames, `etcdctl` status verification, and automated 7-day retention pruning, backed by a dedicated practice scenario (`02-automated-backup/`) with automated test validation.
+- **Automated Daily etcd Backup & Retention (`roles/control_plane`, `roles/cka_lab`, `scripts/etcd-backup.sh`)**: Added
+  automated daily etcd snapshot backups scheduled via systemd timer (`etcd-backup.timer`, `OnCalendar=daily`,
+  `Persistent=true`) with health validation, endpoint TLS extraction, timestamped filenames, `etcdctl` status
+  verification, and automated 7-day retention pruning, backed by a dedicated practice scenario (`02-automated-backup/`)
+  with automated test validation.
 
-- **Hands-on CKA Exam Practice Scenarios & Curricula (`roles/cka_lab`, `~/cka/`)**: Expanded exam training suite with manual client certificate and context creation drills (`~/cka/rbac/manual-user/`), static pod TLS discovery and etcd restore workflows, kubeadm node maintenance drills, speed JSONPath challenge harnesses, CoreDNS break-fix scenarios, multi-namespace microsegmentation NetworkPolicies, faulty pod isolation autopsy patterns, and PriorityClass preemption testing, all cross-referenced with official CNCF exam documentation links.
-- **Ceph Cloud-Native Storage & Dynamic StorageClasses (`roles/rook_ceph`, `roles/nfs_server`, `roles/cka_lab`, `playbooks/ceph.yml`)**: Added dual Ceph block (RBD) and shared filesystem (CephFS / CephNFS) provisioning for multi-replica ReadWriteMany workloads with dynamic StorageClasses (`03-ceph-nfs-sc.yaml`, `03-cephfs-sc.yaml`) and verification suites.
-- **Control Plane CLI & Terminal Ergonomics (`roles/control_plane_tools`, `scripts/control-plane-tools.sh`)**: Configured system-wide and user bash alias (`glow="glow -s tokyo-night -w 150"`) for styled Tokyo-Night 150-column markdown rendering across `/etc/profile.d/glow.sh` and user `.bashrc`.
+- **Hands-on CKA Exam Practice Scenarios & Curricula (`roles/cka_lab`, `~/cka/`)**: Expanded exam training suite with
+  manual client certificate and context creation drills (`~/cka/rbac/manual-user/`), static pod TLS discovery and etcd
+  restore workflows, kubeadm node maintenance drills, speed JSONPath challenge harnesses, CoreDNS break-fix scenarios,
+  multi-namespace microsegmentation NetworkPolicies, faulty pod isolation autopsy patterns, and PriorityClass preemption
+  testing, all cross-referenced with official CNCF exam documentation links.
+- **Ceph Cloud-Native Storage & Dynamic StorageClasses (`roles/rook_ceph`, `roles/nfs_server`, `roles/cka_lab`,
+  `playbooks/ceph.yml`)**: Added dual Ceph block (RBD) and shared filesystem (CephFS / CephNFS) provisioning for
+  multi-replica ReadWriteMany workloads with dynamic StorageClasses (`03-ceph-nfs-sc.yaml`, `03-cephfs-sc.yaml`) and
+  verification suites.
+- **Control Plane CLI & Terminal Ergonomics (`roles/control_plane_tools`, `scripts/control-plane-tools.sh`)**:
+  Configured system-wide and user bash alias (`glow="glow -s tokyo-night -w 150"`) for styled Tokyo-Night 150-column
+  markdown rendering across `/etc/profile.d/glow.sh` and user `.bashrc`.
 
 ### Fixed
 
-- **Kustomize Deprecated `commonLabels` Warning (`roles/cka_lab`)**: Migrated overlay `kustomization.yaml` templates to Kustomize v5 `labels` transformer directive (`includeSelectors: true`), eliminating deprecation warnings during `kubectl apply -k` and `kubectl kustomize`.
-- **Vagrant Secondary Storage Volume Collisions (`Vagrantfile`)**: Configured `allow_existing: true` on the secondary disk definition (`/dev/vdb`) for `kube-control-plane` to prevent `virStorageVolCreateXML` collisions during cluster recreation.
-- **Rook-Ceph CSI Provisioner Scheduling (`roles/rook_ceph`, `group_vars/all.yml`)**: Added control-plane tolerations and tuned provisioner replica counts to prevent memory exhaustion and unschedulable pod warnings on worker nodes.
+- **Kustomize Deprecated `commonLabels` Warning (`roles/cka_lab`)**: Migrated overlay `kustomization.yaml` templates to
+  Kustomize v5 `labels` transformer directive (`includeSelectors: true`), eliminating deprecation warnings during
+  `kubectl apply -k` and `kubectl kustomize`.
+- **Vagrant Secondary Storage Volume Collisions (`Vagrantfile`)**: Configured `allow_existing: true` on the secondary
+  disk definition (`/dev/vdb`) for `kube-control-plane` to prevent `virStorageVolCreateXML` collisions during cluster
+  recreation.
+- **Rook-Ceph CSI Provisioner Scheduling (`roles/rook_ceph`, `group_vars/all.yml`)**: Added control-plane tolerations
+  and tuned provisioner replica counts to prevent memory exhaustion and unschedulable pod warnings on worker nodes.
 
 ## [1.4.2] - 2026-10-11
 
 ### Added
 
-- **Confidential PowerDNS Resolvers for ACME (`roles/caddy`, `group_vars/all.yml`)**: Configured SOPS-encrypted DNS resolver settings (`caddy_resolvers` / `POWERDNS_RESOLVERS`) for Caddy's PowerDNS DNS-01 ACME challenge propagation, resolving DNS propagation timeouts in split-horizon and local LAN environments with secure file injection (`0600 root:caddy`) and `no_log: true` masking.
+- **Confidential PowerDNS Resolvers for ACME (`roles/caddy`, `group_vars/all.yml`)**: Configured SOPS-encrypted DNS
+  resolver settings (`caddy_resolvers` / `POWERDNS_RESOLVERS`) for Caddy's PowerDNS DNS-01 ACME challenge propagation,
+  resolving DNS propagation timeouts in split-horizon and local LAN environments with secure file injection (`0600
+  root:caddy`) and `no_log: true` masking.
 
 ### Changed
 
@@ -171,43 +236,70 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Dynamic NFS CSI Provisioning (`roles/nfs_csi`, `roles/cka_lab`, `playbooks/nfs_csi.yml`)**: Automated dynamic PV provisioning via the official Kubernetes SIG Storage NFS CSI Driver (`csi-driver-nfs`), supporting both production cluster rollouts (`playbooks/nfs_csi.yml`) and dedicated CKA hands-on drills (`~/cka/storage-classes/` and `~/cka/volumes/08-nfs-csi`) with ReadWriteMany shared workloads and automated test runners.
-- **NGINX Gateway Fabric & Ingress Scenarios (`roles/cka_lab`)**: Comprehensive Gateway API drills with version-pinned CRDs, NodePort routing, and hostname filtering via `httpbingo`, complemented by an Ingress-NGINX practice installer for CKA exam coverage.
+- **Dynamic NFS CSI Provisioning (`roles/nfs_csi`, `roles/cka_lab`, `playbooks/nfs_csi.yml`)**: Automated dynamic PV
+  provisioning via the official Kubernetes SIG Storage NFS CSI Driver (`csi-driver-nfs`), supporting both production
+  cluster rollouts (`playbooks/nfs_csi.yml`) and dedicated CKA hands-on drills (`~/cka/storage-classes/` and
+  `~/cka/volumes/08-nfs-csi`) with ReadWriteMany shared workloads and automated test runners.
+- **NGINX Gateway Fabric & Ingress Scenarios (`roles/cka_lab`)**: Comprehensive Gateway API drills with version-pinned
+  CRDs, NodePort routing, and hostname filtering via `httpbingo`, complemented by an Ingress-NGINX practice installer
+  for CKA exam coverage.
 
 ### Changed
 
-- **NFS Server Export Directory (`roles/nfs_server`, `group_vars/all.yml`)**: Standardized root NFS share directory to `/exports` across lab environments, volume templates, and dynamic storage configurations.
+- **NFS Server Export Directory (`roles/nfs_server`, `group_vars/all.yml`)**: Standardized root NFS share directory to
+  `/exports` across lab environments, volume templates, and dynamic storage configurations.
 
 ### Fixed
 
-- **CKA Lab Volume Directory Initialization (`roles/cka_lab`)**: Automatically create export directory paths with write permissions prior to copying sample files, ensuring clean isolated execution of `cka_lab.yml`.
+- **CKA Lab Volume Directory Initialization (`roles/cka_lab`)**: Automatically create export directory paths with write
+  permissions prior to copying sample files, ensuring clean isolated execution of `cka_lab.yml`.
 
 ## [1.4.0] - 2026-10-08
 
 ### Added
 
-- **CKS Certification Lab Suite (`roles/cks_lab`, `playbooks/cks_lab.yml`)**: Provisioned hands-on exam training environment on control plane with automated security tooling (`kube-bench`, `trivy`, `hadolint`, `kubesec`, `cosign`), multi-node AppArmor profiles and kernel enforcement (`k8s-deny-write`, `k8s-deny-network`), Seccomp profiles (`audit.json`, `fine-grained.json`), native K8s 1.30+ security context drills, and system footprint audit scripts.
-- **NFS Shared Storage (`roles/nfs_server`, `playbooks/nfs.yml`)**: Dedicated NFS kernel storage server role provisioned automatically during VM boot (`make preprod-up`) across preprod and prod environments.
-- **iSCSI Target & Storage Scenarios (`roles/iscsi_target`, `roles/cka_lab`)**: Standalone Linux-IO (LIO) target server with declarative file-backed LUNs, initiator tooling, and CKA volume drills for direct mounts, raw block devices, and static PV/PVC bindings.
-- **Ceph RBD Practice Drills (`roles/cka_lab`)**: Block storage practice scenarios covering ext4 dynamic volumes, raw block devices, Ceph CSI static bindings, and live online volume expansion.
-- **Rook-Ceph Block Storage (`roles/rook_ceph`)**: Cloud-native Ceph orchestration backed by dedicated virtual disk on the control plane with dynamic storage class provisioning.
-- **Control Plane Tooling (`roles/control_plane_tools`)**: Consolidated official `glow` CLI viewer package installation into control plane bootstrap tooling.
+- **CKS Certification Lab Suite (`roles/cks_lab`, `playbooks/cks_lab.yml`)**: Provisioned hands-on exam training
+  environment on control plane with automated security tooling (`kube-bench`, `trivy`, `hadolint`, `kubesec`, `cosign`),
+  multi-node AppArmor profiles and kernel enforcement (`k8s-deny-write`, `k8s-deny-network`), Seccomp profiles
+  (`audit.json`, `fine-grained.json`), native K8s 1.30+ security context drills, and system footprint audit scripts.
+- **NFS Shared Storage (`roles/nfs_server`, `playbooks/nfs.yml`)**: Dedicated NFS kernel storage server role provisioned
+  automatically during VM boot (`make preprod-up`) across preprod and prod environments.
+- **iSCSI Target & Storage Scenarios (`roles/iscsi_target`, `roles/cka_lab`)**: Standalone Linux-IO (LIO) target server
+  with declarative file-backed LUNs, initiator tooling, and CKA volume drills for direct mounts, raw block devices, and
+  static PV/PVC bindings.
+- **Ceph RBD Practice Drills (`roles/cka_lab`)**: Block storage practice scenarios covering ext4 dynamic volumes, raw
+  block devices, Ceph CSI static bindings, and live online volume expansion.
+- **Rook-Ceph Block Storage (`roles/rook_ceph`)**: Cloud-native Ceph orchestration backed by dedicated virtual disk on
+  the control plane with dynamic storage class provisioning.
+- **Control Plane Tooling (`roles/control_plane_tools`)**: Consolidated official `glow` CLI viewer package installation
+  into control plane bootstrap tooling.
 
 ### Fixed
 
-- **Cross-Node Task Delegation (`inventory/preprod/hosts.ini`)**: Configured per-host SSH private keys in preprod inventory to resolve authentication failures during delegated execution across cluster nodes.
-- **CKS Multi-Node Template Rendering (`roles/cks_lab`)**: Resolved list indexing in cartesian product loops for AppArmor and Seccomp profile distribution.
-- **Storage & CSI Configurations (`roles/cka_lab`, `roles/rook_ceph`)**: Corrected Ceph CSI driver domain to `.csi.ceph.com` and pinned static iSCSI claims to empty StorageClass to prevent admission binding deadlocks.
-- **VM Disk Provisioning & Cleanup (`Vagrantfile`, `Makefile`)**: Expanded base root disk sizing to 25GB to eliminate kubelet disk pressure, and automated secondary volume removal on destroy.
+- **Cross-Node Task Delegation (`inventory/preprod/hosts.ini`)**: Configured per-host SSH private keys in preprod
+  inventory to resolve authentication failures during delegated execution across cluster nodes.
+- **CKS Multi-Node Template Rendering (`roles/cks_lab`)**: Resolved list indexing in cartesian product loops for
+  AppArmor and Seccomp profile distribution.
+- **Storage & CSI Configurations (`roles/cka_lab`, `roles/rook_ceph`)**: Corrected Ceph CSI driver domain to
+  `.csi.ceph.com` and pinned static iSCSI claims to empty StorageClass to prevent admission binding deadlocks.
+- **VM Disk Provisioning & Cleanup (`Vagrantfile`, `Makefile`)**: Expanded base root disk sizing to 25GB to eliminate
+  kubelet disk pressure, and automated secondary volume removal on destroy.
 
 ## [1.3.0] - 2026-10-02
 
 ### Added
 
-- **CKA Training Lab Suite (`roles/cka_lab`)**: Provisioned 15+ hands-on exam practice scenarios via `make preprod-cka-lab` under `/home/vagrant/cka/`, including `scheduling`, `workloads_advanced`, `storage_classes`, `cluster_troubleshooting`, `crds`, `chaos_troubleshooting` (Headless LitmusChaos), `networking` (Services, Ingress, Gateway API, NetworkPolicies), `pods`, `deployments`, `volumes` (NFS server export), `user_rbac`, `secrets`, `configmaps`, `kustomize`, and `helm` (Metrics Server, Prometheus Operator, NGINX Gateway Fabric, httpbin-go).
-- **Caddy Ingress Reverse Proxy (`roles/caddy`)**: Automated `xcaddy` compilation with PowerDNS DNS-01 ACME Let's Encrypt support, Garage S3 binary caching (`s3://os76-assets/caddy/...`), and `https-wrench` TLS validation.
-- **SOPS & Secrets Management**: Configured Age key encryption workflow (`.sops.yaml`) for transparent Ansible variable decryption via `community.sops.sops`.
-- **Control Plane Tools**: Automated installation of pinned `etcdctl`/`etcdutl` (`v3.5.16`) and dynamic kube-apiserver TLS certificate SAN address discovery.
+- **CKA Training Lab Suite (`roles/cka_lab`)**: Provisioned 15+ hands-on exam practice scenarios via `make
+  preprod-cka-lab` under `/home/vagrant/cka/`, including `scheduling`, `workloads_advanced`, `storage_classes`,
+  `cluster_troubleshooting`, `crds`, `chaos_troubleshooting` (Headless LitmusChaos), `networking` (Services, Ingress,
+  Gateway API, NetworkPolicies), `pods`, `deployments`, `volumes` (NFS server export), `user_rbac`, `secrets`,
+  `configmaps`, `kustomize`, and `helm` (Metrics Server, Prometheus Operator, NGINX Gateway Fabric, httpbin-go).
+- **Caddy Ingress Reverse Proxy (`roles/caddy`)**: Automated `xcaddy` compilation with PowerDNS DNS-01 ACME Let's
+  Encrypt support, Garage S3 binary caching (`s3://os76-assets/caddy/...`), and `https-wrench` TLS validation.
+- **SOPS & Secrets Management**: Configured Age key encryption workflow (`.sops.yaml`) for transparent Ansible variable
+  decryption via `community.sops.sops`.
+- **Control Plane Tools**: Automated installation of pinned `etcdctl`/`etcdutl` (`v3.5.16`) and dynamic kube-apiserver
+  TLS certificate SAN address discovery.
 - **Base OS Updates**: Added automated OS package upgrades during VM provisioning (`Vagrantfile`, `roles/common`).
 
 ### Changed
@@ -225,21 +317,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Fixed LitmusChaos experiment CRDs, RBAC bindings, and containerd runtime socket integration.
 - Fixed `sync-kubeconfig.sh` validation for stopped VMs and inventory management network address resolution.
-- Fixed kube-apiserver TLS SAN mismatch handling with automatic SAN drift detection and non-destructive certificate re-issuance.
+- Fixed kube-apiserver TLS SAN mismatch handling with automatic SAN drift detection and non-destructive certificate
+  re-issuance.
 - Added automatic cleanup of `admin.conf` and `kubeconfig.preprod` on `make preprod-destroy`.
 
 ## [1.2.0] - 2026-09-27
 
 ### Added
 
-- **Control Plane Tooling (`roles/control_plane_tools`)**: Automated bootstrap of Helm, `k9s` Debian package, and `scripts/install-kube-metrics.sh` for Metrics Server deployment.
-- **Kubeconfig Synchronization**: Added `scripts/sync-kubeconfig.sh` helper and `make preprod-sync-kubeconfig` / `prod-sync-kubeconfig` targets for non-disruptive local `~/.kube/config` updates.
-- **Environment Context Naming**: Configured environment-aware context naming in `group_vars` (`k8s-homelab-preprod`, `k8s-homelab`).
+- **Control Plane Tooling (`roles/control_plane_tools`)**: Automated bootstrap of Helm, `k9s` Debian package, and
+  `scripts/install-kube-metrics.sh` for Metrics Server deployment.
+- **Kubeconfig Synchronization**: Added `scripts/sync-kubeconfig.sh` helper and `make preprod-sync-kubeconfig` /
+  `prod-sync-kubeconfig` targets for non-disruptive local `~/.kube/config` updates.
+- **Environment Context Naming**: Configured environment-aware context naming in `group_vars` (`k8s-homelab-preprod`,
+  `k8s-homelab`).
 - **Script Documentation**: Standardized header docstrings and parameter specs across all `scripts/` helpers.
 
 ### Fixed
 
-- Improved `scripts/sync-kubeconfig.sh` with robust `admin.conf` staging, dynamic TLS server address resolution, and reachable IP probing.
+- Improved `scripts/sync-kubeconfig.sh` with robust `admin.conf` staging, dynamic TLS server address resolution, and
+  reachable IP probing.
 - Verified Helm GPG key fingerprints to reject untrusted primary keys.
 
 ## [1.1.0] - 2026-09-23

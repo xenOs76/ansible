@@ -33,7 +33,7 @@ set -euo pipefail
 echo "=== [cni-install-hubble.sh] Installing Cilium Hubble CLI ==="
 
 # 1. Determine latest stable CLI version and system architecture
-DEFAULT_HUBBLE_VERSION="v1.20.2"
+DEFAULT_HUBBLE_VERSION="v1.20.4"
 HUBBLE_VERSION=$(curl -s --fail https://raw.githubusercontent.com/cilium/hubble/master/stable.txt || true)
 if [ -z "${HUBBLE_VERSION}" ]; then
   echo "    Warning: Unable to query upstream stable.txt, falling back to ${DEFAULT_HUBBLE_VERSION}"

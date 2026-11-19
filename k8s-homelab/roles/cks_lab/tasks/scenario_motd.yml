@@ -1,0 +1,11 @@
+---
+- name: Deploy CKS training MOTD hook
+  ansible.builtin.template:
+    src: cks_motd.sh.j2
+    dest: "{{ cks_lab_update_motd_hook }}"
+    owner: root
+    group: root
+    mode: "0755"
+  tags:
+    - cks_lab
+    - motd
